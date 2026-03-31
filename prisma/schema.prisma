@@ -33,6 +33,8 @@ model CV {
   updated_at    DateTime                    @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id])
 }
 
 model Job {
@@ -62,6 +64,8 @@ model JobPreference {
   updated_at DateTime @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id])
 }
 
 model Application {

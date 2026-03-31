@@ -1,0 +1,56 @@
+import json
+import anthropic
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from embedder import embed
+
+router = APIRouter()
+_client = anthropic.Anthropic()
+
+
+class ProcessCVRequest(BaseModel):
+    raw_text: str
+    user_id: str
+
+
+@router.post("/process-cv")
+async def process_cv(req: ProcessCVRequest):
+    # Extract structured data from CV using Claude Haiku
+    message = _client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Extract from this CV. Return only valid JSON, no markdown:\n"
+                    '{"skills": ["string"], "job_titles": ["string"], '
+                    '"years_experience": 0, "clean_summary": "string"}\n\n'
+                    + req.raw_text
+                ),
+            }
+        ],
+    )
+
+    raw = message.content[0].text.strip()
+
+    try:
+        extracted = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON from Claude: {raw}")
+
+    skills_json = {
+        "skills": extracted.get("skills", []),
+        "job_titles": extracted.get("job_titles", []),
+        "years_experience": extracted.get("years_experience", 0),
+    }
+    clean_summary = extracted.get("clean_summary", "")
+
+    embed_text = clean_summary + " " + " ".join(skills_json["skills"])
+    embedding = embed(embed_text)
+
+    return {
+        "skills_json": skills_json,
+        "clean_summary": clean_summary,
+        "embedding": embedding,
+    }
