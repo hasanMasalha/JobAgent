@@ -13,6 +13,51 @@ class MatchRequest(BaseModel):
     user_id: str
 
 
+@router.get("/match-debug")
+async def match_debug(user_id: str):
+    """Returns counts at each filtering stage so you can see what's blocking results."""
+    database_url = os.environ["DATABASE_URL"]
+    conn = await asyncpg.connect(database_url)
+    try:
+        cv_row = await conn.fetchrow(
+            'SELECT user_id, length(clean_summary) as summary_len, embedding IS NOT NULL as has_embedding FROM "CV" WHERE user_id = $1',
+            user_id,
+        )
+        total_jobs = await conn.fetchval('SELECT COUNT(*) FROM "Job"')
+        recent_jobs = await conn.fetchval(
+            "SELECT COUNT(*) FROM \"Job\" WHERE scraped_at > NOW() - INTERVAL '48 hours'"
+        )
+        jobs_with_embeddings = await conn.fetchval(
+            "SELECT COUNT(*) FROM \"Job\" WHERE embedding IS NOT NULL AND scraped_at > NOW() - INTERVAL '48 hours'"
+        )
+        seen_jobs = await conn.fetchval(
+            'SELECT COUNT(*) FROM "UserJobInteraction" WHERE user_id = $1',
+            user_id,
+        )
+        above_threshold = 0
+        if cv_row and cv_row["has_embedding"]:
+            above_threshold = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM "Job" j, "CV" cv
+                WHERE cv.user_id = $1
+                  AND j.scraped_at > NOW() - INTERVAL '48 hours'
+                  AND 1 - (j.embedding <=> cv.embedding::vector) > 0.60
+                """,
+                user_id,
+            )
+    finally:
+        await conn.close()
+
+    return {
+        "cv": dict(cv_row) if cv_row else None,
+        "total_jobs_in_db": total_jobs,
+        "recent_jobs_last_48h": recent_jobs,
+        "recent_jobs_with_embeddings": jobs_with_embeddings,
+        "seen_jobs_excluded": seen_jobs,
+        "jobs_above_0_60_threshold": above_threshold,
+    }
+
+
 @router.post("/match-jobs")
 async def match_jobs(req: MatchRequest):
     database_url = os.environ["DATABASE_URL"]
@@ -31,7 +76,7 @@ async def match_jobs(req: MatchRequest):
               AND j.id NOT IN (
                 SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1
               )
-              AND 1 - (j.embedding <=> cv.embedding::vector) > 0.60
+              AND 1 - (j.embedding <=> cv.embedding::vector) > 0.50
             ORDER BY j.embedding <=> cv.embedding::vector
             LIMIT 50
             """,
