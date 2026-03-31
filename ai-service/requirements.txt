@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sentence-transformers
+playwright
+jobspy
+anthropic
+asyncpg
+psycopg2-binary
+apscheduler
+python-multipart
+httpx
