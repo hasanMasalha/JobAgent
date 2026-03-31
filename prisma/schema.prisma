@@ -52,6 +52,8 @@ model Job {
 
   applications Application[]
   interactions UserJobInteraction[]
+
+  @@unique([url])
 }
 
 model JobPreference {
