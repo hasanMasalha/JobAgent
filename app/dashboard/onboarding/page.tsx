@@ -46,7 +46,15 @@ export default function OnboardingPage() {
     form.append("min_salary", minSalary);
 
     const res = await fetch("/api/cv/upload", { method: "POST", body: form });
-    const data = await res.json();
+    const text = await res.text();
+    let data: { error?: string; success?: boolean } = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      setError(`Server error: ${text || res.statusText}`);
+      setLoading(false);
+      return;
+    }
 
     if (!res.ok) {
       setError(data.error ?? "Something went wrong");

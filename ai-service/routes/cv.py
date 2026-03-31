@@ -33,6 +33,10 @@ async def process_cv(req: ProcessCVRequest):
     )
 
     raw = message.content[0].text.strip()
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1]
+        raw = raw.rsplit("```", 1)[0].strip()
 
     try:
         extracted = json.loads(raw)
