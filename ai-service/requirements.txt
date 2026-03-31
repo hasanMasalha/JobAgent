@@ -3,7 +3,7 @@ python-dotenv
 uvicorn
 sentence-transformers
 playwright
-jobspy
+python-jobspy
 anthropic
 asyncpg
 psycopg2-binary

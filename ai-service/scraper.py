@@ -44,12 +44,12 @@ async def scrape_israel_jobs() -> list[dict]:
 
             results.append(
                 {
-                    "title": str(row.get("title") or "").strip(),
-                    "company": str(row.get("company") or "").strip(),
-                    "description": str(row.get("description") or "").strip(),
-                    "location": str(row.get("location") or "").strip(),
+                    "title": _clean(row.get("title")),
+                    "company": _clean(row.get("company")),
+                    "description": _clean(row.get("description")),
+                    "location": _clean(row.get("location")),
                     "url": url,
-                    "source": str(row.get("site") or "").strip(),
+                    "source": _clean(row.get("site")),
                     "salary_min": salary_min,
                     "salary_max": salary_max,
                 }
@@ -58,6 +58,18 @@ async def scrape_israel_jobs() -> list[dict]:
         await asyncio.sleep(2)
 
     return results
+
+
+def _clean(value) -> str:
+    import math
+    if value is None:
+        return ""
+    try:
+        if math.isnan(float(value)):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
 
 
 def _safe_int(value) -> int | None:
