@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase.server";
 import LogoutButton from "./LogoutButton";
 
 export default async function DashboardLayout({
