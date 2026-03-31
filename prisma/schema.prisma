@@ -1,24 +1,21 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
-}
-
-generator pgvector {
   provider = "prisma-client-js"
 }
 
+generator json {
+  provider = "prisma-json-types-generator"
+}
+
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  extensions = [pgvector(map: "vector")]
+  provider = "postgresql"
 }
 
 model User {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  name                 String?
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  name                  String?
   linkedin_session_path String?
-  created_at           DateTime  @default(now())
+  created_at            DateTime @default(now())
 
   cvs             CV[]
   job_preferences JobPreference[]
@@ -27,19 +24,19 @@ model User {
 }
 
 model CV {
-  id            String   @id @default(uuid())
+  id            String                      @id @default(uuid())
   user_id       String
   raw_text      String
   skills_json   Json?
   clean_summary String?
   embedding     Unsupported("vector(384)")?
-  updated_at    DateTime @updatedAt
+  updated_at    DateTime                    @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model Job {
-  id          String   @id @default(uuid())
+  id          String                      @id @default(uuid())
   title       String
   company     String
   description String
@@ -49,7 +46,7 @@ model Job {
   salary_min  Int?
   salary_max  Int?
   embedding   Unsupported("vector(384)")?
-  scraped_at  DateTime @default(now())
+  scraped_at  DateTime                    @default(now())
 
   applications Application[]
   interactions UserJobInteraction[]
@@ -68,13 +65,13 @@ model JobPreference {
 }
 
 model Application {
-  id          String   @id @default(uuid())
-  user_id     String
-  job_id      String
-  status      String   @default("draft")
-  tailored_cv String?
+  id           String   @id @default(uuid())
+  user_id      String
+  job_id       String
+  status       String   @default("draft")
+  tailored_cv  String?
   cover_letter String?
-  applied_at  DateTime @default(now())
+  applied_at   DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
