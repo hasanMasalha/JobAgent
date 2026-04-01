@@ -57,8 +57,10 @@ export async function POST(req: NextRequest) {
 
     // Update application status
     const finalStatus =
-      pythonData.status === "applied" || pythonData.status === "manual"
+      pythonData.status === "applied"
         ? "applied"
+        : pythonData.status === "manual"
+        ? "manual"
         : "failed";
 
     await db.$executeRaw`

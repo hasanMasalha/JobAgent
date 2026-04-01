@@ -11,3 +11,4 @@ apscheduler
 python-multipart
 httpx
 beautifulsoup4
+reportlab
