@@ -38,7 +38,7 @@ async def apply_to_job(req: ApplyRequest):
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
         user = await conn.fetchrow(
-            'SELECT name, email, phone FROM "User" WHERE id = $1', req.user_id
+            'SELECT name, email FROM "User" WHERE id = $1', req.user_id
         )
         application = await conn.fetchrow(
             'SELECT tailored_cv, cover_letter FROM "Application" WHERE id = $1 AND user_id = $2',
@@ -55,7 +55,7 @@ async def apply_to_job(req: ApplyRequest):
 
     name = user["name"] or ""
     email = user["email"] or ""
-    phone = user["phone"] or ""
+    phone = ""  # phone column not yet in schema — leave empty
     parts = name.split()
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""

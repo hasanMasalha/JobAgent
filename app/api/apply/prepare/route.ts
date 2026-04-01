@@ -71,6 +71,22 @@ export async function POST(req: NextRequest) {
       tailored_summary: string;
     };
 
+    // Reuse existing draft for this user+job if one exists (prevents duplicates on page reload)
+    const existing = await db.$queryRaw<{ id: string; cover_letter: string | null }[]>`
+      SELECT id, cover_letter FROM "Application"
+      WHERE user_id = ${user.id} AND job_id = ${job_id} AND status = 'draft'
+      LIMIT 1
+    `;
+    if (existing.length) {
+      return NextResponse.json({
+        application_id: existing[0].id,
+        cover_letter: existing[0].cover_letter ?? extracted.cover_letter,
+        cv_changes: extracted.cv_changes,
+        job_title: job.title,
+        company: job.company,
+      });
+    }
+
     // Insert draft Application row, return generated id
     const appRows = await db.$queryRaw<{ id: string }[]>`
       INSERT INTO "Application" (id, user_id, job_id, status, tailored_cv, cover_letter, applied_at)
