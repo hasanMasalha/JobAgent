@@ -1,5 +1,7 @@
 import asyncio
 from jobspy import scrape_jobs
+from scraper_drushim import scrape_drushim
+from scraper_alljobs import scrape_alljobs
 
 SEARCH_TERMS = [
     "software engineer",
@@ -21,7 +23,7 @@ async def scrape_israel_jobs() -> list[dict]:
         try:
             df = await asyncio.to_thread(
                 scrape_jobs,
-                site_name=["indeed", "linkedin"],
+                site_name=["indeed", "linkedin", "glassdoor"],
                 search_term=term,
                 location="Israel",
                 country_indeed="Israel",
@@ -56,6 +58,17 @@ async def scrape_israel_jobs() -> list[dict]:
             )
 
         await asyncio.sleep(2)
+
+    # Add Drushim and Alljobs results, deduplicating by URL
+    for extra in await asyncio.gather(scrape_drushim(), scrape_alljobs(), return_exceptions=True):
+        if isinstance(extra, Exception):
+            print(f"[scraper] extra scraper failed: {extra}")
+            continue
+        for job in extra:
+            url = job.get("url", "").strip()
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                results.append(job)
 
     return results
 

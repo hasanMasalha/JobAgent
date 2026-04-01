@@ -19,7 +19,7 @@ async def scrape_and_store():
     new_jobs = 0
     try:
         for job in jobs:
-            embed_text = f"{job['title']} {job['title']} {job['description'][:500]}"
+            embed_text = f"{job['title']} {job['description'][:500]}"
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
