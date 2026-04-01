@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export interface Job {
   id: string;
@@ -19,6 +20,7 @@ export interface Job {
 
 export default function JobCard({ job }: { job: Job }) {
   const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
 
   const score = job.claude_score ?? 0;
   const scoreColor =
@@ -124,6 +126,12 @@ export default function JobCard({ job }: { job: Job }) {
         >
           View job
         </a>
+        <button
+          onClick={() => router.push(`/dashboard/apply/${job.id}`)}
+          className="text-xs font-medium bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors"
+        >
+          Apply
+        </button>
         <span className="text-xs text-gray-400">
           Vector match: {(job.similarity * 100).toFixed(0)}%
         </span>
