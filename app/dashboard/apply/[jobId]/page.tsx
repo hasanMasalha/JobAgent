@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { showToast } from "@/app/components/Toast";
 
 type Stage = "loading" | "ready" | "submitting" | "error";
 
@@ -59,10 +60,15 @@ export default function ApplyPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Submission failed");
       setSubmitResult(json);
-      // Brief pause so user sees the result, then redirect
+      showToast(
+        json.status === "applied" ? "Application submitted!" : "Application saved",
+        "success"
+      );
       setTimeout(() => router.push("/dashboard/applications"), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
+      const msg = err instanceof Error ? err.message : "Submission failed";
+      setError(msg);
+      showToast(msg, "error");
       setStage("error");
     }
   }

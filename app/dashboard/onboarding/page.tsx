@@ -19,6 +19,7 @@ export default function OnboardingPage() {
   const [workMode, setWorkMode] = useState<WorkMode>("hybrid");
   const [minSalary, setMinSalary] = useState("");
 
+  const [skipSalary, setSkipSalary] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,7 +44,7 @@ export default function OnboardingPage() {
     form.append("titles", JSON.stringify(titles));
     form.append("location", location);
     form.append("remote_ok", String(workMode === "remote"));
-    form.append("min_salary", minSalary);
+    form.append("min_salary", skipSalary ? "" : minSalary);
 
     const res = await fetch("/api/cv/upload", { method: "POST", body: form });
     const text = await res.text();
@@ -67,14 +68,17 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <h1 className="text-xl font-semibold mb-6">Set up your profile</h1>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold">Set up your profile</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Step {step} of 2</p>
+      </div>
 
       {/* Step indicator */}
       <div className="flex gap-2 mb-8">
         {[1, 2].map((s) => (
           <div
             key={s}
-            className={`h-1.5 flex-1 rounded-full ${
+            className={`h-1.5 flex-1 rounded-full transition-colors ${
               s <= step ? "bg-black" : "bg-gray-200"
             }`}
           />
@@ -201,16 +205,31 @@ export default function OnboardingPage() {
 
           {/* Min salary */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Minimum salary (optional)
-            </label>
-            <input
-              type="number"
-              value={minSalary}
-              onChange={(e) => setMinSalary(e.target.value)}
-              placeholder="e.g. 15000"
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">Minimum salary</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setSkipSalary((v) => !v);
+                  setMinSalary("");
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                {skipSalary ? "Add salary" : "Skip salary"}
+              </button>
+            </div>
+            {!skipSalary && (
+              <input
+                type="number"
+                value={minSalary}
+                onChange={(e) => setMinSalary(e.target.value)}
+                placeholder="e.g. 15000"
+                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              />
+            )}
+            {skipSalary && (
+              <p className="text-sm text-gray-400 italic">No minimum salary set</p>
+            )}
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}

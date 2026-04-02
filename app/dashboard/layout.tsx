@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerClient } from "@/lib/supabase.server";
 import LogoutButton from "./LogoutButton";
+import { Toast } from "@/app/components/Toast";
 
 export default async function DashboardLayout({
   children,
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
         </div>
       </nav>
       <main className="p-6">{children}</main>
+      <Toast />
     </div>
   );
 }
