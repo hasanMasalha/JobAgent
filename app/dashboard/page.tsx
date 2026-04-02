@@ -207,7 +207,11 @@ export default function DashboardPage() {
         {!loading && !error && filteredJobs.length > 0 && (
           <div className="space-y-4">
             {filteredJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
+              <JobCard
+                key={job.id}
+                job={job}
+                onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+              />
             ))}
           </div>
         )}

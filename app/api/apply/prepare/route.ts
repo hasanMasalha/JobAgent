@@ -48,6 +48,14 @@ export async function POST(req: NextRequest) {
       `  "cv_changes": ["specific change 1", "specific change 2"],\n` +
       `  "tailored_cv": "The full CV text with all changes applied. Keep the same structure and sections as the original but rewrite/reorder content to best match this role."\n` +
       `}\n\n` +
+      `CRITICAL FORMATTING RULES for tailored_cv:\n` +
+      `- The tailored CV must fit on exactly ONE page when printed\n` +
+      `- Keep the total word count under 400 words\n` +
+      `- Each bullet point must be ONE line maximum — no wrapping bullets\n` +
+      `- Maximum 3 bullet points per job role\n` +
+      `- Professional summary: 2 sentences maximum\n` +
+      `- Do not add new sections that weren't in the original CV\n` +
+      `- Do not expand content — reword and emphasize, do not add\n\n` +
       `CV:\n${raw_text}\n\n` +
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;

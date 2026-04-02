@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { generateCVDocx } from "@/lib/generate-cv";
 
 export async function GET(
   _req: NextRequest,
@@ -16,11 +17,13 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify the application belongs to this user
-    const rows = await db.$queryRaw<{ job_title: string; company: string }[]>`
-      SELECT j.title AS job_title, j.company
+    const rows = await db.$queryRaw<
+      { tailored_cv: string | null; job_title: string; company: string; user_name: string | null }[]
+    >`
+      SELECT a.tailored_cv, j.title AS job_title, j.company, u.name AS user_name
       FROM "Application" a
       JOIN "Job" j ON j.id = a.job_id
+      LEFT JOIN "User" u ON u.id = a.user_id
       WHERE a.id = ${params.applicationId} AND a.user_id = ${user.id}
       LIMIT 1
     `;
@@ -29,28 +32,26 @@ export async function GET(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    const pythonUrl = process.env.PYTHON_SERVICE_URL ?? "http://localhost:8000";
-    const pdfRes = await fetch(
-      `${pythonUrl}/generate-cv-pdf?application_id=${encodeURIComponent(params.applicationId)}`
-    );
+    const { tailored_cv, job_title, user_name } = rows[0];
 
-    if (!pdfRes.ok) {
-      const body = await pdfRes.text();
-      console.error("[download-cv] Python error", pdfRes.status, body);
-      let detail = "PDF generation failed";
-      try { detail = JSON.parse(body).detail ?? detail; } catch { /* plain text */ }
-      return NextResponse.json({ error: detail }, { status: pdfRes.status });
+    if (!tailored_cv) {
+      return NextResponse.json(
+        { error: "No tailored CV for this application. Please go through the apply flow again." },
+        { status: 404 }
+      );
     }
 
-    const pdfBytes = await pdfRes.arrayBuffer();
-    const { job_title, company } = rows[0];
-    const filename = `CV_${company}_${job_title}`
-      .replace(/[^a-zA-Z0-9_\-]/g, "_")
-      .slice(0, 60) + ".pdf";
+    const buffer = await generateCVDocx(tailored_cv, job_title);
 
-    return new Response(pdfBytes, {
+    const displayName = user_name?.trim() || (user.email?.split("@")[0] ?? "CV");
+    const filename = `CV_${displayName}`
+      .replace(/[^a-zA-Z0-9_\-]/g, "_")
+      .slice(0, 60) + ".docx";
+
+    return new Response(buffer, {
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });

@@ -14,8 +14,11 @@
     "@prisma/client": "^7.6.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.0",
+    "@types/pdfkit": "^0.17.5",
+    "docx": "^9.6.1",
     "next": "14.2.35",
     "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "react": "^18",
     "react-dom": "^18"

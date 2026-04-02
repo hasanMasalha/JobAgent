@@ -183,7 +183,7 @@ export default function ApplyPage() {
                   disabled={downloadingCv}
                   className="text-xs text-emerald-600 hover:underline disabled:opacity-50"
                 >
-                  {downloadingCv ? "Generating PDF…" : "Download tailored CV"}
+                  {downloadingCv ? "Generating…" : "Download CV (.docx)"}
                 </button>
               </div>
             </div>

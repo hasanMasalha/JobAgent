@@ -38,7 +38,7 @@ export function Toast() {
   return (
     <div
       key={toast.id}
-      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-fade-in ${
+      className={`fixed bottom-24 right-5 z-[60] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-fade-in ${
         toast.type === "success" ? "bg-emerald-600" : "bg-red-500"
       }`}
     >

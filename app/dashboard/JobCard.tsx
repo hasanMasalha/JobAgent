@@ -20,10 +20,11 @@ export interface Job {
   gaps: string[];
 }
 
-export default function JobCard({ job }: { job: Job }) {
+export default function JobCard({ job, onDismiss }: { job: Job; onDismiss?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
   const router = useRouter();
 
   // Fall back to vector similarity when Claude scoring didn't run
@@ -44,8 +45,27 @@ export default function JobCard({ job }: { job: Job }) {
       ? `From ₪${job.salary_min.toLocaleString()}`
       : null;
 
+  async function handleDismiss() {
+    setDismissing(true);
+    try {
+      await fetch("/api/jobs/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: job.id, action: "dismissed" }),
+      });
+      // Let the fade complete before removing from list
+      setTimeout(() => onDismiss?.(job.id), 300);
+    } catch {
+      setDismissing(false);
+    }
+  }
+
   return (
-    <div className="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+    <div
+      className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-300 ${
+        dismissing ? "opacity-0 scale-95" : "opacity-100"
+      }`}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -158,6 +178,13 @@ export default function JobCard({ job }: { job: Job }) {
             hover:bg-gray-50 text-gray-600 border-gray-300"
         >
           {saved ? "Saved ✓" : saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          onClick={handleDismiss}
+          disabled={dismissing}
+          className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
+        >
+          Not interested
         </button>
       </div>
     </div>
