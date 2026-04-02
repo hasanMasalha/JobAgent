@@ -14,21 +14,35 @@ interface Application {
   location: string | null;
 }
 
+const ALLOWED_STATUSES = ["applied", "interviewing", "offer", "rejected"] as const;
+type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
+
 const STATUS_STYLES: Record<string, string> = {
-  draft:        "bg-gray-100 text-gray-600",
   applied:      "bg-blue-100 text-blue-700",
-  manual:       "bg-yellow-100 text-yellow-700",
   interviewing: "bg-purple-100 text-purple-700",
   offer:        "bg-green-100 text-green-800",
   rejected:     "bg-red-100 text-red-600",
+  draft:        "bg-gray-100 text-gray-500",
+  manual:       "bg-yellow-100 text-yellow-700",
   cancelled:    "bg-gray-100 text-gray-400",
   failed:       "bg-red-50 text-red-400",
 };
+
+function StatPill({ label, count, color }: { label: string; count: number; color: string }) {
+  return (
+    <div className={`flex flex-col items-center px-5 py-3 rounded-xl border ${color}`}>
+      <span className="text-2xl font-bold">{count}</span>
+      <span className="text-xs font-medium mt-0.5 uppercase tracking-wide">{label}</span>
+    </div>
+  );
+}
 
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/applications")
@@ -41,25 +55,73 @@ export default function ApplicationsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function handleStatusChange(id: string, newStatus: AllowedStatus) {
+    setUpdating(id);
+    try {
+      const res = await fetch(`/api/applications/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to update status");
+      }
+      setApps((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this application? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to delete");
+      }
+      setApps((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  const counts = {
+    applied:      apps.filter((a) => a.status === "applied").length,
+    interviewing: apps.filter((a) => a.status === "interviewing").length,
+    offer:        apps.filter((a) => a.status === "offer").length,
+    rejected:     apps.filter((a) => a.status === "rejected").length,
+  };
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">My Applications</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track your job applications</p>
-        </div>
-        {!loading && !error && (
-          <span className="text-sm text-gray-400">{apps.length} total</span>
-        )}
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-gray-900">My Applications</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Track and manage your job applications</p>
       </div>
 
+      {/* Stats bar */}
+      {!loading && !error && (
+        <div className="grid grid-cols-4 gap-3 mb-7">
+          <StatPill label="Applied"      count={counts.applied}      color="border-blue-200 bg-blue-50 text-blue-700" />
+          <StatPill label="Interviewing" count={counts.interviewing} color="border-purple-200 bg-purple-50 text-purple-700" />
+          <StatPill label="Offers"       count={counts.offer}        color="border-green-200 bg-green-50 text-green-700" />
+          <StatPill label="Rejected"     count={counts.rejected}     color="border-red-200 bg-red-50 text-red-600" />
+        </div>
+      )}
+
       {loading && (
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white border rounded-xl p-5 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-              <div className="h-3 bg-gray-100 rounded w-1/3" />
-            </div>
+        <div className="space-y-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white border rounded-xl h-14 animate-pulse" />
           ))}
         </div>
       )}
@@ -71,7 +133,7 @@ export default function ApplicationsPage() {
       )}
 
       {!loading && !error && apps.length === 0 && (
-        <div className="bg-white border rounded-xl p-10 text-center text-gray-500 text-sm">
+        <div className="bg-white border rounded-xl p-12 text-center text-gray-500 text-sm">
           No applications yet.{" "}
           <Link href="/dashboard" className="text-blue-600 hover:underline">
             Browse matched jobs
@@ -80,57 +142,75 @@ export default function ApplicationsPage() {
       )}
 
       {!loading && !error && apps.length > 0 && (
-        <div className="space-y-4">
-          {apps.map((app) => (
-            <div key={app.id} className="bg-white border rounded-xl p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{app.job_title}</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
+        <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+                <th className="text-left px-4 py-3 font-medium">Company</th>
+                <th className="text-left px-4 py-3 font-medium">Role</th>
+                <th className="text-left px-4 py-3 font-medium">Applied</th>
+                <th className="text-left px-4 py-3 font-medium">Status</th>
+                <th className="text-left px-4 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {apps.map((app) => (
+                <tr key={app.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900 max-w-[160px] truncate">
                     {app.company}
-                    {app.location ? ` · ${app.location}` : ""}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 max-w-[200px] truncate">
+                    {app.job_title}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {new Date(app.applied_at).toLocaleDateString("en-GB", {
-                      day: "numeric", month: "short", year: "numeric",
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
                     })}
-                  </p>
-                </div>
-                <span
-                  className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
-                    STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {app.status === "manual" ? "Apply manually" : app.status}
-                </span>
-              </div>
-
-              {app.status === "manual" && (
-                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-                  This job doesn&apos;t support Easy Apply.{" "}
-                  <a
-                    href={app.job_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold underline"
-                  >
-                    Apply directly on the job site →
-                  </a>
-                </div>
-              )}
-
-              <div className="mt-3 flex gap-3">
-                <a
-                  href={app.job_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-medium text-blue-600 hover:underline"
-                >
-                  View job
-                </a>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : "applied"}
+                      disabled={updating === app.id}
+                      onChange={(e) =>
+                        handleStatusChange(app.id, e.target.value as AllowedStatus)
+                      }
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer capitalize focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
+                        STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {ALLOWED_STATUSES.map((s) => (
+                        <option key={s} value={s} className="bg-white text-gray-800 font-normal">
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={app.job_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        View job ↗
+                      </a>
+                      <button
+                        onClick={() => handleDelete(app.id)}
+                        disabled={deleting === app.id}
+                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                        title="Delete application"
+                      >
+                        {deleting === app.id ? "…" : "Delete"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
