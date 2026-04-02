@@ -171,15 +171,20 @@ export default function ApplicationsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <select
-                      value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : "applied"}
+                      value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : ""}
                       disabled={updating === app.id}
                       onChange={(e) =>
                         handleStatusChange(app.id, e.target.value as AllowedStatus)
                       }
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer capitalize focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
                         STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
                       }`}
                     >
+                      {app.status === "manual" && (
+                        <option value="" disabled className="bg-white text-gray-400 font-normal">
+                          Action needed — update after applying
+                        </option>
+                      )}
                       {ALLOWED_STATUSES.map((s) => (
                         <option key={s} value={s} className="bg-white text-gray-800 font-normal">
                           {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -189,14 +194,25 @@ export default function ApplicationsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <a
-                        href={app.job_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline font-medium"
-                      >
-                        View job ↗
-                      </a>
+                      {app.status === "manual" ? (
+                        <a
+                          href={app.job_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Apply now →
+                        </a>
+                      ) : (
+                        <a
+                          href={app.job_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline font-medium"
+                        >
+                          View job ↗
+                        </a>
+                      )}
                       <button
                         onClick={() => handleDelete(app.id)}
                         disabled={deleting === app.id}

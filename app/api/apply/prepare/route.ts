@@ -25,14 +25,15 @@ export async function POST(req: NextRequest) {
     const cvRows = await db.$queryRaw<{ raw_text: string }[]>`
       SELECT raw_text FROM "CV" WHERE user_id = ${user.id} LIMIT 1
     `;
+
     if (!cvRows.length) {
       return NextResponse.json({ error: "No CV found. Please upload your CV first." }, { status: 404 });
     }
     const { raw_text } = cvRows[0];
 
     // Fetch Job
-    const jobRows = await db.$queryRaw<{ title: string; company: string; description: string }[]>`
-      SELECT title, company, description FROM "Job" WHERE id = ${job_id} LIMIT 1
+    const jobRows = await db.$queryRaw<{ title: string; company: string; description: string; url: string }[]>`
+      SELECT title, company, description, url FROM "Job" WHERE id = ${job_id} LIMIT 1
     `;
     if (!jobRows.length) {
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -41,12 +42,11 @@ export async function POST(req: NextRequest) {
 
     // Call Claude Sonnet to tailor CV
     const prompt =
-      `Tailor this CV for this specific role.\n` +
-      `Return ONLY valid JSON, no markdown:\n` +
+      `Tailor this CV for the role below. Return ONLY valid JSON, no markdown:\n` +
       `{\n` +
-      `  "cover_letter": "3 paragraphs, professional tone",\n` +
+      `  "cover_letter": "3 paragraphs, professional tone, specific to this role",\n` +
       `  "cv_changes": ["specific change 1", "specific change 2"],\n` +
-      `  "tailored_summary": "2 sentence professional summary"\n` +
+      `  "tailored_cv": "The full CV text with all changes applied. Keep the same structure and sections as the original but rewrite/reorder content to best match this role."\n` +
       `}\n\n` +
       `CV:\n${raw_text}\n\n` +
       `Job: ${job.title} at ${job.company}\n` +
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -68,22 +68,33 @@ export async function POST(req: NextRequest) {
     const extracted = JSON.parse(raw) as {
       cover_letter: string;
       cv_changes: string[];
-      tailored_summary: string;
+      tailored_cv: string;
     };
 
     // Reuse existing draft for this user+job if one exists (prevents duplicates on page reload)
-    const existing = await db.$queryRaw<{ id: string; cover_letter: string | null }[]>`
-      SELECT id, cover_letter FROM "Application"
+    const existing = await db.$queryRaw<{ id: string; cover_letter: string | null; tailored_cv: string | null }[]>`
+      SELECT id, cover_letter, tailored_cv FROM "Application"
       WHERE user_id = ${user.id} AND job_id = ${job_id} AND status = 'draft'
       LIMIT 1
     `;
     if (existing.length) {
+      // Backfill tailored_cv / cover_letter if missing (e.g. draft created before this feature)
+      if (!existing[0].tailored_cv || !existing[0].cover_letter) {
+        await db.$executeRaw`
+          UPDATE "Application"
+          SET tailored_cv   = COALESCE(tailored_cv,   ${extracted.tailored_cv}),
+              cover_letter  = COALESCE(cover_letter,  ${extracted.cover_letter})
+          WHERE id = ${existing[0].id}
+        `;
+      }
       return NextResponse.json({
         application_id: existing[0].id,
         cover_letter: existing[0].cover_letter ?? extracted.cover_letter,
+        tailored_cv: existing[0].tailored_cv ?? extracted.tailored_cv,
         cv_changes: extracted.cv_changes,
         job_title: job.title,
         company: job.company,
+        job_url: job.url,
       });
     }
 
@@ -91,16 +102,18 @@ export async function POST(req: NextRequest) {
     const appRows = await db.$queryRaw<{ id: string }[]>`
       INSERT INTO "Application" (id, user_id, job_id, status, tailored_cv, cover_letter, applied_at)
       VALUES (gen_random_uuid(), ${user.id}, ${job_id}, 'draft',
-              ${extracted.tailored_summary}, ${extracted.cover_letter}, now())
+              ${extracted.tailored_cv}, ${extracted.cover_letter}, now())
       RETURNING id
     `;
 
     return NextResponse.json({
       application_id: appRows[0].id,
       cover_letter: extracted.cover_letter,
+      tailored_cv: extracted.tailored_cv,
       cv_changes: extracted.cv_changes,
       job_title: job.title,
       company: job.company,
+      job_url: job.url,
     });
   } catch (err) {
     console.error("[apply/prepare]", err);

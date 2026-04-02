@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { showToast } from "@/app/components/Toast";
 
 export interface Job {
   id: string;
@@ -12,6 +13,7 @@ export interface Job {
   url: string;
   salary_min: number | null;
   salary_max: number | null;
+  scraped_at: string;
   similarity: number;
   claude_score: number;
   reasons: string[];
@@ -20,9 +22,14 @@ export interface Job {
 
 export default function JobCard({ job }: { job: Job }) {
   const [expanded, setExpanded] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
 
-  const score = job.claude_score ?? 0;
+  // Fall back to vector similarity when Claude scoring didn't run
+  const score = job.claude_score > 0
+    ? job.claude_score
+    : Math.round(job.similarity * 100);
   const scoreColor =
     score >= 80
       ? "bg-green-100 text-green-800"
@@ -132,9 +139,26 @@ export default function JobCard({ job }: { job: Job }) {
         >
           Apply
         </button>
-        <span className="text-xs text-gray-400">
-          Vector match: {(job.similarity * 100).toFixed(0)}%
-        </span>
+        <button
+          disabled={saved || saving}
+          onClick={async () => {
+            setSaving(true);
+            try {
+              const res = await fetch(`/api/jobs/${job.id}/save`, { method: "POST" });
+              if (!res.ok) throw new Error("Failed to save");
+              setSaved(true);
+              showToast("Job saved", "success");
+            } catch {
+              showToast("Could not save job", "error");
+            } finally {
+              setSaving(false);
+            }
+          }}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50
+            hover:bg-gray-50 text-gray-600 border-gray-300"
+        >
+          {saved ? "Saved ✓" : saving ? "Saving…" : "Save"}
+        </button>
       </div>
     </div>
   );

@@ -31,6 +31,9 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Forward pathname so server layouts can read it via headers()
+  supabaseResponse.headers.set("x-pathname", pathname);
+
   if (!user && pathname.startsWith("/dashboard")) {
     return NextResponse.redirect(new URL("/login", request.url));
   }

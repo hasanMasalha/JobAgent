@@ -23,12 +23,12 @@ async def scrape_israel_jobs() -> list[dict]:
         try:
             df = await asyncio.to_thread(
                 scrape_jobs,
-                site_name=["indeed", "linkedin", "glassdoor"],
+                site_name=["indeed"],
                 search_term=term,
                 location="Israel",
                 country_indeed="Israel",
-                results_wanted=30,
-                hours_old=48,
+                results_wanted=50,
+                hours_old=168,
             )
         except Exception as e:
             print(f"[scraper] error scraping '{term}': {e}")
@@ -39,6 +39,11 @@ async def scrape_israel_jobs() -> list[dict]:
             url = str(row.get("job_url") or "").strip()
             if not url or url in seen_urls:
                 continue
+
+            description = _clean(row.get("description"))
+            if not description:
+                continue  # skip jobs with no description
+
             seen_urls.add(url)
 
             salary_min = _safe_int(row.get("min_amount"))
@@ -48,7 +53,7 @@ async def scrape_israel_jobs() -> list[dict]:
                 {
                     "title": _clean(row.get("title")),
                     "company": _clean(row.get("company")),
-                    "description": _clean(row.get("description")),
+                    "description": description,
                     "location": _clean(row.get("location")),
                     "url": url,
                     "source": _clean(row.get("site")),
@@ -66,7 +71,7 @@ async def scrape_israel_jobs() -> list[dict]:
             continue
         for job in extra:
             url = job.get("url", "").strip()
-            if url and url not in seen_urls:
+            if url and url not in seen_urls and job.get("description", "").strip():
                 seen_urls.add(url)
                 results.append(job)
 

@@ -12,13 +12,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const force_refresh = new URL(req.url).searchParams.get("refresh") === "true";
+
     const pythonRes = await fetch(
       `${process.env.PYTHON_SERVICE_URL}/match-jobs`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id }),
-        signal: AbortSignal.timeout(60_000),
+        body: JSON.stringify({ user_id: user.id, force_refresh }),
+        signal: AbortSignal.timeout(120_000),
       }
     );
 
