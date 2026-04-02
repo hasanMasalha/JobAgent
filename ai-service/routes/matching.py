@@ -107,17 +107,17 @@ async def match_jobs(req: MatchRequest):
 
     # Step B — Claude batch scoring (ONE call for all jobs)
     jobs_text = "\n".join(
-        f'JOB_ID:{j["id"]} | {j["title"]} at {j["company"]} | {(j["description"] or "")[:200]}'
+        f'{j["id"]} | {j["title"]} at {j["company"]} | {(j["description"] or "")[:200]}'
         for j in jobs
     )
 
     prompt = (
         "You are a job matching assistant. Score each job for this candidate.\n"
         "Return ONLY a JSON array. No markdown, no explanation.\n"
-        'Format: [{"job_id":"...","score":85,"reasons":["r1","r2"],"gaps":["g1"]}]\n\n'
+        'Format: [{"job_id":"<exact id from input>","score":85,"reasons":["r1","r2"],"gaps":["g1"]}]\n\n'
         f"Candidate: {clean_summary}\n"
         f"Skills: {skills_list}\n\n"
-        f"Jobs:\n{jobs_text}"
+        f"Jobs (id | title | description):\n{jobs_text}"
     )
 
     message = _client.messages.create(
