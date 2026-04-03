@@ -31,3 +31,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { job_id } = await req.json();
+    if (!job_id) {
+      return NextResponse.json({ error: "job_id required" }, { status: 400 });
+    }
+
+    await db.$executeRaw`
+      DELETE FROM "UserJobInteraction"
+      WHERE user_id = ${user.id} AND job_id = ${job_id} AND action = 'saved'
+    `;
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[jobs/interact DELETE]", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

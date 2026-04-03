@@ -83,7 +83,13 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
         'SELECT clean_summary, skills_json FROM "CV" WHERE user_id = $1',
         user_id,
     )
-    return [dict(r) for r in rows], cv_row
+    result = []
+    for r in rows:
+        d = dict(r)
+        if hasattr(d.get("scraped_at"), "isoformat"):
+            d["scraped_at"] = d["scraped_at"].isoformat()
+        result.append(d)
+    return result, cv_row
 
 
 # ── Claude scoring (slow, enriches results) ───────────────────────────────────

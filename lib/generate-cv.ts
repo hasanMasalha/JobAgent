@@ -1,199 +1,197 @@
 import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  AlignmentType,
-  BorderStyle,
-  LevelFormat,
-  convertInchesToTwip,
-} from "docx";
-
-const SECTION_HEADERS = new Set([
-  "summary",
-  "objective",
-  "profile",
-  "work experience",
-  "experience",
-  "employment",
-  "education",
-  "academic",
-  "skills",
-  "technical skills",
-  "competencies",
-  "projects",
-  "portfolio",
-  "certifications",
-  "certificates",
-  "awards",
-  "languages",
-  "publications",
-  "references",
-]);
-
-function isSectionHeader(line: string): boolean {
-  return SECTION_HEADERS.has(line.replace(/:$/, "").toLowerCase().trim());
-}
-
-function isBullet(line: string): boolean {
-  return /^(o |• |- |· )/.test(line);
-}
-
-function stripBullet(line: string): string {
-  return line.replace(/^(o |• |- |· )/, "").trim();
-}
-
-const SINGLE_SPACING = { line: 240, lineRule: "auto" as const };
-
-function bodyParagraph(text: string): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text, font: "Arial", size: 19 })], // 9.5pt
-    spacing: { after: 40, ...SINGLE_SPACING },
-  });
-}
-
-function bulletParagraph(text: string): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text, font: "Arial", size: 19 })], // 9.5pt
-    bullet: { level: 0 },
-    spacing: { after: 30, ...SINGLE_SPACING },
-  });
-}
-
-function sectionHeaderParagraph(text: string): Paragraph {
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text: text.toUpperCase(),
-        bold: true,
-        font: "Arial",
-        size: 22, // 11pt
-      }),
-    ],
-    spacing: { before: 120, after: 60, ...SINGLE_SPACING },
-    border: {
-      bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
-    },
-  });
-}
-
-function spacerParagraph(): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text: "" })],
-    spacing: { after: 40, ...SINGLE_SPACING },
-  });
-}
+  Document, Packer, Paragraph, TextRun, AlignmentType,
+  BorderStyle, LevelFormat,
+} from 'docx'
 
 export async function generateCVDocx(
   cvText: string,
-  jobTitle: string
+  jobTitle: string = 'CV'
 ): Promise<Buffer> {
-  const lines = cvText.split("\n");
-  const children: Paragraph[] = [];
 
-  // First line → candidate name (16pt bold centered)
-  // Second line → contact (11pt centered)
-  let lineIndex = 0;
+  const FONT = 'Calibri'
+  const COLOR_NAME = '1F2937'      // near black
+  const COLOR_SECTION = '1F2937'   // near black for section headers
+  const COLOR_BODY = '374151'      // dark gray for body text
+  const COLOR_CONTACT = '6B7280'   // medium gray for contact line
 
-  // Skip leading empty lines
-  while (lineIndex < lines.length && !lines[lineIndex].trim()) lineIndex++;
+  const children: Paragraph[] = []
 
-  if (lineIndex < lines.length) {
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: lines[lineIndex].trim(),
-            bold: true,
-            font: "Arial",
-            size: 28, // 14pt
-          }),
-        ],
+  // Parse the CV text into structured sections
+  const lines = cvText.split('\n').map(l => l.trim()).filter(Boolean)
+
+  // Known section headers to detect
+  const SECTION_HEADERS = [
+    'summary', 'work experience', 'experience', 'education',
+    'skills', 'projects', 'languages', 'certifications',
+    'achievements', 'contact'
+  ]
+
+  const isSectionHeader = (line: string) =>
+    SECTION_HEADERS.some(h => line.toLowerCase() === h ||
+      line.toLowerCase().startsWith(h + ':'))
+
+  const isBullet = (line: string) =>
+    line.startsWith('- ') || line.startsWith('• ') ||
+    line.startsWith('* ') || line.startsWith('o ')
+
+  const isContactLine = (line: string) =>
+    line.includes('@') || line.includes('|') ||
+    line.includes('+') || !!line.match(/\d{3}/)
+
+  let isFirstLine = true
+  let isSecondLine = false
+  let nameAdded = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // First line = candidate name — large, bold, centered
+    if (isFirstLine) {
+      children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 60, ...SINGLE_SPACING },
-      })
-    );
-    lineIndex++;
-  }
-
-  // Second non-empty line → contact info centered
-  while (lineIndex < lines.length && !lines[lineIndex].trim()) lineIndex++;
-
-  if (lineIndex < lines.length && !isSectionHeader(lines[lineIndex])) {
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: lines[lineIndex].trim(),
-            font: "Arial",
-            size: 22, // 11pt
-          }),
-        ],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 80, ...SINGLE_SPACING },
-      })
-    );
-    lineIndex++;
-  }
-
-  // Remaining lines
-  for (; lineIndex < lines.length; lineIndex++) {
-    const raw = lines[lineIndex];
-    const line = raw.trim();
-
-    if (!line) {
-      children.push(spacerParagraph());
-    } else if (isSectionHeader(line)) {
-      children.push(sectionHeaderParagraph(line.replace(/:$/, "")));
-    } else if (isBullet(line)) {
-      children.push(bulletParagraph(stripBullet(line)));
-    } else {
-      children.push(bodyParagraph(line));
+        spacing: { before: 0, after: 40 },
+        children: [new TextRun({
+          text: line,
+          font: FONT,
+          size: 32,        // 16pt
+          bold: true,
+          color: COLOR_NAME,
+        })]
+      }))
+      isFirstLine = false
+      isSecondLine = true
+      nameAdded = true
+      continue
     }
+
+    // Contact line (email, phone, LinkedIn)
+    if (isSecondLine || (nameAdded && isContactLine(line))) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 120 },
+        children: [new TextRun({
+          text: line,
+          font: FONT,
+          size: 18,        // 9pt
+          color: COLOR_CONTACT,
+        })]
+      }))
+      isSecondLine = false
+      continue
+    }
+
+    // Section headers — blue, bold, with bottom border line
+    if (isSectionHeader(line)) {
+      children.push(new Paragraph({
+        spacing: { before: 160, after: 0 },
+        border: {
+          bottom: {
+            color: COLOR_SECTION,
+            style: BorderStyle.SINGLE,
+            size: 6,
+            space: 4,
+          }
+        },
+        children: [new TextRun({
+          text: line.toUpperCase(),
+          font: FONT,
+          size: 20,        // 10pt
+          bold: true,
+          color: COLOR_SECTION,
+          characterSpacing: 40,  // slight letter spacing
+        })]
+      }))
+      continue
+    }
+
+    // Bullet points — proper docx bullets, not unicode
+    if (isBullet(line)) {
+      const text = line.replace(/^[-•*o]\s+/, '')
+      children.push(new Paragraph({
+        numbering: { reference: 'cv-bullets', level: 0 },
+        spacing: { before: 0, after: 40 },
+        children: [new TextRun({
+          text,
+          font: FONT,
+          size: 19,        // 9.5pt
+          color: COLOR_BODY,
+        })]
+      }))
+      continue
+    }
+
+    // Job title lines — detect by pattern (Title, Company · Date)
+    const isRoleHeader = line.includes('·') || line.includes('–') ||
+      (line.includes('-') && !!line.match(/\d{4}/))
+
+    if (isRoleHeader) {
+      const parts = line.split(/[·–]/)
+      const runParts = parts.flatMap((part, idx) => [
+        new TextRun({
+          text: idx === 0 ? part.trim() : ' · ' + part.trim(),
+          font: FONT,
+          size: 19,
+          bold: idx === 0,
+          color: idx === 0 ? COLOR_NAME : COLOR_CONTACT,
+        })
+      ])
+      children.push(new Paragraph({
+        spacing: { before: 100, after: 20 },
+        children: runParts,
+      }))
+      continue
+    }
+
+    // Regular body text
+    children.push(new Paragraph({
+      spacing: { before: 0, after: 40 },
+      children: [new TextRun({
+        text: line,
+        font: FONT,
+        size: 19,          // 9.5pt
+        color: COLOR_BODY,
+      })]
+    }))
   }
 
   const doc = new Document({
     numbering: {
-      config: [
-        {
-          reference: "bullet-list",
-          levels: [
-            {
-              level: 0,
-              format: LevelFormat.BULLET,
-              text: "\u2022",
-              alignment: AlignmentType.LEFT,
-              style: {
-                paragraph: {
-                  indent: {
-                    left: convertInchesToTwip(0.375),
-                    hanging: convertInchesToTwip(0.25),
-                  },
-                },
-                run: { font: "Arial" },
-              },
+      config: [{
+        reference: 'cv-bullets',
+        levels: [{
+          level: 0,
+          format: LevelFormat.BULLET,
+          text: '•',
+          alignment: AlignmentType.LEFT,
+          style: {
+            paragraph: {
+              indent: { left: 360, hanging: 180 },
+              spacing: { before: 0, after: 40 },
             },
-          ],
-        },
-      ],
+            run: {
+              font: FONT,
+              size: 19,
+              color: COLOR_BODY,
+            }
+          }
+        }]
+      }]
     },
-    sections: [
-      {
-        properties: {
-          page: {
-            size: { width: convertInchesToTwip(8.27), height: convertInchesToTwip(11.69) }, // A4
-            margin: {
-              top: 900,
-              bottom: 900,
-              left: 900,
-              right: 900,
-            },
-          },
-        },
-        children,
+    sections: [{
+      properties: {
+        page: {
+          size: { width: 12240, height: 15840 },  // US Letter
+          margin: {
+            top: 900,
+            bottom: 900,
+            left: 1080,
+            right: 1080,
+          }
+        }
       },
-    ],
-  });
+      children,
+    }]
+  })
 
-  return Packer.toBuffer(doc);
+  return await Packer.toBuffer(doc)
 }

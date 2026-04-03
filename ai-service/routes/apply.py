@@ -1,11 +1,15 @@
+import asyncio
 import os
 import tempfile
 import asyncpg
+import anthropic
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, ElementHandle
 from utils.cv_pdf import generate_cv_pdf
+
+_anthropic = anthropic.Anthropic()
 
 router = APIRouter()
 
@@ -231,19 +235,296 @@ async def _apply_indeed(
     return {"status": "manual", "message": "Could not complete Indeed application — apply manually via the link"}
 
 
-# ── LinkedIn apply ─────────────────────────────────────────────────────────────
+# ── LinkedIn Easy Apply — field helpers ───────────────────────────────────────
 
-async def _apply_linkedin(
+async def _get_field_label(page: Page, el: ElementHandle) -> str:
+    """Return the best human-readable label for an input element."""
+    # 1. aria-label attribute
+    try:
+        aria = await el.get_attribute("aria-label") or ""
+        if aria.strip():
+            return aria.strip()
+    except Exception:
+        pass
+
+    # 2. aria-labelledby → look up the referenced element's text
+    try:
+        labelledby = await el.get_attribute("aria-labelledby") or ""
+        if labelledby:
+            ref = page.locator(f"#{labelledby.split()[0]}").first
+            text = (await ref.inner_text()).strip()
+            if text:
+                return text
+    except Exception:
+        pass
+
+    # 3. Associated <label for="...">
+    try:
+        el_id = await el.get_attribute("id") or ""
+        if el_id:
+            label = page.locator(f"label[for='{el_id}']").first
+            text = (await label.inner_text()).strip()
+            if text:
+                return text
+    except Exception:
+        pass
+
+    # 4. Nearest ancestor <label>
+    try:
+        text = await el.evaluate(
+            """el => {
+                let node = el.parentElement;
+                while (node) {
+                    if (node.tagName === 'LABEL') return node.innerText.trim();
+                    node = node.parentElement;
+                }
+                return '';
+            }"""
+        )
+        if text:
+            return text
+    except Exception:
+        pass
+
+    # 5. placeholder fallback
+    try:
+        return (await el.get_attribute("placeholder") or "").strip()
+    except Exception:
+        return ""
+
+
+async def _ask_claude_for_answer(label: str, user: dict) -> str:
+    """Use Claude Haiku to answer a screening question from LinkedIn."""
+    profile = (
+        f"Name: {user.get('first_name', '')} {user.get('last_name', '')}, "
+        f"Email: {user.get('email', '')}"
+    )
+    prompt = (
+        f"LinkedIn job application form field: \"{label}\"\n"
+        f"Applicant profile: {profile}\n\n"
+        "Reply with ONLY the answer value to fill in the field — nothing else.\n"
+        "Rules:\n"
+        "- For 'years of experience' questions: reply with a reasonable number (e.g. 3)\n"
+        "- For work authorization / 'are you authorized to work': reply Yes\n"
+        "- For sponsorship / 'do you require sponsorship': reply No\n"
+        "- For salary expectation: reply with a blank string\n"
+        "- For yes/no questions: reply Yes or No\n"
+        "- If unsure, reply with an empty string"
+    )
+    try:
+        msg = _anthropic.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=50,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+    except Exception:
+        return ""
+
+
+async def _get_answer_for_field(label: str, user: dict) -> str:
+    """Map common LinkedIn field labels to user data, Claude for the rest."""
+    label_lower = label.lower()
+
+    # Direct mappings — no Claude needed
+    if "first name" in label_lower:
+        return user.get("first_name", "")
+    if "last name" in label_lower:
+        return user.get("last_name", "")
+    if "email" in label_lower:
+        return user.get("email", "")
+    if "phone" in label_lower or "mobile" in label_lower:
+        return user.get("phone", "")
+    if "city" in label_lower or "location" in label_lower:
+        return user.get("city", "")
+    if "linkedin" in label_lower and "url" in label_lower:
+        return user.get("linkedin_url", "")
+    if "website" in label_lower or "portfolio" in label_lower:
+        return user.get("portfolio_url", "")
+
+    # Questions that benefit from a reasoned answer
+    if any(w in label_lower for w in [
+        "year", "experience", "authorized", "authoris", "require",
+        "sponsor", "salary", "expect", "notice", "reloc",
+    ]):
+        return await _ask_claude_for_answer(label, user)
+
+    return ""
+
+
+# ── LinkedIn Easy Apply — multi-step modal loop ───────────────────────────────
+
+async def _handle_easy_apply_modal(
     page: Page,
-    first_name: str,
-    last_name: str,
-    email: str,
-    phone: str,
+    user: dict,
     pdf_path: str,
     cover_letter: str,
     screenshot_path: str,
 ) -> dict:
-    await page.goto(page.url, timeout=30_000)
+    max_steps = 10
+
+    for step in range(max_steps):
+        await page.wait_for_timeout(1000)
+
+        # ── 1. Submit button → final step ────────────────────────────────────
+        submit = page.locator(
+            "button[aria-label*='Submit'], "
+            "button:has-text('Submit application'), "
+            "button:has-text('Review your application')"
+        )
+        if await submit.count() > 0:
+            # Take screenshot before submitting
+            try:
+                await page.screenshot(path=screenshot_path, full_page=False)
+            except Exception:
+                pass
+            await submit.last.click()
+            await page.wait_for_timeout(2000)
+            return {"status": "applied", "message": "Application submitted via LinkedIn Easy Apply"}
+
+        # ── 2. CV / Resume upload ─────────────────────────────────────────────
+        try:
+            file_input = page.locator("input[type='file']").first
+            if await file_input.is_visible(timeout=1000):
+                await file_input.set_input_files(pdf_path)
+            else:
+                upload_btn = page.locator(
+                    "button:has-text('Upload resume'), "
+                    "label:has-text('Upload resume'), "
+                    "button:has-text('Upload')"
+                ).first
+                if await upload_btn.is_visible(timeout=800):
+                    await upload_btn.click()
+                    await page.wait_for_timeout(600)
+                    await page.locator("input[type='file']").first.set_input_files(pdf_path)
+        except Exception:
+            pass
+
+        # ── 3. Cover letter textarea ──────────────────────────────────────────
+        try:
+            cl = page.locator(
+                "textarea[id*='cover'], textarea[name*='cover'], "
+                "textarea[placeholder*='cover'], textarea[placeholder*='Cover'], "
+                "textarea[placeholder*='Write a cover']"
+            ).first
+            if await cl.is_visible(timeout=800):
+                current = await cl.input_value()
+                if not current:
+                    await cl.fill(cover_letter)
+        except Exception:
+            pass
+
+        # ── 4. Text / tel inputs that are empty ───────────────────────────────
+        try:
+            inputs: list[ElementHandle] = await page.query_selector_all(
+                "input[type='text'], input[type='tel'], input[type='number'], textarea"
+            )
+            for inp in inputs[:10]:
+                try:
+                    current_val = await inp.input_value()
+                    if current_val:
+                        continue
+                    label = await _get_field_label(page, inp)
+                    if not label:
+                        continue
+                    value = await _get_answer_for_field(label, user)
+                    if value:
+                        await inp.fill(value)
+                        await asyncio.sleep(0.3)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # ── 5. Dropdowns — pick first non-placeholder option ──────────────────
+        try:
+            selects: list[ElementHandle] = await page.query_selector_all("select")
+            for sel in selects[:5]:
+                try:
+                    options: list[ElementHandle] = await sel.query_selector_all("option")
+                    if len(options) > 1:
+                        current = await sel.input_value()
+                        if not current or current == options[0].get_attribute("value"):
+                            await sel.select_option(index=1)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # ── 6. Radio buttons — prefer "Yes", else first option ────────────────
+        try:
+            fieldsets = await page.locator("fieldset").all()
+            for fieldset in fieldsets[:8]:
+                try:
+                    radios = await fieldset.locator("input[type='radio']").all()
+                    if not radios:
+                        continue
+                    already_checked = any(
+                        await r.is_checked() for r in radios
+                        if not isinstance(await r.is_checked(), Exception)
+                    )
+                    if already_checked:
+                        continue
+                    # Try to find a "Yes" option
+                    yes_clicked = False
+                    for radio in radios:
+                        try:
+                            label_el = page.locator(
+                                f"label[for='{await radio.get_attribute('id') or ''}']"
+                            ).first
+                            text = (await label_el.inner_text()).strip().lower()
+                            if text in ("yes", "כן"):
+                                await radio.click()
+                                yes_clicked = True
+                                break
+                        except Exception:
+                            pass
+                    if not yes_clicked:
+                        await radios[0].click()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # ── 7. Checkboxes (e.g. privacy policy) ──────────────────────────────
+        try:
+            checkboxes = await page.locator(
+                "input[type='checkbox']:not(:checked)"
+            ).all()
+            for cb in checkboxes[:3]:
+                try:
+                    await cb.click()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # ── 8. Click Next / Continue / Review ────────────────────────────────
+        next_btn = page.locator(
+            "button[aria-label*='Next'], "
+            "button[aria-label*='Continue'], "
+            "button[aria-label*='Review'], "
+            "button:has-text('Next'), "
+            "button:has-text('Continue')"
+        ).last
+        if await next_btn.count() > 0:
+            await next_btn.click()
+        else:
+            return {
+                "status": "failed",
+                "message": f"Stuck on step {step + 1} — no Next or Submit button found",
+            }
+
+    return {"status": "failed", "message": "Exceeded maximum steps (10)"}
+
+
+async def _apply_linkedin(
+    page: Page,
+    user: dict,
+    pdf_path: str,
+    cover_letter: str,
+    screenshot_path: str,
+) -> dict:
     await page.wait_for_timeout(2000)
 
     easy_apply = page.locator("button:has-text('Easy Apply')").first
@@ -255,63 +536,7 @@ async def _apply_linkedin(
     await easy_apply.click()
     await page.wait_for_timeout(1500)
 
-    fill_map = [
-        ("input[id*='firstName'], input[name='firstName']", first_name),
-        ("input[id*='lastName'], input[name='lastName']", last_name),
-        ("input[type='email']", email),
-        ("input[type='tel']", phone),
-    ]
-    for selector, value in fill_map:
-        await _try_fill(page, selector, value)
-
-    try:
-        file_input = page.locator("input[type='file']").first
-        if await file_input.is_visible(timeout=3000):
-            await file_input.set_input_files(pdf_path)
-        else:
-            upload_btn = page.locator(
-                "button:has-text('Upload'), label:has-text('Upload resume')"
-            ).first
-            if await upload_btn.is_visible(timeout=2000):
-                await upload_btn.click()
-                await page.wait_for_timeout(500)
-                await page.locator("input[type='file']").first.set_input_files(pdf_path)
-    except Exception:
-        pass
-
-    try:
-        cl_area = page.locator(
-            "textarea[id*='cover'], textarea[name*='cover'], "
-            "textarea[placeholder*='cover'], textarea[placeholder*='Cover']"
-        ).first
-        if await cl_area.is_visible(timeout=3000):
-            await cl_area.fill(cover_letter)
-    except Exception:
-        pass
-
-    await page.screenshot(path=screenshot_path, full_page=False)
-
-    submit_btn = page.locator(
-        "button[aria-label*='Submit'], button:has-text('Submit application')"
-    ).first
-    try:
-        await submit_btn.wait_for(state="visible", timeout=5000)
-    except Exception:
-        return {"status": "failed", "message": "Could not find submit button"}
-
-    await submit_btn.click()
-
-    try:
-        await page.wait_for_selector(
-            "div:has-text('application was sent'), "
-            "div:has-text('Application submitted'), "
-            "h3:has-text('Your application was sent')",
-            timeout=8000,
-        )
-    except Exception:
-        pass
-
-    return {"status": "applied", "message": "Application submitted via LinkedIn Easy Apply"}
+    return await _handle_easy_apply_modal(page, user, pdf_path, cover_letter, screenshot_path)
 
 
 # ── main handler ───────────────────────────────────────────────────────────────
@@ -344,10 +569,19 @@ async def apply_to_job(req: ApplyRequest):
 
     name = user["name"] or ""
     email = user["email"] or ""
-    phone = ""
     parts = name.split()
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""
+
+    user_data = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "phone": "",
+        "city": "",
+        "linkedin_url": "",
+        "portfolio_url": "",
+    }
 
     tailored_cv = application["tailored_cv"] or ""
     cover_letter = application["cover_letter"] or ""
@@ -366,8 +600,19 @@ async def apply_to_job(req: ApplyRequest):
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             profile_dir,
-            headless=False,
-            args=["--no-sandbox"],
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
@@ -375,13 +620,12 @@ async def apply_to_job(req: ApplyRequest):
 
             if is_indeed:
                 result = await _apply_indeed(
-                    page, first_name, last_name, email, phone,
+                    page, first_name, last_name, email, "",
                     pdf_path, cover_letter, screenshot_path,
                 )
             else:
                 result = await _apply_linkedin(
-                    page, first_name, last_name, email, phone,
-                    pdf_path, cover_letter, screenshot_path,
+                    page, user_data, pdf_path, cover_letter, screenshot_path,
                 )
 
             return result

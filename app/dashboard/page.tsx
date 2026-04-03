@@ -82,6 +82,7 @@ function applySort(jobs: Job[], sortBy: Filters["sortBy"]): Job[] {
 
 export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -99,11 +100,18 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/match${isRefresh ? "?refresh=true" : ""}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load jobs");
-      setJobs(data.jobs);
+      const [matchRes, savedRes] = await Promise.all([
+        fetch(`/api/match${isRefresh ? "?refresh=true" : ""}`),
+        fetch("/api/jobs/saved"),
+      ]);
+      const matchData = await matchRes.json();
+      if (!matchRes.ok) throw new Error(matchData.error ?? "Failed to load jobs");
+      setJobs(matchData.jobs);
       setLastFetched(new Date());
+      if (savedRes.ok) {
+        const savedData = await savedRes.json();
+        setSavedIds(new Set((savedData.jobs ?? []).map((j: { id: string }) => j.id)));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
@@ -210,6 +218,7 @@ export default function DashboardPage() {
               <JobCard
                 key={job.id}
                 job={job}
+                initialSaved={savedIds.has(job.id)}
                 onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
               />
             ))}

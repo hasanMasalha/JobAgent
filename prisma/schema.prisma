@@ -15,6 +15,9 @@ model User {
   email                 String   @unique
   name                  String?
   linkedin_session_path String?
+  google_access_token   String?
+  google_refresh_token  String?
+  google_connected      Boolean  @default(false)
   created_at            DateTime @default(now())
 
   cvs             CV[]

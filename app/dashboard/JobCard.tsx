@@ -20,9 +20,9 @@ export interface Job {
   gaps: string[];
 }
 
-export default function JobCard({ job, onDismiss }: { job: Job; onDismiss?: (id: string) => void }) {
+export default function JobCard({ job, initialSaved = false, onDismiss }: { job: Job; initialSaved?: boolean; onDismiss?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const router = useRouter();
@@ -160,24 +160,38 @@ export default function JobCard({ job, onDismiss }: { job: Job; onDismiss?: (id:
           Apply
         </button>
         <button
-          disabled={saved || saving}
+          disabled={saving}
           onClick={async () => {
             setSaving(true);
             try {
-              const res = await fetch(`/api/jobs/${job.id}/save`, { method: "POST" });
-              if (!res.ok) throw new Error("Failed to save");
-              setSaved(true);
-              showToast("Job saved", "success");
+              if (saved) {
+                const res = await fetch("/api/jobs/interact", {
+                  method: "DELETE",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ job_id: job.id }),
+                });
+                if (!res.ok) throw new Error("Failed to unsave");
+                setSaved(false);
+                showToast("Job removed from saved", "success");
+              } else {
+                const res = await fetch(`/api/jobs/${job.id}/save`, { method: "POST" });
+                if (!res.ok) throw new Error("Failed to save");
+                setSaved(true);
+                showToast("Job saved", "success");
+              }
             } catch {
-              showToast("Could not save job", "error");
+              showToast(saved ? "Could not unsave job" : "Could not save job", "error");
             } finally {
               setSaving(false);
             }
           }}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50
-            hover:bg-gray-50 text-gray-600 border-gray-300"
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+            saved
+              ? "bg-gray-100 text-gray-500 border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+              : "hover:bg-gray-50 text-gray-600 border-gray-300"
+          }`}
         >
-          {saved ? "Saved ✓" : saving ? "Saving…" : "Save"}
+          {saving ? "…" : saved ? "Saved ✓" : "Save"}
         </button>
         <button
           onClick={handleDismiss}

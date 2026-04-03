@@ -11,18 +11,20 @@ const STARTER_PROMPTS = [
   "What backend roles did I match today?",
   "Which companies have I applied to?",
   "Show me my best matches this week",
+  "Give me a summary of my job search",
 ];
 
 export default function ChatPage() {
   const [history, setHistory] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [toolLabel, setToolLabel] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history, streaming]);
+  }, [history, streaming, toolLabel]);
 
   async function sendMessage(text: string) {
     if (!text.trim() || streaming) return;
@@ -32,8 +34,9 @@ export default function ChatPage() {
     setHistory(nextHistory);
     setInput("");
     setStreaming(true);
+    setToolLabel(null);
 
-    // Placeholder for assistant message that we'll stream into
+    // Placeholder assistant message
     setHistory([...nextHistory, { role: "assistant", content: "" }]);
 
     try {
@@ -42,7 +45,7 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMsg.content,
-          history: history, // previous history, not including new user message
+          history,
         }),
       });
 
@@ -53,19 +56,62 @@ export default function ChatPage() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
       let assistantText = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        assistantText += decoder.decode(value, { stream: true });
-        setHistory([...nextHistory, { role: "assistant", content: assistantText }]);
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line) as { type: string; label?: string; chunk?: string };
+
+            if (event.type === "tool" && event.label) {
+              setToolLabel(event.label);
+            } else if (event.type === "text" && event.chunk) {
+              setToolLabel(null);
+              assistantText += event.chunk;
+              setHistory([
+                ...nextHistory,
+                { role: "assistant", content: assistantText },
+              ]);
+            }
+          } catch {
+            // malformed line — ignore
+          }
+        }
+      }
+
+      // Flush any remaining buffer
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer) as { type: string; chunk?: string };
+          if (event.type === "text" && event.chunk) {
+            assistantText += event.chunk;
+            setHistory([...nextHistory, { role: "assistant", content: assistantText }]);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // If Claude returned nothing (shouldn't happen), clear the placeholder
+      if (!assistantText) {
+        setHistory(nextHistory);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setHistory([...nextHistory, { role: "assistant", content: `Error: ${msg}` }]);
     } finally {
       setStreaming(false);
+      setToolLabel(null);
     }
   }
 
@@ -115,7 +161,7 @@ export default function ChatPage() {
               }`}
             >
               {msg.content}
-              {msg.role === "assistant" && msg.content === "" && streaming && (
+              {msg.role === "assistant" && msg.content === "" && streaming && !toolLabel && (
                 <span className="inline-flex gap-1 items-center h-4">
                   <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
                   <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -131,6 +177,18 @@ export default function ChatPage() {
 
       {/* Input area */}
       <div className="border-t pt-4">
+        {/* Tool status indicator */}
+        {toolLabel && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <span className="inline-flex gap-0.5 items-center">
+              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+            </span>
+            <span className="text-xs text-gray-400 italic">{toolLabel}</span>
+          </div>
+        )}
+
         <div className="flex gap-2 items-end bg-white border rounded-2xl px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
           <textarea
             ref={textareaRef}

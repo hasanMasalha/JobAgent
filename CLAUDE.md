@@ -47,9 +47,14 @@ SUPABASE_ANON_KEY          Supabase anon key
 ANTHROPIC_API_KEY          Claude API key
 REDIS_URL                  Upstash Redis URL
 PYTHON_SERVICE_URL         http://localhost:8000
+GOOGLE_CLIENT_ID           Google OAuth 2.0 client ID
+GOOGLE_CLIENT_SECRET       Google OAuth 2.0 client secret
+GOOGLE_REDIRECT_URI        https://yourdomain.com/api/auth/google/callback
 
 ## Database tables
-users          id, email, name, linkedin_session_path, created_at
+users          id, email, name, linkedin_session_path,
+               google_access_token, google_refresh_token,
+               google_connected, created_at
 cvs            id, user_id, raw_text, skills_json, clean_summary,
                embedding vector(384), updated_at
 jobs           id, title, company, description, location, url,
@@ -77,6 +82,10 @@ draft → applied → interviewing → offer / rejected / cancelled
 3. Only after Confirm → Playwright opens LinkedIn Easy Apply and submits
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
 5. Screenshot taken before every submit and stored
+
+## Playwright / browser automation caveats
+- Playwright runs headless=True. For LinkedIn the user must have a saved
+  session in browser_profile/{user_id}/ — see the LinkedIn login flow in preferences.
 
 ## Naming conventions
 - API routes: /app/api/[resource]/route.ts

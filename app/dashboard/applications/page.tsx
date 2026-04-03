@@ -28,6 +28,113 @@ const STATUS_STYLES: Record<string, string> = {
   failed:       "bg-red-50 text-red-400",
 };
 
+interface CalendarModalProps {
+  app: Application;
+  onClose: () => void;
+  onSuccess: (eventUrl: string) => void;
+}
+
+function CalendarModal({ app, onClose, onSuccess }: CalendarModalProps) {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("10:00");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/calendar/create-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: app.id, date, time, notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create event");
+      onSuccess(data.eventUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">
+          Schedule interview on Google Calendar
+        </h2>
+        <p className="text-sm text-gray-500 mb-5">
+          {app.job_title} at {app.company}
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Interview date
+            </label>
+            <input
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Interview time
+            </label>
+            <input
+              type="time"
+              required
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Zoom link, interviewer name…"
+              rows={3}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
+            >
+              Skip
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !date}
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {loading ? "Adding…" : "Add to Calendar"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function StatPill({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className={`flex flex-col items-center px-5 py-3 rounded-xl border ${color}`}>
@@ -43,6 +150,8 @@ export default function ApplicationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [calendarModal, setCalendarModal] = useState<Application | null>(null);
+  const [toast, setToast] = useState<{ message: string; url?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/applications")
@@ -54,6 +163,13 @@ export default function ApplicationsPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Auto-dismiss toast after 6 seconds
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   async function handleStatusChange(id: string, newStatus: AllowedStatus) {
     setUpdating(id);
@@ -70,6 +186,11 @@ export default function ApplicationsPage() {
       setApps((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
       );
+
+      if (newStatus === "interviewing") {
+        const app = apps.find((a) => a.id === id);
+        if (app) setCalendarModal({ ...app, status: newStatus });
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -103,6 +224,36 @@ export default function ApplicationsPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-xl shadow-lg flex items-center gap-3">
+          <span>{toast.message}</span>
+          {toast.url && (
+            <a
+              href={toast.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium whitespace-nowrap"
+            >
+              View event →
+            </a>
+          )}
+          <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* Calendar modal */}
+      {calendarModal && (
+        <CalendarModal
+          app={calendarModal}
+          onClose={() => setCalendarModal(null)}
+          onSuccess={(eventUrl) => {
+            setCalendarModal(null);
+            setToast({ message: "Interview added to Google Calendar!", url: eventUrl });
+          }}
+        />
+      )}
+
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">My Applications</h1>
         <p className="text-sm text-gray-500 mt-0.5">Track and manage your job applications</p>

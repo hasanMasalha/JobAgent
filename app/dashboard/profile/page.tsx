@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
@@ -30,6 +30,13 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // LinkedIn session state
+  const [linkedinConnected, setLinkedinConnected] = useState(false);
+  const [linkedinConnecting, setLinkedinConnecting] = useState(false);
+  const [linkedinModal, setLinkedinModal] = useState(false);
+  const [linkedinError, setLinkedinError] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
@@ -48,7 +55,73 @@ export default function ProfilePage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Check LinkedIn session status on mount
+    fetch("/api/linkedin/session-status")
+      .then((r) => r.json())
+      .then((d) => { if (d.connected) setLinkedinConnected(true); })
+      .catch(() => {});
   }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  async function handleConnectLinkedin() {
+    setLinkedinError("");
+    setLinkedinConnecting(true);
+    setLinkedinModal(true);
+
+    try {
+      const res = await fetch("/api/linkedin/start-session", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "Failed to start session");
+    } catch (err) {
+      setLinkedinError(err instanceof Error ? err.message : "Failed to start");
+      setLinkedinConnecting(false);
+      return;
+    }
+
+    // Poll every 3 s for up to 2 minutes
+    let elapsed = 0;
+    pollRef.current = setInterval(async () => {
+      elapsed += 3;
+      try {
+        const res = await fetch("/api/linkedin/session-status");
+        const data = await res.json();
+        if (data.connected) {
+          clearInterval(pollRef.current!);
+          setLinkedinConnected(true);
+          setLinkedinConnecting(false);
+          setLinkedinModal(false);
+          showToast("LinkedIn connected!", "success");
+          return;
+        }
+        if (data.login_status === "timeout" || data.login_status === "error") {
+          clearInterval(pollRef.current!);
+          setLinkedinConnecting(false);
+          setLinkedinError(
+            data.login_status === "timeout"
+              ? "Timed out — you have 2 minutes to log in. Try again."
+              : "Something went wrong. Try again."
+          );
+          return;
+        }
+      } catch { /* ignore transient errors */ }
+
+      if (elapsed >= 120) {
+        clearInterval(pollRef.current!);
+        setLinkedinConnecting(false);
+        setLinkedinError("Timed out after 2 minutes. Try again.");
+      }
+    }, 3000);
+  }
+
+  function cancelLinkedinConnect() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setLinkedinConnecting(false);
+    setLinkedinModal(false);
+    setLinkedinError("");
+  }
 
   function addTitle() {
     const t = titleInput.trim();
@@ -120,6 +193,40 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
+      {/* LinkedIn instruction modal */}
+      {linkedinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-2">Connect LinkedIn</h2>
+            {linkedinConnecting && !linkedinError ? (
+              <>
+                <p className="text-sm text-gray-600 mb-4">
+                  A browser window is opening on this machine. Log in to LinkedIn normally —
+                  the window will close automatically once you&apos;re signed in.
+                </p>
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-5">
+                  <span className="inline-flex gap-0.5">
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:300ms]" />
+                  </span>
+                  <span className="text-sm text-blue-700">Waiting for login… (up to 2 minutes)</span>
+                </div>
+              </>
+            ) : null}
+            {linkedinError && (
+              <p className="text-sm text-red-600 mb-4">{linkedinError}</p>
+            )}
+            <button
+              onClick={cancelLinkedinConnect}
+              className="w-full border rounded-lg py-2 text-sm hover:bg-gray-50"
+            >
+              {linkedinConnecting ? "Cancel" : "Close"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Your Profile</h1>
         <p className="text-sm text-gray-500 mt-0.5">Update your CV and job preferences</p>
@@ -277,6 +384,50 @@ export default function ProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* LinkedIn Connection */}
+      <div className="bg-white border rounded-xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">LinkedIn Connection</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
+          </div>
+          {linkedinConnected ? (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                Connected
+              </span>
+              <button
+                onClick={handleConnectLinkedin}
+                disabled={linkedinConnecting}
+                className="text-xs text-gray-500 hover:underline disabled:opacity-50"
+              >
+                Reconnect
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                Not connected
+              </span>
+              <button
+                onClick={handleConnectLinkedin}
+                disabled={linkedinConnecting}
+                className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+              >
+                {linkedinConnecting ? "Connecting…" : "Connect LinkedIn"}
+              </button>
+            </div>
+          )}
+        </div>
+        {!linkedinConnected && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+            Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
