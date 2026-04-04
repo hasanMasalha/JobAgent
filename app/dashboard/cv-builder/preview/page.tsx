@@ -16,7 +16,7 @@ function CVPreview({ cvText }: { cvText: string }) {
   let contactWritten = false;
 
   return (
-    <div className="px-8 py-7 font-mono text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap max-h-[70vh] overflow-y-auto">
+    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "'Calibri', 'Carlito', Arial, sans-serif" }}>
       {lines.map((line, i) => {
         const trimmed = line.trim();
 

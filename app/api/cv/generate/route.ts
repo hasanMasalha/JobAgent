@@ -55,8 +55,7 @@ Location: ${personal.location}
 ${personal.linkedin ? `LinkedIn: ${personal.linkedin}` : ""}
 ${personal.portfolio ? `Portfolio/GitHub: ${personal.portfolio}` : ""}
 
-Work Experience:
-${expLines || "  (none provided)"}
+${expLines ? `Work Experience:\n${expLines}` : ""}
 
 Education:
 ${eduLines || "  (none provided)"}
@@ -69,8 +68,8 @@ ${projectLines ? `Projects:\n${projectLines}` : ""}
 Instructions:
 - Start with the candidate's full name on the first line, then contact info on the second line (email | phone | location${personal.linkedin ? " | LinkedIn" : ""}${personal.portfolio ? " | Portfolio" : ""})
 - Write a 2-3 sentence professional summary tailored to "${personal.title}"
-- For each job: write 3-5 impactful bullet points using strong action verbs and quantified achievements where possible
-- Use these exact section headers (plain text, no markdown): Summary, Work Experience, Education, Skills, Languages${projectLines ? ", Projects" : ""}
+${expLines ? "- For each job: write 3-5 impactful bullet points using strong action verbs and quantified achievements where possible" : "- Do NOT include a Work Experience section at all — the candidate has no work experience"}
+- Use these exact section headers (plain text, no markdown): Summary${expLines ? ", Work Experience" : ""}, Education, Skills, Languages${projectLines ? ", Projects" : ""}
 - Bullet points must start with "• "
 - Keep the CV to one page (approx 550 words max)
 - Do NOT include any markdown, asterisks, or special formatting — plain text only
