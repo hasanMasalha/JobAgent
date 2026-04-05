@@ -12,11 +12,15 @@ const SECTION_HEADERS = new Set([
 
 function CVPreview({ cvText }: { cvText: string }) {
   const lines = cvText.split("\n");
+
   let nameWritten = false;
   let contactWritten = false;
 
   return (
-    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "'Calibri', 'Carlito', Arial, sans-serif" }}>
+    <>
+      {/* Carlito is metric-compatible with Calibri — used as fallback on non-Windows */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}</style>
+    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
       {lines.map((line, i) => {
         const trimmed = line.trim();
 
@@ -50,6 +54,7 @@ function CVPreview({ cvText }: { cvText: string }) {
         return <div key={i} className="text-gray-700">{trimmed}</div>;
       })}
     </div>
+    </>
   );
 }
 
