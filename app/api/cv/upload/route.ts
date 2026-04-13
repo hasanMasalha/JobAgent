@@ -25,9 +25,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract text from PDF
-    // Import from lib directly to bypass pdf-parse's debug code that reads a test file on load
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse/lib/pdf.js");
+    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
     const buffer = Buffer.from(await cvFile.arrayBuffer());
     const { text: rawText } = await pdfParse(buffer);
 
