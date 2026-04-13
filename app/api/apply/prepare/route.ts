@@ -60,11 +60,26 @@ export async function POST(req: NextRequest) {
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    });
+    let message;
+    try {
+      message = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: prompt }],
+      });
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 529 || status === 503 || status === 500) {
+        // Sonnet overloaded — fall back to Haiku
+        message = await anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: prompt }],
+        });
+      } else {
+        throw err;
+      }
+    }
 
     let raw = (message.content[0] as { text: string }).text.trim();
     if (raw.startsWith("```")) {
