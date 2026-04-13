@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
-const anthropic = new Anthropic();
+const anthropic = new Anthropic({ maxRetries: 5, timeout: 120_000 });
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,26 +60,13 @@ export async function POST(req: NextRequest) {
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;
 
-    let message;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        message = await anthropic.messages.create({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          messages: [{ role: "user", content: prompt }],
-        });
-        break;
-      } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        if (status === 529 && attempt < 3) {
-          await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
-          continue;
-        }
-        throw err;
-      }
-    }
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-    let raw = (message!.content[0] as { text: string }).text.trim();
+    let raw = (message.content[0] as { text: string }).text.trim();
     if (raw.startsWith("```")) {
       raw = raw.split("\n").slice(1).join("\n");
       const fence = raw.lastIndexOf("```");
