@@ -41,6 +41,7 @@ export default async function DashboardLayout({
             <Link href="/dashboard" className="text-gray-600 hover:text-gray-900 transition-colors">Jobs</Link>
             <Link href="/dashboard/applications" className="text-gray-600 hover:text-gray-900 transition-colors">Applications</Link>
             <Link href="/dashboard/saved" className="text-gray-600 hover:text-gray-900 transition-colors">Saved</Link>
+            <Link href="/dashboard/my-cv" className="text-gray-600 hover:text-gray-900 transition-colors">My CV</Link>
             <Link href="/dashboard/profile" className="text-gray-600 hover:text-gray-900 transition-colors">Profile</Link>
           </div>
         </div>

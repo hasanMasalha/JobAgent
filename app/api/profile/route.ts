@@ -14,8 +14,8 @@ export async function GET(_req: NextRequest) {
     }
 
     const [cvRows, prefRows, dbUser] = await Promise.all([
-      db.$queryRaw<{ clean_summary: string | null; skills_json: string | null; updated_at: Date }[]>`
-        SELECT clean_summary, skills_json, updated_at
+      db.$queryRaw<{ id: string; clean_summary: string | null; skills_json: string | null; updated_at: Date; raw_text: string }[]>`
+        SELECT id, clean_summary, skills_json, updated_at, raw_text
         FROM "CV" WHERE user_id = ${user.id} LIMIT 1
       `,
       db.$queryRaw<{ titles: string[]; locations: string[]; remote_ok: boolean; min_salary: number | null }[]>`

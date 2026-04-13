@@ -113,7 +113,7 @@ export default function OnboardingPage() {
         if (!res.ok) throw new Error(data.error ?? "Update failed");
       }
 
-      router.push("/dashboard");
+      router.push(file ? "/dashboard/my-cv" : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

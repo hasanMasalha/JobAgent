@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
+import CVScoreCard from "@/app/components/CVScoreCard";
 
 const SECTION_HEADERS = new Set([
   "summary", "work experience", "experience", "education",
@@ -169,6 +170,10 @@ function PreviewContent() {
           <span className="text-xs text-gray-400 font-mono">preview</span>
         </div>
         {cvText && <CVPreview cvText={cvText} />}
+      </div>
+
+      <div className="mb-6">
+        <CVScoreCard />
       </div>
 
       <div className="flex items-center justify-between">
