@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest) {
       `,
       db.user.findUnique({
         where: { id: user.id },
-        select: { google_connected: true },
+        select: { google_connected: true, email_notifications: true },
       }),
     ]);
 
@@ -32,6 +32,7 @@ export async function GET(_req: NextRequest) {
       cv: cvRows[0] ?? null,
       preferences: prefRows[0] ?? null,
       google_connected: dbUser?.google_connected ?? false,
+      email_notifications: dbUser?.email_notifications ?? true,
     });
   } catch (err) {
     console.error("[profile GET]", err);

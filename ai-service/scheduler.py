@@ -1,6 +1,7 @@
 import logging
 import os
 import asyncpg
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -11,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
+NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
 
 async def _run_scrape():
     logger.info("[scheduler] Starting daily scrape…")
@@ -19,6 +23,22 @@ async def _run_scrape():
         logger.info("[scheduler] Scrape done: %s", result)
     except Exception:
         logger.exception("[scheduler] Scrape failed")
+
+
+async def _notify_user_if_matches(user_id: str, match_count: int):
+    if match_count == 0:
+        return
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{NEXTJS_URL}/api/email/send-matches",
+                json={"user_id": user_id},
+                headers={"X-Internal-Key": INTERNAL_API_KEY},
+                timeout=30,
+            )
+            logger.info("[scheduler] Email notify user %s: %s", user_id, resp.text)
+    except Exception:
+        logger.exception("[scheduler] Email notify failed for user %s", user_id)
 
 
 async def _run_match_all():
@@ -33,8 +53,10 @@ async def _run_match_all():
     for row in rows:
         user_id = row["id"]
         try:
-            await match_jobs(MatchRequest(user_id=user_id))
-            logger.info("[scheduler] Matched jobs for user %s", user_id)
+            result = await match_jobs(MatchRequest(user_id=user_id))
+            match_count = len(result) if isinstance(result, list) else 0
+            logger.info("[scheduler] Matched %d jobs for user %s", match_count, user_id)
+            await _notify_user_if_matches(user_id, match_count)
         except Exception:
             logger.exception("[scheduler] Match failed for user %s", user_id)
 
