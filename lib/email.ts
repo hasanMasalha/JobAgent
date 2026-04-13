@@ -104,7 +104,7 @@ export async function sendDailyMatchEmail(params: {
             JobAgent · Sent daily when new matches are found
           </p>
           <p style="margin:6px 0 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/preferences?unsubscribe=true"
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/profile?unsubscribe=true"
                style="color:#9ca3af; font-size:12px;">
               Unsubscribe from daily emails
             </a>

@@ -43,7 +43,6 @@ export default async function DashboardLayout({
             <Link href="/dashboard/saved" className="text-gray-600 hover:text-gray-900 transition-colors">Saved</Link>
             <Link href="/dashboard/my-cv" className="text-gray-600 hover:text-gray-900 transition-colors">My CV</Link>
             <Link href="/dashboard/profile" className="text-gray-600 hover:text-gray-900 transition-colors">Profile</Link>
-            <Link href="/dashboard/preferences" className="text-gray-600 hover:text-gray-900 transition-colors">Preferences</Link>
           </div>
         </div>
         <div className="flex items-center gap-4">

@@ -1,0 +1,2205 @@
+
+> jobagent@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 4.3s
+ ✓ Compiled /middleware in 300ms
+ ✓ Compiled (124 modules)
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 21.6s (756 modules)
+ ✓ Compiled in 2.8s (326 modules)
+ GET /dashboard 200 in 5612ms
+ ○ Compiling /favicon.ico ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled /dashboard/preferences in 7.4s (444 modules)
+ ✓ Compiled in 603ms (315 modules)
+ GET /favicon.ico 200 in 8771ms
+ GET / 307 in 6012ms
+ GET /favicon.ico 200 in 71ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 7951ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 356ms
+ ✓ Compiled /dashboard/onboarding in 496ms (797 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 384ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 362ms
+ ✓ Compiled in 1475ms (332 modules)
+ GET /dashboard/preferences?_rsc=glg0h 200 in 1546ms
+ ✓ Compiled in 1330ms (748 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /dashboard/preferences?_rsc=glg0h 200 in 2305ms
+ GET /dashboard/preferences 200 in 2325ms
+ ✓ Compiled /favicon.ico in 135ms (448 modules)
+ GET /favicon.ico 200 in 245ms
+ GET /favicon.ico 200 in 21ms
+ ✓ Compiled /api/profile in 116ms (471 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 601ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 347ms
+ ○ Compiling /dashboard/profile ...
+ ✓ Compiled /dashboard/profile in 629ms (795 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 425ms
+ ✓ Compiled /api/linkedin/session-status in 419ms (477 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 481ms
+ GET /api/linkedin/session-status 200 in 1251ms
+ GET /api/linkedin/session-status 200 in 346ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 420ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 344ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 458ms
+ GET /api/linkedin/session-status 200 in 505ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 341ms
+ GET /api/linkedin/session-status 200 in 485ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 403ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 377ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 396ms
+ GET /api/linkedin/session-status 200 in 415ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 356ms
+ GET /api/linkedin/session-status 200 in 348ms
+ ✓ Compiled in 1147ms (754 modules)
+ ✓ Compiled /api/linkedin/session-status in 141ms (446 modules)
+ ✓ Compiled (448 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 817ms
+ GET /api/linkedin/session-status 200 in 844ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 376ms
+ GET /api/linkedin/session-status 200 in 357ms
+ GET /dashboard/profile?_rsc=1kb5q 200 in 1488ms
+ ✓ Compiled in 427ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 671ms
+ ✓ Compiled in 423ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 636ms
+ ✓ Compiled in 820ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 1562ms
+ ✓ Compiled in 1126ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 653ms
+ ✓ Compiled in 898ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 615ms
+ ✓ Compiled in 955ms (782 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 401ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 340ms
+ GET /dashboard/profile?_rsc=1kb5q 200 in 621ms
+ GET /api/linkedin/session-status 200 in 1337ms
+ GET /api/linkedin/session-status 200 in 336ms
+ ✓ Compiled in 588ms (782 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 385ms
+ GET /api/linkedin/session-status 200 in 405ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 360ms
+ GET /api/linkedin/session-status 200 in 350ms
+ GET /dashboard/profile?_rsc=1kb5q 200 in 591ms
+ ✓ Compiled in 622ms (782 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 628ms
+ ✓ Compiled in 758ms (782 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⨯ Error: Cannot access default.then on the server. You cannot dot into a client module from a server component. You can only pass the imported name through.
+    at Object.get (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:255061)
+    at rq (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:9302)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10388
+    at async Promise.all (index 0)
+    at async rq (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10093)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10388
+    at async Promise.all (index 0)
+    at async rq (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10093)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10388
+    at async Promise.all (index 0)
+    at async rq (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:10093)
+    at async rJ (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:12680)
+    at async r3 (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:16174)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1427:30)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/dashboard/profile'
+}
+ ⨯ Error: Cannot access default.then on the server. You cannot dot into a client module from a server component. You can only pass the imported name through.
+    at async Promise.all (index 0)
+    at async Promise.all (index 0)
+    at async Promise.all (index 0)
+digest: "1222767386"
+ ⨯ Error: Cannot access default.then on the server. You cannot dot into a client module from a server component. You can only pass the imported name through.
+    at async Promise.all (index 0)
+    at async Promise.all (index 0)
+    at async Promise.all (index 0)
+digest: "1222767386"
+ ○ Compiling /_error ...
+ GET /dashboard/profile 500 in 783ms
+ ✓ Compiled /_error in 2.4s (994 modules)
+ ✓ Compiled /favicon.ico in 391ms (517 modules)
+ GET /favicon.ico 200 in 493ms
+ ✓ Compiled in 1038ms (1037 modules)
+ GET /dashboard/profile 200 in 1896ms
+ GET /favicon.ico 200 in 43ms
+ GET /favicon.ico 200 in 28ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 425ms
+ GET /api/linkedin/session-status 200 in 446ms
+ ✓ Compiled in 1809ms (1155 modules)
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 1956ms
+ GET /api/linkedin/session-status 200 in 1883ms
+ ○ Compiling /_not-found ...
+ GET /dashboard/profile?_rsc=1kb5q 200 in 2872ms
+ ✓ Compiled /_not-found in 1044ms (1020 modules)
+ GET /dashboard/profile 200 in 697ms
+ GET /favicon.ico 200 in 42ms
+prisma:error 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+[profile GET] PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    id: "61ddd06f-b30d-4b3e-952b-bbe12ba563fc"
+  },
+  select: {
+    google_connected: true,
+    email_notifications: true,
+    ~~~~~~~~~~~~~~~~~~~
+?   id?: true,
+?   email?: true,
+?   name?: true,
+?   linkedin_session_path?: true,
+?   google_access_token?: true,
+?   google_refresh_token?: true,
+?   created_at?: true,
+?   cvs?: true,
+?   job_preferences?: true,
+?   applications?: true,
+?   interactions?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `email_notifications` for select statement on model `User`. Available options are marked with ?.
+    at ar (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at Gr.handleRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at Gr.handleAndLogRequestError (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async Promise.all (index 2)
+    at async GET (webpack-internal:///(rsc)/./app/api/profile/route.ts:25:44)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  clientVersion: '7.6.0'
+}
+ GET /api/profile 500 in 377ms
+ GET /api/linkedin/session-status 200 in 384ms

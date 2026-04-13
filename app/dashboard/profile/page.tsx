@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
 type WorkMode = "remote" | "hybrid" | "onsite";
@@ -11,8 +11,9 @@ interface Profile {
   preferences: { titles: string[]; locations: string[]; remote_ok: boolean; min_salary: number | null } | null;
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +31,10 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Notifications
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [savingEmail, setSavingEmail] = useState(false);
+
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
@@ -40,8 +45,11 @@ export default function ProfilePage() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
-      .then((data: Profile) => {
+      .then((data: Profile & { email_notifications?: boolean }) => {
         setProfile(data);
+        if (typeof data.email_notifications === "boolean") {
+          setEmailNotifications(data.email_notifications);
+        }
         if (data.preferences) {
           setTitles(data.preferences.titles ?? []);
           setLocation(data.preferences.locations?.[0] ?? "");
@@ -65,6 +73,15 @@ export default function ProfilePage() {
 
   // Cleanup polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Auto-unsubscribe when ?unsubscribe=true
+  useEffect(() => {
+    if (searchParams.get("unsubscribe") === "true" && !loading) {
+      handleEmailToggle(false);
+      showToast("You've been unsubscribed from daily emails.");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   async function handleConnectLinkedin() {
     setLinkedinError("");
@@ -114,6 +131,20 @@ export default function ProfilePage() {
         setLinkedinError("Timed out after 2 minutes. Try again.");
       }
     }, 3000);
+  }
+
+  async function handleEmailToggle(value: boolean) {
+    setEmailNotifications(value);
+    setSavingEmail(true);
+    try {
+      await fetch("/api/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_notifications: value }),
+      });
+    } finally {
+      setSavingEmail(false);
+    }
   }
 
   function cancelLinkedinConnect() {
@@ -428,6 +459,44 @@ export default function ProfilePage() {
           </p>
         )}
       </div>
+
+      {/* Notifications */}
+      <div className="bg-white border rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Notifications</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Daily match emails</p>
+            <p className="text-xs text-gray-500 mt-0.5">Get an email when new jobs are found</p>
+          </div>
+          <button
+            onClick={() => handleEmailToggle(!emailNotifications)}
+            disabled={savingEmail}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-60 ${
+              emailNotifications ? "bg-black" : "bg-gray-200"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                emailNotifications ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-lg mx-auto space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="bg-white border rounded-xl h-24 animate-pulse" />
+        ))}
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   );
 }
