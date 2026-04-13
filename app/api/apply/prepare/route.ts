@@ -60,13 +60,26 @@ export async function POST(req: NextRequest) {
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    });
+    let message;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        message = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: prompt }],
+        });
+        break;
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status;
+        if (status === 529 && attempt < 3) {
+          await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    let raw = (message.content[0] as { text: string }).text.trim();
+    let raw = (message!.content[0] as { text: string }).text.trim();
     if (raw.startsWith("```")) {
       raw = raw.split("\n").slice(1).join("\n");
       const fence = raw.lastIndexOf("```");
