@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
@@ -27,6 +25,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract text from PDF
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
     const buffer = Buffer.from(await cvFile.arrayBuffer());
     const { text: rawText } = await pdfParse(buffer);
 
