@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { db } from "@/lib/db";
 import { sendDailyMatchEmail } from "@/lib/email";
-
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
-);
 
 function isAuthorized(req: NextRequest): boolean {
   // Allow calls from localhost
@@ -46,23 +40,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, skipped: "notifications_off" });
     }
 
-    // Get user email + name from Supabase auth
-    const { data: authUser, error: authError } =
-      await supabaseAdmin.auth.admin.getUserById(user_id);
-    if (authError || !authUser?.user) {
+    // Get user email + name from DB
+    const userRow2 = await db.$queryRaw<{ email: string; name: string | null }[]>`
+      SELECT email, name FROM "User" WHERE id = ${user_id} LIMIT 1
+    `;
+    if (!userRow2.length) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-
-    const userEmail = authUser.user.email;
-    if (!userEmail) {
-      return NextResponse.json({ error: "No email on user" }, { status: 400 });
-    }
-
-    // Get user name from DB
-    const nameRow = await db.$queryRaw<{ name: string | null }[]>`
-      SELECT name FROM "User" WHERE id = ${user_id} LIMIT 1
-    `;
-    const userName = nameRow[0]?.name ?? "";
+    const userEmail = userRow2[0].email;
+    const userName = userRow2[0].name ?? "";
 
     // Get today's matches — jobs scraped in the last 24h not yet dismissed or applied
     const matches = await db.$queryRaw<
