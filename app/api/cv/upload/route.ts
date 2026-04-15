@@ -24,11 +24,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No CV file provided" }, { status: 400 });
     }
 
-    // Extract text from PDF
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
+    const fileName = cvFile.name.toLowerCase();
+    const isPdf = fileName.endsWith(".pdf");
+    const isDocx = fileName.endsWith(".docx");
+    const isDoc = fileName.endsWith(".doc");
+
+    if (!isPdf && !isDocx && !isDoc) {
+      return NextResponse.json(
+        { error: "Unsupported file type. Please upload a PDF or Word document (.pdf, .docx)." },
+        { status: 400 }
+      );
+    }
+    if (isDoc) {
+      return NextResponse.json(
+        { error: "Old .doc format is not supported. Please save your CV as .docx or .pdf and re-upload." },
+        { status: 400 }
+      );
+    }
+
     const buffer = Buffer.from(await cvFile.arrayBuffer());
-    const { text: rawText } = await pdfParse(buffer);
+    let rawText: string;
+
+    if (isPdf) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
+      const result = await pdfParse(buffer);
+      rawText = result.text;
+    } else {
+      // .docx
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mammoth = require("mammoth");
+      const result = await mammoth.extractRawText({ buffer });
+      rawText = result.value;
+    }
 
     // Send to Python service for Claude extraction + embedding
     const pythonRes = await fetch(

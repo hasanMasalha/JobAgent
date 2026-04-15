@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // distDir default (.next) — kept outside OneDrive via junction symlink
-  serverExternalPackages: ["pdf-parse"],
+  experimental: {
+    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
+  },
 }
 
 module.exports = nextConfig

@@ -301,20 +301,25 @@ function ProfileContent() {
           <label className="block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors">
             <input
               type="file"
-              accept=".pdf"
+              accept=".pdf,.docx"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f && f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
+                if (!f) return;
+                if (f.name.toLowerCase().endsWith(".doc") && !f.name.toLowerCase().endsWith(".docx")) {
+                  setError("Old .doc format is not supported. Please save as .docx or .pdf.");
+                  return;
+                }
+                if (f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
                 setError("");
-                setFile(f ?? null);
+                setFile(f);
               }}
             />
             {file ? (
               <span className="text-sm font-medium text-gray-800">{file.name}</span>
             ) : (
               <span className="text-sm text-gray-400">
-                {profile?.cv ? "Click to upload a new PDF" : "Click to choose a PDF"}
+                {profile?.cv ? "Click to upload a new PDF or Word doc" : "Click to choose a PDF or Word doc (.pdf, .docx)"}
               </span>
             )}
           </label>
