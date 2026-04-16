@@ -43,7 +43,75 @@ async def scrape_alljobs() -> list[dict]:
                 print(f"[alljobs] error scraping '{term}': {e}")
             await asyncio.sleep(2)
 
+        # Enrich jobs whose description is missing or too short
+        to_enrich = [j for j in results if len(j.get("description", "")) < 100]
+        if to_enrich:
+            print(f"[alljobs] enriching {len(to_enrich)} listings with full descriptions...")
+            for job in to_enrich:
+                desc = await _fetch_description(client, job["url"])
+                if desc:
+                    job["description"] = desc
+                await asyncio.sleep(1.5)
+
     return results
+
+
+async def _fetch_description(client: httpx.AsyncClient, url: str) -> str:
+    """Fetch full job description from an AllJobs job page."""
+    try:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            return ""
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        description_parts = []
+
+        # Try known content containers in order of specificity
+        content_selectors = [
+            ".job-description",
+            ".content-area",
+            "[class*='job-content']",
+            "[class*='description']",
+            ".position-description",
+        ]
+        main_content = None
+        for selector in content_selectors:
+            main_content = soup.select_one(selector)
+            if main_content:
+                break
+
+        if main_content:
+            for elem in main_content.find_all(["p", "li", "div", "span"]):
+                text = elem.get_text(strip=True)
+                if text and len(text) > 20:
+                    description_parts.append(text)
+
+        # Also pull any Requirements section marked with a bold label
+        req_label = soup.find(
+            lambda tag: tag.name in ["b", "strong"] and "equirement" in tag.get_text()
+        )
+        if req_label:
+            parent = req_label.find_parent(["div", "section", "td"])
+            if parent:
+                req_text = parent.get_text(separator="\n", strip=True)
+                joined = "\n".join(description_parts)
+                if req_text not in joined:
+                    description_parts.append(req_text)
+
+        # De-duplicate and drop very short lines
+        seen: set[str] = set()
+        clean_lines: list[str] = []
+        for line in "\n".join(description_parts).split("\n"):
+            line = line.strip()
+            if line and len(line) > 10 and line not in seen:
+                seen.add(line)
+                clean_lines.append(line)
+
+        return "\n".join(clean_lines)[:3000]
+
+    except Exception as e:
+        print(f"[alljobs] failed to fetch description for {url}: {e}")
+        return ""
 
 
 async def _fetch_term(client: httpx.AsyncClient, term: str) -> list[dict]:

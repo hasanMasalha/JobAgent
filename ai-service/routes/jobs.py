@@ -17,6 +17,7 @@ async def scrape_and_store():
     conn = await asyncpg.connect(database_url)
 
     new_jobs = 0
+    updated_jobs = 0
     try:
         for job in jobs:
             if not (job.get("description") or "").strip():
@@ -25,7 +26,7 @@ async def scrape_and_store():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
-            result = await conn.execute(
+            row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
@@ -33,7 +34,12 @@ async def scrape_and_store():
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
                         $9::vector, now())
-                ON CONFLICT (url) DO NOTHING
+                ON CONFLICT (url) DO UPDATE
+                    SET description = EXCLUDED.description,
+                        embedding    = EXCLUDED.embedding,
+                        scraped_at   = now()
+                    WHERE length("Job".description) < 100
+                RETURNING (xmax = 0) AS is_insert
                 """,
                 job["title"],
                 job["company"],
@@ -45,9 +51,13 @@ async def scrape_and_store():
                 job["salary_max"],
                 embedding_str,
             )
-            if result == "INSERT 0 1":
+            if row is None:
+                pass  # conflict but description was already long enough — skip
+            elif row["is_insert"]:
                 new_jobs += 1
+            else:
+                updated_jobs += 1
     finally:
         await conn.close()
 
-    return {"new_jobs": new_jobs, "total_processed": len(jobs)}
+    return {"new_jobs": new_jobs, "updated_jobs": updated_jobs, "total_processed": len(jobs)}
