@@ -162,14 +162,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <JobFilters filters={filters} onChange={setFilters} />
+      <JobFilters
+        filters={filters}
+        onChange={setFilters}
+        matchCount={!loading && !error && jobs.length > 0 ? filteredJobs.length : undefined}
+        totalCount={!loading && !error && jobs.length > 0 ? jobs.length : undefined}
+      />
 
       <div className="mt-4">
-        {!loading && !error && jobs.length > 0 && (
-          <p className="text-xs text-gray-400 mb-3">
-            Showing {filteredJobs.length} of {jobs.length} matches
-          </p>
-        )}
 
         {loading && (
           <div className="space-y-4">
