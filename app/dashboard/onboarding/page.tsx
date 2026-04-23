@@ -144,7 +144,7 @@ export default function OnboardingPage() {
           <div
             key={s}
             className={`h-1.5 flex-1 rounded-full transition-colors ${
-              s <= step ? "bg-black" : "bg-gray-200"
+              s <= step ? "bg-black dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
             }`}
           />
         ))}
@@ -154,12 +154,12 @@ export default function OnboardingPage() {
         <div className="space-y-4">
           {/* Existing CV preview for returning users */}
           {isUpdate && existingCV && (
-            <div className="bg-gray-50 border rounded-xl p-4 space-y-2">
+            <div className="bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current CV</p>
               {existingCV.skills_json?.skills?.length ? (
                 <div className="flex flex-wrap gap-1.5">
                   {existingCV.skills_json.skills.slice(0, 12).map((s) => (
-                    <span key={s} className="text-xs bg-white border px-2 py-0.5 rounded-full text-gray-700">{s}</span>
+                    <span key={s} className="text-xs bg-white dark:bg-gray-700 border dark:border-gray-600 px-2 py-0.5 rounded-full text-gray-700 dark:text-gray-300">{s}</span>
                   ))}
                   {existingCV.skills_json.skills.length > 12 && (
                     <span className="text-xs text-gray-400">+{existingCV.skills_json.skills.length - 12} more</span>
@@ -252,7 +252,7 @@ export default function OnboardingPage() {
               <button
                 disabled={!isUpdate && !file}
                 onClick={() => setStep(2)}
-                className="w-full bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
+                className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40"
               >
                 Continue
               </button>
@@ -263,7 +263,7 @@ export default function OnboardingPage() {
           {isUpdate && cvPath === null && (
             <button
               onClick={() => setStep(2)}
-              className="w-full border py-2 rounded text-sm text-gray-500 hover:bg-gray-50"
+              className="w-full border dark:border-gray-600 py-2 rounded text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Keep current CV, update preferences only →
             </button>
@@ -287,7 +287,7 @@ export default function OnboardingPage() {
                   if (e.key === "Enter") { e.preventDefault(); addTitle(); }
                 }}
                 placeholder="e.g. Frontend Developer"
-                className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
               <button
                 type="button"
@@ -320,7 +320,7 @@ export default function OnboardingPage() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g. Tel Aviv"
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
             />
           </div>
 
@@ -361,7 +361,7 @@ export default function OnboardingPage() {
                 value={minSalary}
                 onChange={(e) => setMinSalary(e.target.value)}
                 placeholder="e.g. 15000"
-                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
             )}
             {skipSalary && (
@@ -370,9 +370,9 @@ export default function OnboardingPage() {
           </div>
 
           {/* Google Calendar */}
-          <div className="border rounded-xl p-4 flex items-center justify-between">
+          <div className="border dark:border-gray-600 rounded-xl p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-900">Google Calendar</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Google Calendar</p>
               <p className="text-xs text-gray-500 mt-0.5">
                 Get interview reminders added automatically
               </p>

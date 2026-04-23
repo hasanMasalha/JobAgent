@@ -33,10 +33,10 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
     : Math.round(job.similarity * 100);
   const scoreColor =
     score >= 80
-      ? "bg-green-100 text-green-800"
+      ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400"
       : score >= 60
-      ? "bg-yellow-100 text-yellow-800"
-      : "bg-gray-100 text-gray-600";
+      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400"
+      : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400";
 
   const salary =
     job.salary_min && job.salary_max
@@ -62,20 +62,20 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
 
   return (
     <div
-      className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-300 ${
+      className={`bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-300 ${
         dismissing ? "opacity-0 scale-95" : "opacity-100"
       }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">{job.title}</h3>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {job.company}
             {job.location ? ` · ${job.location}` : ""}
           </p>
           {salary && (
-            <p className="text-xs text-gray-400 mt-0.5">{salary}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{salary}</p>
           )}
         </div>
         <span
@@ -87,14 +87,14 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
 
       {/* Description preview */}
       {job.description && (
-        <p className="text-sm text-gray-600 mt-3 line-clamp-2">
+        <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 line-clamp-2">
           {job.description}
         </p>
       )}
 
       {/* Expand toggle */}
       <button
-        className="text-xs text-blue-600 mt-2 hover:underline focus:outline-none"
+        className="text-xs text-blue-600 dark:text-blue-400 mt-2 hover:underline focus:outline-none"
         onClick={() => setExpanded((v) => !v)}
       >
         {expanded ? "Show less" : "Show more"}
@@ -104,12 +104,12 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
         <div className="mt-3 space-y-3">
           {job.reasons.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-green-700 mb-1">
+              <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">
                 Why it fits
               </p>
               <ul className="space-y-0.5">
                 {job.reasons.map((r, i) => (
-                  <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                  <li key={i} className="text-xs text-gray-700 dark:text-gray-300 flex gap-1.5">
                     <span className="text-green-500 shrink-0">✓</span>
                     {r}
                   </li>
@@ -119,10 +119,10 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
           )}
           {job.gaps.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-amber-700 mb-1">Gaps</p>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Gaps</p>
               <ul className="space-y-0.5">
                 {job.gaps.map((g, i) => (
-                  <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                  <li key={i} className="text-xs text-gray-700 dark:text-gray-300 flex gap-1.5">
                     <span className="text-amber-400 shrink-0">!</span>
                     {g}
                   </li>
@@ -132,10 +132,10 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
           )}
           {job.description && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-1">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
                 Full description
               </p>
-              <p className="text-xs text-gray-600 whitespace-pre-line">
+              <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line">
                 {job.description}
               </p>
             </div>
@@ -187,8 +187,8 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
           }}
           className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
             saved
-              ? "bg-gray-100 text-gray-500 border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
-              : "hover:bg-gray-50 text-gray-600 border-gray-300"
+              ? "bg-gray-100 text-gray-500 border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 dark:hover:border-red-800"
+              : "hover:bg-gray-50 text-gray-600 border-gray-300 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
           }`}
         >
           {saving ? "…" : saved ? "Saved ✓" : "Save"}
@@ -196,7 +196,7 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
         <button
           onClick={handleDismiss}
           disabled={dismissing}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
+          className="text-xs text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors disabled:opacity-50 ml-auto"
         >
           Not interested
         </button>

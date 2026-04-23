@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import LogoutButton from "./LogoutButton";
 import ChatFab from "./ChatFab";
 import { Toast } from "@/app/components/Toast";
+import { ThemeToggle } from "@/app/components/ThemeToggle";
 
 export default async function DashboardLayout({
   children,
@@ -33,22 +34,23 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <nav className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <span className="font-semibold text-sm">JobAgent</span>
+          <span className="font-semibold text-sm dark:text-white">JobAgent</span>
           <div className="flex items-center gap-4 text-sm">
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900 transition-colors">Jobs</Link>
-            <Link href="/dashboard/applications" className="text-gray-600 hover:text-gray-900 transition-colors">Applications</Link>
-            <Link href="/dashboard/saved" className="text-gray-600 hover:text-gray-900 transition-colors">Saved</Link>
-            <Link href="/dashboard/my-cv" className="text-gray-600 hover:text-gray-900 transition-colors">My CV</Link>
-            <Link href="/dashboard/profile" className="text-gray-600 hover:text-gray-900 transition-colors">Profile</Link>
+            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">Jobs</Link>
+            <Link href="/dashboard/applications" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">Applications</Link>
+            <Link href="/dashboard/saved" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">Saved</Link>
+            <Link href="/dashboard/my-cv" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">My CV</Link>
+            <Link href="/dashboard/profile" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">Profile</Link>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {user.email?.split("@")[0]}
           </span>
+          <ThemeToggle />
           <LogoutButton />
         </div>
       </nav>

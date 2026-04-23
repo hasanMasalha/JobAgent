@@ -63,17 +63,17 @@ function CalendarModal({ app, onClose, onSuccess }: CalendarModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
           Schedule interview on Google Calendar
         </h2>
-        <p className="text-sm text-gray-500 mb-5">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
           {app.job_title} at {app.company}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Interview date
             </label>
             <input
@@ -81,12 +81,12 @@ function CalendarModal({ app, onClose, onSuccess }: CalendarModalProps) {
               required
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+              className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Interview time
             </label>
             <input
@@ -94,12 +94,12 @@ function CalendarModal({ app, onClose, onSuccess }: CalendarModalProps) {
               required
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+              className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Notes (optional)
             </label>
             <textarea
@@ -107,17 +107,17 @@ function CalendarModal({ app, onClose, onSuccess }: CalendarModalProps) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Zoom link, interviewer name…"
               rows={3}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+              className="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
+              className="flex-1 border dark:border-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               Skip
             </button>
@@ -255,8 +255,8 @@ export default function ApplicationsPage() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">My Applications</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Track and manage your job applications</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">My Applications</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Track and manage your job applications</p>
       </div>
 
       {/* Stats bar */}
@@ -272,31 +272,31 @@ export default function ApplicationsPage() {
       {loading && (
         <div className="space-y-2">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white border rounded-xl h-14 animate-pulse" />
+            <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl h-14 animate-pulse" />
           ))}
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5 text-sm text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
 
       {!loading && !error && apps.length === 0 && (
-        <div className="bg-white border rounded-xl p-12 text-center text-gray-500 text-sm">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-12 text-center text-gray-500 dark:text-gray-400 text-sm">
           No applications yet.{" "}
-          <Link href="/dashboard" className="text-blue-600 hover:underline">
+          <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">
             Browse matched jobs
           </Link>
         </div>
       )}
 
       {!loading && !error && apps.length > 0 && (
-        <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+              <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left px-4 py-3 font-medium">Company</th>
                 <th className="text-left px-4 py-3 font-medium">Role</th>
                 <th className="text-left px-4 py-3 font-medium">Applied</th>
@@ -304,16 +304,16 @@ export default function ApplicationsPage() {
                 <th className="text-left px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {apps.map((app) => (
-                <tr key={app.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900 max-w-[160px] truncate">
+                <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-white max-w-[160px] truncate">
                     {app.company}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 max-w-[200px] truncate">
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-[200px] truncate">
                     {app.job_title}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {new Date(app.applied_at).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",

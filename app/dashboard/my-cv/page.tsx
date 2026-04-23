@@ -82,7 +82,7 @@ export default function MyCVPage() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto mt-20 text-center">
-        <div className="inline-block w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin" />
+        <div className="inline-block w-6 h-6 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -90,7 +90,7 @@ export default function MyCVPage() {
   if (!cvText) {
     return (
       <div className="max-w-4xl mx-auto mt-20 text-center">
-        <p className="text-gray-500 text-sm mb-4">No CV found.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">No CV found.</p>
         <Link href="/dashboard/onboarding" className="text-sm font-medium underline">Upload or build a CV</Link>
       </div>
     );
@@ -99,11 +99,11 @@ export default function MyCVPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">My CV</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">My CV</h1>
         <div className="flex gap-2">
           <Link
             href="/dashboard/onboarding"
-            className="text-xs font-medium border px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+            className="text-xs font-medium border dark:border-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             Replace CV
           </Link>
@@ -111,7 +111,7 @@ export default function MyCVPage() {
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="text-xs font-medium bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="text-xs font-medium bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
               {downloading ? "Preparing…" : "Download .docx"}
             </button>
@@ -121,9 +121,9 @@ export default function MyCVPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* CV preview */}
-        <div className="lg:col-span-3 bg-white border rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-gray-50 border-b px-5 py-2">
-            <span className="text-xs text-gray-400 font-mono">preview</span>
+        <div className="lg:col-span-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700 px-5 py-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">preview</span>
           </div>
           <div className="max-h-[70vh] overflow-y-auto">
             <CVPreview cvText={cvText} />

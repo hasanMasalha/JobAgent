@@ -113,8 +113,8 @@ export default function ApplyPage() {
     return (
       <div className="max-w-2xl mx-auto mt-20 text-center">
         <div className="inline-block w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-gray-600 font-medium">Preparing your application…</p>
-        <p className="text-sm text-gray-400 mt-1">Claude is tailoring your CV — this takes about 10–15 seconds</p>
+        <p className="text-gray-600 dark:text-gray-300 font-medium">Preparing your application…</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Claude is tailoring your CV — this takes about 10–15 seconds</p>
       </div>
     );
   }
@@ -123,12 +123,12 @@ export default function ApplyPage() {
   if (stage === "error") {
     return (
       <div className="max-w-2xl mx-auto mt-12">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5 text-sm text-red-700 dark:text-red-400">
           {error}
         </div>
         <button
           onClick={() => router.push("/dashboard")}
-          className="mt-4 text-sm text-gray-500 hover:underline"
+          className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:underline"
         >
           ← Back to dashboard
         </button>
@@ -196,14 +196,14 @@ export default function ApplyPage() {
       <div className="max-w-2xl mx-auto mt-20 text-center">
         {submitResult ? (
           <>
-            <p className="text-lg font-semibold text-gray-900">Application submitted!</p>
-            <p className="text-sm text-gray-500 mt-1">{submitResult.message}</p>
-            <p className="text-xs text-gray-400 mt-3">Redirecting…</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">Application submitted!</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{submitResult.message}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">Redirecting…</p>
           </>
         ) : (
           <>
             <div className="inline-block w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-gray-600 font-medium">Submitting your application…</p>
+            <p className="text-gray-600 dark:text-gray-300 font-medium">Submitting your application…</p>
           </>
         )}
       </div>
@@ -215,8 +215,8 @@ export default function ApplyPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">{data!.job_title}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{data!.company}</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{data!.job_title}</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{data!.company}</p>
       </div>
 
       {/* CV Changes */}
@@ -236,14 +236,14 @@ export default function ApplyPage() {
 
       {/* Cover Letter */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Cover Letter <span className="font-normal text-gray-400">(editable)</span>
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          Cover Letter <span className="font-normal text-gray-400 dark:text-gray-500">(editable)</span>
         </label>
         <textarea
           value={coverLetter}
           onChange={(e) => setCoverLetter(e.target.value)}
           rows={12}
-          className="w-full border border-gray-300 rounded-xl p-4 text-sm text-gray-700 leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-xl p-4 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
         />
       </div>
 
@@ -251,7 +251,7 @@ export default function ApplyPage() {
       <div className="flex gap-3 pb-8">
         <button
           onClick={() => router.push("/dashboard")}
-          className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         >
           Cancel
         </button>
