@@ -35,18 +35,18 @@ export default function SavedJobsPage() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Saved Jobs</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Jobs you bookmarked for later</p>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Saved Jobs</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Jobs you bookmarked for later</p>
         </div>
         {!loading && !error && (
-          <span className="text-sm text-gray-400">{jobs.length} saved</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">{jobs.length} saved</span>
         )}
       </div>
 
       {loading && (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white border rounded-xl p-5 animate-pulse">
+            <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 animate-pulse">
               <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
               <div className="h-3 bg-gray-100 rounded w-1/3" />
             </div>
@@ -61,7 +61,7 @@ export default function SavedJobsPage() {
       )}
 
       {!loading && !error && jobs.length === 0 && (
-        <div className="bg-white border rounded-xl p-10 text-center text-gray-500 text-sm">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center text-gray-500 dark:text-gray-400 text-sm">
           No saved jobs yet.{" "}
           <a href="/dashboard" className="text-blue-600 hover:underline">
             Browse matched jobs
@@ -81,17 +81,17 @@ export default function SavedJobsPage() {
                 : null;
 
             return (
-              <div key={job.id} className="bg-white border rounded-xl p-5 shadow-sm">
+              <div key={job.id} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">{job.title}</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                       {job.company}
                       {job.location ? ` · ${job.location}` : ""}
                     </p>
-                    {salary && <p className="text-xs text-gray-400 mt-0.5">{salary}</p>}
+                    {salary && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{salary}</p>}
                   </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                  <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
                     {new Date(job.scraped_at).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",

@@ -216,7 +216,7 @@ function ProfileContent() {
     return (
       <div className="max-w-lg mx-auto space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white border rounded-xl h-24 animate-pulse" />
+          <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl h-24 animate-pulse" />
         ))}
       </div>
     );
@@ -227,11 +227,11 @@ function ProfileContent() {
       {/* LinkedIn instruction modal */}
       {linkedinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-2">Connect LinkedIn</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Connect LinkedIn</h2>
             {linkedinConnecting && !linkedinError ? (
               <>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   A browser window is opening on this machine. Log in to LinkedIn normally —
                   the window will close automatically once you&apos;re signed in.
                 </p>
@@ -250,7 +250,7 @@ function ProfileContent() {
             )}
             <button
               onClick={cancelLinkedinConnect}
-              className="w-full border rounded-lg py-2 text-sm hover:bg-gray-50"
+              className="w-full border dark:border-gray-600 rounded-lg py-2 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               {linkedinConnecting ? "Cancel" : "Close"}
             </button>
@@ -259,15 +259,15 @@ function ProfileContent() {
       )}
 
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Your Profile</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Update your CV and job preferences</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your Profile</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Update your CV and job preferences</p>
       </div>
 
       {/* Current CV status */}
       {profile?.cv && (
-        <div className="bg-white border rounded-xl p-5">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">Current CV</h2>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Current CV</h2>
             <span className="text-xs text-gray-400">
               Last updated {new Date(profile.cv.updated_at).toLocaleDateString("en-GB", {
                 day: "numeric", month: "short", year: "numeric",
@@ -294,7 +294,7 @@ function ProfileContent() {
 
       <form onSubmit={handleSave} className="space-y-5">
         {/* CV upload */}
-        <div className="bg-white border rounded-xl p-5">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             {profile?.cv ? "Replace CV (optional)" : "Upload CV"}
           </h2>
@@ -327,7 +327,7 @@ function ProfileContent() {
 
         {/* Job preferences */}
         <div className="bg-white border rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Job Preferences</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Job Preferences</h2>
 
           <div>
             <label className="block text-sm font-medium mb-1">Job titles</label>
@@ -338,7 +338,7 @@ function ProfileContent() {
                 onChange={(e) => setTitleInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
                 placeholder="e.g. Frontend Developer"
-                className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
               <button type="button" onClick={addTitle} className="px-3 py-2 bg-gray-100 rounded text-sm hover:bg-gray-200">Add</button>
             </div>
@@ -361,7 +361,7 @@ function ProfileContent() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g. Tel Aviv"
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
             />
           </div>
 
@@ -394,7 +394,7 @@ function ProfileContent() {
                 value={minSalary}
                 onChange={(e) => setMinSalary(e.target.value)}
                 placeholder="e.g. 15000"
-                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
             )}
             {skipSalary && <p className="text-sm text-gray-400 italic">No minimum salary set</p>}
@@ -407,14 +407,14 @@ function ProfileContent() {
           <button
             type="button"
             onClick={() => router.push("/dashboard")}
-            className="flex-1 border py-2 rounded text-sm hover:bg-gray-50"
+            className="flex-1 border dark:border-gray-600 dark:text-gray-300 py-2 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving || titles.length === 0}
-            className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
+            className="flex-1 bg-black dark:bg-white dark:text-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
@@ -422,10 +422,10 @@ function ProfileContent() {
       </form>
 
       {/* LinkedIn Connection */}
-      <div className="bg-white border rounded-xl p-5">
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-gray-700">LinkedIn Connection</h2>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
             <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
           </div>
           {linkedinConnected ? (
@@ -466,7 +466,7 @@ function ProfileContent() {
       </div>
 
       {/* Notifications */}
-      <div className="bg-white border rounded-xl p-5">
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Notifications</h2>
         <div className="flex items-center justify-between">
           <div>
@@ -497,7 +497,7 @@ export default function ProfilePage() {
     <Suspense fallback={
       <div className="max-w-lg mx-auto space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white border rounded-xl h-24 animate-pulse" />
+          <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl h-24 animate-pulse" />
         ))}
       </div>
     }>

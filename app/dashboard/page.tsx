@@ -143,19 +143,19 @@ export default function DashboardPage() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Matched Jobs</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Top matches based on your CV</p>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Matched Jobs</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Top matches based on your CV</p>
         </div>
         <div className="flex items-center gap-3">
           {lastFetched && !loading && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
               Last updated: {timeAgo(lastFetched)}
             </span>
           )}
           <button
             onClick={() => fetchJobs(true)}
             disabled={loading}
-            className="text-sm font-medium px-3 py-1.5 border rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            className="text-sm font-medium px-3 py-1.5 border rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
           >
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -174,28 +174,28 @@ export default function DashboardPage() {
         {loading && (
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white border rounded-xl p-5 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-                <div className="h-3 bg-gray-100 rounded w-1/3 mb-4" />
-                <div className="h-3 bg-gray-100 rounded w-full mb-1" />
-                <div className="h-3 bg-gray-100 rounded w-4/5" />
+              <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 animate-pulse">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2" />
+                <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/3 mb-4" />
+                <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-full mb-1" />
+                <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-4/5" />
               </div>
             ))}
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5 text-sm text-red-700 dark:text-red-400">
             {error}
           </div>
         )}
 
         {!loading && !error && jobs.length === 0 && (
-          <div className="bg-white border rounded-xl p-10 text-center">
-            <p className="text-gray-700 font-medium">No new matches today.</p>
-            <p className="text-sm text-gray-500 mt-1">
+          <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
+            <p className="text-gray-700 dark:text-gray-300 font-medium">No new matches today.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Check back tomorrow or{" "}
-              <a href="/dashboard/onboarding" className="text-blue-600 hover:underline">
+              <a href="/dashboard/onboarding" className="text-blue-600 dark:text-blue-400 hover:underline">
                 update your preferences
               </a>
               .
@@ -204,9 +204,9 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && (
-          <div className="bg-white border rounded-xl p-10 text-center">
-            <p className="text-gray-700 font-medium">No jobs match your filters.</p>
-            <p className="text-sm text-gray-500 mt-1">
+          <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
+            <p className="text-gray-700 dark:text-gray-300 font-medium">No jobs match your filters.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Try adjusting the filters above.
             </p>
           </div>
