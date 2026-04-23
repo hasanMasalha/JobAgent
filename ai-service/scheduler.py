@@ -1,12 +1,13 @@
 import logging
 import os
+
 import asyncpg
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from routes.jobs import scrape_and_store
-from routes.matching import match_jobs, MatchRequest
+from routes.matching import MatchRequest, match_jobs
 
 logger = logging.getLogger(__name__)
 

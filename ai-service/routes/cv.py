@@ -1,7 +1,9 @@
 import json
+
 import anthropic
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from embedder import embed
 
 router = APIRouter()
@@ -40,8 +42,8 @@ async def process_cv(req: ProcessCVRequest):
 
     try:
         extracted = json.loads(raw)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON from Claude: {raw}")
+    except json.JSONDecodeError as err:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON from Claude: {raw}") from err
 
     skills_json = {
         "skills": extracted.get("skills", []),

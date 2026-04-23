@@ -131,7 +131,7 @@ export default function CVBuilderPage() {
   const [experiences, setExperiences] = useState<Experience[]>([emptyExperience()]);
   const [educations, setEducations] = useState<Education[]>([emptyEducation()]);
   const [skillsInfo, setSkillsInfo] = useState<SkillsInfo>({ skills: [], languages: [], projects: [] });
-  const [projectTechInput, setProjectTechInput] = useState<string[]>(["", "", ""]);
+  const [_projectTechInput, setProjectTechInput] = useState<string[]>(["", "", ""]);
 
   const [skipExperience, setSkipExperience] = useState(false);
   const [generating, setGenerating] = useState(false);

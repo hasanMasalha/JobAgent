@@ -1,8 +1,10 @@
 import os
+
 import asyncpg
-from fastapi import APIRouter, HTTPException
-from scraper import scrape_israel_jobs
+from fastapi import APIRouter
+
 from embedder import embed
+from scraper import scrape_israel_jobs
 
 router = APIRouter()
 
