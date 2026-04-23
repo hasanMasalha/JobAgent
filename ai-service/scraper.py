@@ -1,7 +1,9 @@
 import asyncio
+
 from jobspy import scrape_jobs
-from scraper_drushim import scrape_drushim
+
 from scraper_alljobs import scrape_alljobs
+from scraper_drushim import scrape_drushim
 
 SEARCH_TERMS = [
     "software engineer",

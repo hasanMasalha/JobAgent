@@ -1,0 +1,22 @@
+[tool.ruff]
+src = ["ai-service"]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in default arguments (common in FastAPI)
+    "E402",  # module level import not at top — intentional in main.py (load_dotenv must run first)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["routes", "utils"]

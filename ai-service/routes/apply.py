@@ -1,12 +1,14 @@
 import asyncio
 import os
 import tempfile
-import asyncpg
+
 import anthropic
+import asyncpg
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
+from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
-from playwright.async_api import async_playwright, Page, ElementHandle
+
 from utils.cv_pdf import generate_cv_pdf
 
 _anthropic = anthropic.Anthropic()
@@ -113,7 +115,7 @@ async def _apply_indeed(
         }
 
     # Multi-step form loop (up to 10 steps)
-    for step in range(10):
+    for _step in range(10):
         await page.wait_for_timeout(1000)
         current_url = page.url
 

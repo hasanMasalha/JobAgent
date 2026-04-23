@@ -5,7 +5,7 @@ import {
 
 export async function generateCVDocx(
   cvText: string,
-  jobTitle: string = 'CV'
+  _jobTitle: string = 'CV'
 ): Promise<Buffer> {
 
   const FONT = 'Calibri'
