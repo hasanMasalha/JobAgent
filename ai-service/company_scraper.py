@@ -113,6 +113,38 @@ async def scrape_lever(company: dict) -> list[dict]:
             return []
 
 
+async def scrape_comeet(company: dict) -> list[dict]:
+    slug = company.get('slug', '')
+    if not slug or ':' not in slug:
+        return []
+    uid, token = slug.split(':', 1)
+    url = f'https://www.comeet.co/careers-api/2.0/company/{uid}/positions?token={token}'
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        try:
+            resp = await client.get(url, timeout=10)
+            if resp.status_code != 200:
+                return []
+            jobs = []
+            for pos in resp.json():
+                loc = pos.get('location') or {}
+                location = loc.get('name') or loc.get('city') or ''
+                job_url = pos.get('url_active_page') or pos.get('url_comeet_hosted_page', '')
+                jobs.append({
+                    'title': pos.get('name', ''),
+                    'company': company['name'],
+                    'description': '',
+                    'location': location,
+                    'url': job_url,
+                    'source': 'company_careers',
+                    'salary_min': None,
+                    'salary_max': None,
+                })
+            return jobs
+        except Exception as e:
+            print(f"Comeet error for {company['name']}: {e}")
+            return []
+
+
 async def scrape_html_page(company: dict) -> list[dict]:
     """
     For companies with plain HTML careers pages,
@@ -193,6 +225,8 @@ async def scrape_company(company: dict) -> list[dict]:
         return await scrape_greenhouse(company)
     elif ats == 'lever':
         return await scrape_lever(company)
+    elif ats == 'comeet':
+        return await scrape_comeet(company)
     elif ats == 'html':
         return await scrape_html_page(company)
     else:

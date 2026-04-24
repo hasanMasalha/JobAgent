@@ -127,6 +127,23 @@ async def detect_ats(
                     print(f"  {name}: detected {ats_name} via iframe (slug: {slug})")
                     return {"ats_type": ats_name, "slug": slug}
 
+        # Comeet: its JSON blob is embedded deep in the page, past the 500k limit.
+        # Scan the full page text separately so we don't miss it.
+        comeet_uid = re.search(
+            r'comeet\.(?:com|co)/jobs/[^/"\']+/([A-Z0-9]{2,}\.[A-Z0-9]{2,})',
+            resp.text, re.IGNORECASE,
+        )
+        if comeet_uid:
+            uid = comeet_uid.group(1)
+            comeet_token = re.search(
+                r'careers-api/2\.0/company/[^/]+/positions/[^?]+\?token=([A-Za-z0-9]+)',
+                resp.text, re.IGNORECASE,
+            )
+            if comeet_token:
+                token = comeet_token.group(1)
+                print(f"  {name}: detected comeet (uid: {uid})")
+                return {"ats_type": "comeet", "slug": f"{uid}:{token}"}
+
         print(f"  {name}: no ATS detected -> html")
         return {"ats_type": "html", "slug": ""}
 
@@ -207,11 +224,13 @@ async def enrich_companies_csv():
 
     greenhouse = sum(1 for r in rows if r.get('ats_type') == 'greenhouse')
     lever = sum(1 for r in rows if r.get('ats_type') == 'lever')
+    comeet = sum(1 for r in rows if r.get('ats_type') == 'comeet')
     html = sum(1 for r in rows if r.get('ats_type') == 'html')
 
     print("\nResults:")
     print(f"  Greenhouse: {greenhouse}")
     print(f"  Lever:      {lever}")
+    print(f"  Comeet:     {comeet}")
     print(f"  HTML:       {html}")
 
     with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
