@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ats_discovery import auto_discover_israeli_companies
 from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
 from embedder import embed
 from scraper import scrape_israel_jobs
@@ -125,3 +126,8 @@ async def toggle_company(req: ToggleCompanyRequest):
         writer.writerows(rows)
 
     return {"success": True}
+
+
+@router.post("/companies/auto-discover")
+async def trigger_auto_discovery():
+    return await auto_discover_israeli_companies()
