@@ -80,11 +80,13 @@ KNOWN_ATS: dict[str, dict] = {
     "Gong":          {"ats_type": "greenhouse", "slug": "gongio"},
     "Wiz":           {"ats_type": "greenhouse", "slug": "wizinc"},
     "Armis":         {"ats_type": "greenhouse", "slug": "armissecurity"},
-    "Bringg":        {"ats_type": "greenhouse", "slug": "bringg"},
-    "OpenWeb":       {"ats_type": "greenhouse", "slug": "openweb"},
-    "Torq":          {"ats_type": "greenhouse", "slug": "torq"},
+    "Bringg":         {"ats_type": "greenhouse", "slug": "bringg"},
+    "OpenWeb":        {"ats_type": "greenhouse", "slug": "openweb"},
+    "Torq":           {"ats_type": "greenhouse", "slug": "torq"},
+    "Cato Networks":  {"ats_type": "greenhouse", "slug": "catonetworks"},
+    "Cloudflare":     {"ats_type": "greenhouse", "slug": "cloudflare"},
     # Lever
-    "WalkMe":        {"ats_type": "lever", "slug": "walkme"},
+    "WalkMe":         {"ats_type": "lever", "slug": "walkme"},
 }
 
 
