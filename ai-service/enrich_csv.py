@@ -16,6 +16,7 @@ _STANDARD_FIELDS = ['name', 'careers_url', 'ats_type', 'slug',
 
 def _normalize_row(row: dict) -> dict:
     """Resolve column name aliases to the standard keys used everywhere."""
+    row = {k.strip(): v for k, v in row.items()}
     if not row.get('name'):
         for alias in _NAME_ALIASES:
             if row.get(alias):
@@ -35,6 +36,7 @@ def _normalize_row(row: dict) -> dict:
 ATS_PATTERNS = {
     "greenhouse": [
         r'boards\.greenhouse\.io/([a-zA-Z0-9_-]+)',
+        r'job-boards\.greenhouse\.io/([a-zA-Z0-9_-]+)',
         r'greenhouse\.io/([a-zA-Z0-9_-]+)',
     ],
     "lever": [
@@ -45,10 +47,45 @@ ATS_PATTERNS = {
     ],
     "ashby": [
         r'jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)',
+        r'app\.ashbyhq\.com/([a-zA-Z0-9_-]+)',
     ],
 }
 
+# Additional iframe/embed patterns scanned against raw HTML only
+_IFRAME_PATTERNS = [
+    (r'<iframe[^>]+src="([^"]*jobs\.lever\.co/([a-zA-Z0-9_-]+)[^"]*)"', "lever", 2),
+    (r'<iframe[^>]+src="([^"]*boards\.greenhouse\.io/([a-zA-Z0-9_-]+)[^"]*)"', "greenhouse", 2),
+    (r'<iframe[^>]+src="([^"]*job-boards\.greenhouse\.io/([a-zA-Z0-9_-]+)[^"]*)"', "greenhouse", 2),
+    (r'<iframe[^>]+src="([^"]*app\.ashbyhq\.com/([a-zA-Z0-9_-]+)[^"]*)"', "ashby", 2),
+]
+
 _SKIP_SLUGS = {'embed', 'api', 'v1', 'jobs', 'careers', 'apply'}
+
+# Hardcoded lookup for companies whose ATS is loaded via JS and
+# cannot be detected from static HTML. Validated against live APIs.
+KNOWN_ATS: dict[str, dict] = {
+    # Greenhouse
+    "Taboola":       {"ats_type": "greenhouse", "slug": "taboola"},
+    "Lightricks":    {"ats_type": "greenhouse", "slug": "lightricks"},
+    "AppsFlyer":     {"ats_type": "greenhouse", "slug": "appsflyer"},
+    "JFrog":         {"ats_type": "greenhouse", "slug": "jfrog"},
+    "Riskified":     {"ats_type": "greenhouse", "slug": "riskified"},
+    "Orca Security": {"ats_type": "greenhouse", "slug": "orcasecurity"},
+    "Salt Security": {"ats_type": "greenhouse", "slug": "saltsecurity"},
+    "Cybereason":    {"ats_type": "greenhouse", "slug": "cybereason"},
+    "Fireblocks":    {"ats_type": "greenhouse", "slug": "fireblocks"},
+    "Melio":         {"ats_type": "greenhouse", "slug": "melio"},
+    "Forter":        {"ats_type": "greenhouse", "slug": "forter"},
+    "Yotpo":         {"ats_type": "greenhouse", "slug": "yotpo"},
+    "Gong":          {"ats_type": "greenhouse", "slug": "gongio"},
+    "Wiz":           {"ats_type": "greenhouse", "slug": "wizinc"},
+    "Armis":         {"ats_type": "greenhouse", "slug": "armissecurity"},
+    "Bringg":        {"ats_type": "greenhouse", "slug": "bringg"},
+    "OpenWeb":       {"ats_type": "greenhouse", "slug": "openweb"},
+    "Torq":          {"ats_type": "greenhouse", "slug": "torq"},
+    # Lever
+    "WalkMe":        {"ats_type": "lever", "slug": "walkme"},
+}
 
 
 async def detect_ats(
@@ -70,7 +107,7 @@ async def detect_ats(
     # Fetch the page and check final URL + HTML
     try:
         resp = await client.get(careers_url, timeout=10, follow_redirects=True)
-        combined = str(resp.url) + " " + resp.text[:8000]
+        combined = str(resp.url) + " " + resp.text[:500_000]
 
         for ats_name, patterns in ATS_PATTERNS.items():
             for pattern in patterns:
@@ -81,11 +118,20 @@ async def detect_ats(
                         print(f"  {name}: detected {ats_name} (slug: {slug})")
                         return {"ats_type": ats_name, "slug": slug}
 
-        print(f"  {name}: no ATS detected → html")
+        # Scan for iframe embeds that standard patterns may miss
+        for pattern, ats_name, slug_group in _IFRAME_PATTERNS:
+            match = re.search(pattern, resp.text, re.IGNORECASE)
+            if match:
+                slug = match.group(slug_group)
+                if slug not in _SKIP_SLUGS:
+                    print(f"  {name}: detected {ats_name} via iframe (slug: {slug})")
+                    return {"ats_type": ats_name, "slug": slug}
+
+        print(f"  {name}: no ATS detected -> html")
         return {"ats_type": "html", "slug": ""}
 
     except Exception as e:
-        print(f"  {name}: error — {e}")
+        print(f"  {name}: error - {e}")
         return {"ats_type": "html", "slug": ""}
 
 
@@ -117,6 +163,22 @@ async def enrich_companies_csv():
     print(f"Already enriched: {already_done}")
     print(f"Need enrichment:  {len(to_enrich)}")
     print("Starting ATS detection...")
+
+    # Apply hardcoded lookup table first — no HTTP needed
+    lookup_hits = 0
+    for row in rows:
+        if row.get('ats_type') and row.get('ats_type') != 'html':
+            continue
+        name = row.get('name', '').strip()
+        if name in KNOWN_ATS:
+            row['ats_type'] = KNOWN_ATS[name]['ats_type']
+            row['slug'] = KNOWN_ATS[name]['slug']
+            row['last_crawled'] = datetime.now().strftime('%Y-%m-%d')
+            print(f"  {name}: lookup -> {row['ats_type']} (slug: {row['slug']})")
+            lookup_hits += 1
+
+    print(f"Lookup table applied: {lookup_hits} companies resolved")
+    print("Starting static ATS detection for remaining companies...")
 
     async with httpx.AsyncClient(
         follow_redirects=True,
@@ -158,7 +220,7 @@ async def enrich_companies_csv():
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"\nSaved enriched CSV to {CSV_PATH}")
+    print("\nSaved enriched CSV to companies.csv")
 
 
 if __name__ == "__main__":

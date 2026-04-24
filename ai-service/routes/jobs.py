@@ -138,3 +138,37 @@ async def enrich_companies():
     from enrich_csv import enrich_companies_csv
     await enrich_companies_csv()
     return {"status": "done"}
+
+
+class SetAtsRequest(BaseModel):
+    name: str
+    ats_type: str
+    slug: str
+
+
+@router.post("/companies/set-ats")
+async def set_company_ats(req: SetAtsRequest):
+    rows = []
+    updated = False
+    try:
+        with open(CSV_PATH, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            fieldnames = list(reader.fieldnames or [])
+            for row in reader:
+                if row.get('name') == req.name:
+                    row['ats_type'] = req.ats_type
+                    row['slug'] = req.slug
+                    updated = True
+                rows.append(row)
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "companies.csv not found"})
+
+    if not updated:
+        return JSONResponse(status_code=404, content={"error": f"Company '{req.name}' not found"})
+
+    with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return {"success": True, "name": req.name, "ats_type": req.ats_type, "slug": req.slug}
