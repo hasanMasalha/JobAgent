@@ -8,6 +8,30 @@ import httpx
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "companies.csv")
 
+_NAME_ALIASES = ('Company', 'company name', 'Company Name')
+_URL_ALIASES = ('Careers URL', 'Careers_URL', 'careers url', 'url', 'URL')
+_STANDARD_FIELDS = ['name', 'careers_url', 'ats_type', 'slug',
+                    'last_crawled', 'active']
+
+
+def _normalize_row(row: dict) -> dict:
+    """Resolve column name aliases to the standard keys used everywhere."""
+    if not row.get('name'):
+        for alias in _NAME_ALIASES:
+            if row.get(alias):
+                row['name'] = row.pop(alias)
+                break
+    if not row.get('careers_url'):
+        for alias in _URL_ALIASES:
+            if row.get(alias):
+                row['careers_url'] = row.pop(alias)
+                break
+    row.setdefault('ats_type', '')
+    row.setdefault('slug', '')
+    row.setdefault('last_crawled', '')
+    row.setdefault('active', 'true')
+    return row
+
 ATS_PATTERNS = {
     "greenhouse": [
         r'boards\.greenhouse\.io/([a-zA-Z0-9_-]+)',
@@ -80,15 +104,7 @@ async def enrich_companies_csv():
         return
 
     # Normalise column names and fill missing fields
-    for row in rows:
-        if 'url' in row and 'careers_url' not in row:
-            row['careers_url'] = row.pop('url')
-        if 'URL' in row and 'careers_url' not in row:
-            row['careers_url'] = row.pop('URL')
-        row.setdefault('ats_type', '')
-        row.setdefault('slug', '')
-        row.setdefault('last_crawled', '')
-        row.setdefault('active', 'true')
+    rows = [_normalize_row(row) for row in rows]
 
     to_enrich = [
         row for row in rows
@@ -136,10 +152,8 @@ async def enrich_companies_csv():
     print(f"  Lever:      {lever}")
     print(f"  HTML:       {html}")
 
-    required_fields = ['name', 'careers_url', 'ats_type', 'slug',
-                       'last_crawled', 'active']
     with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=required_fields,
+        writer = csv.DictWriter(f, fieldnames=_STANDARD_FIELDS,
                                 extrasaction='ignore')
         writer.writeheader()
         writer.writerows(rows)
