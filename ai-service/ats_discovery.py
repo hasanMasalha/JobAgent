@@ -1,7 +1,8 @@
 import asyncio
 import csv
+import json
+import os
 import re
-import urllib.parse
 from datetime import datetime
 
 import httpx
@@ -65,18 +66,30 @@ async def discover_from_greenhouse() -> list[dict]:
     return companies_found
 
 
-async def discover_via_google_search(
+async def discover_via_serper_search(
     client: httpx.AsyncClient,
 ) -> list[dict]:
     """
-    Search Google for Israeli companies on Greenhouse and Lever.
-    Extracts slugs from search result URLs.
+    Use Serper API to find Israeli companies on Greenhouse and Lever.
+    Returns Google search results as structured JSON — no scraping,
+    no CAPTCHA.
     """
-    searches = [
+    api_key = os.environ.get('SERPER_API_KEY', '')
+    if not api_key:
+        print("SERPER_API_KEY not set — skipping")
+        return []
+
+    headers = {
+        "X-API-KEY": api_key,
+        "Content-Type": "application/json",
+    }
+
+    queries = [
         'site:boards.greenhouse.io "Tel Aviv"',
         'site:boards.greenhouse.io "Israel"',
         'site:boards.greenhouse.io "Herzliya"',
         'site:boards.greenhouse.io "Ramat Gan"',
+        'site:boards.greenhouse.io "Petah Tikva"',
         'site:jobs.lever.co "Tel Aviv"',
         'site:jobs.lever.co "Israel"',
         'site:jobs.lever.co "Herzliya"',
@@ -85,48 +98,79 @@ async def discover_via_google_search(
     greenhouse_slugs: set[str] = set()
     lever_slugs: set[str] = set()
 
-    for query in searches:
+    for query in queries:
         try:
-            encoded = urllib.parse.quote(query)
-            url = f"https://www.google.com/search?q={encoded}&num=100"
-
-            resp = await client.get(
-                url, headers=_HTTP_HEADERS, timeout=15
+            resp = await client.post(
+                "https://google.serper.dev/search",
+                headers=headers,
+                content=json.dumps({
+                    "q": query,
+                    "num": 100,
+                    "gl": "il",
+                    "hl": "en",
+                }),
+                timeout=15,
             )
-            html = resp.text
 
-            gh_matches = re.findall(
-                r'boards\.greenhouse\.io/([a-zA-Z0-9_-]+)', html
+            if resp.status_code == 429:
+                print("Serper rate limited — waiting 10s...")
+                await asyncio.sleep(10)
+                continue
+
+            if resp.status_code != 200:
+                print(f"Serper API error: {resp.status_code}")
+                continue
+
+            data = resp.json()
+
+            for result in data.get("organic", []):
+                url = result.get("link", "")
+
+                gh_match = re.search(
+                    r'boards\.greenhouse\.io/([a-zA-Z0-9_-]+)', url
+                )
+                if gh_match:
+                    slug = gh_match.group(1)
+                    if slug not in ('embed', 'api', 'v1', 'jobs'):
+                        greenhouse_slugs.add(slug)
+
+                lv_match = re.search(
+                    r'jobs\.lever\.co/([a-zA-Z0-9_-]+)', url
+                )
+                if lv_match:
+                    slug = lv_match.group(1)
+                    if slug not in ('api', 'v0'):
+                        lever_slugs.add(slug)
+
+            print(
+                f"  '{query[:45]}...': "
+                f"{len(data.get('organic', []))} results"
             )
-            for slug in gh_matches:
-                if slug not in ('embed', 'api', 'v1'):
-                    greenhouse_slugs.add(slug)
 
-            lv_matches = re.findall(
-                r'jobs\.lever\.co/([a-zA-Z0-9_-]+)', html
-            )
-            lever_slugs.update(lv_matches)
-
-            await asyncio.sleep(3)
+            await asyncio.sleep(0.5)
 
         except Exception as e:
-            print(f"Google search error: {e}")
+            print(f"Serper error for '{query}': {e}")
 
-    results = []
+    companies = []
     for slug in greenhouse_slugs:
-        results.append({
+        companies.append({
             "slug": slug,
             "ats_type": "greenhouse",
             "careers_url": f"https://boards.greenhouse.io/{slug}",
         })
     for slug in lever_slugs:
-        results.append({
+        companies.append({
             "slug": slug,
             "ats_type": "lever",
             "careers_url": f"https://jobs.lever.co/{slug}",
         })
 
-    return results
+    print(
+        f"Serper found: {len(greenhouse_slugs)} Greenhouse "
+        f"+ {len(lever_slugs)} Lever companies"
+    )
+    return companies
 
 
 async def discover_from_startup_nation(
@@ -205,8 +249,8 @@ async def auto_discover_israeli_companies() -> dict:
         follow_redirects=True,
         headers=_HTTP_HEADERS,
     ) as client:
-        print("Strategy 1: Searching Google for Israeli ATS boards...")
-        ats_results = await discover_via_google_search(client)
+        print("Strategy 1: Searching via Serper for Israeli ATS boards...")
+        ats_results = await discover_via_serper_search(client)
 
         for company in ats_results:
             slug = company.get('slug', '')
