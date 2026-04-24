@@ -131,3 +131,10 @@ async def toggle_company(req: ToggleCompanyRequest):
 @router.post("/companies/auto-discover")
 async def trigger_auto_discovery():
     return await auto_discover_israeli_companies()
+
+
+@router.post("/companies/enrich")
+async def enrich_companies():
+    from enrich_csv import enrich_companies_csv
+    await enrich_companies_csv()
+    return {"status": "done"}
