@@ -1,8 +1,12 @@
+import csv
 import os
 
 import asyncpg
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
 from embedder import embed
 from scraper import scrape_israel_jobs
 
@@ -63,3 +67,61 @@ async def scrape_and_store():
         await conn.close()
 
     return {"new_jobs": new_jobs, "updated_jobs": updated_jobs, "total_processed": len(jobs)}
+
+
+@router.post("/companies/discover")
+async def trigger_discovery():
+    return await discover_all_companies()
+
+
+@router.get("/companies/list")
+async def list_companies():
+    try:
+        with open(CSV_PATH, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            return list(reader)
+    except FileNotFoundError:
+        return []
+
+
+class AddCompanyRequest(BaseModel):
+    name: str
+    base_url: str
+
+
+@router.post("/companies/add")
+async def add_company(req: AddCompanyRequest):
+    return await discover_one_company(req.name, req.base_url)
+
+
+class ToggleCompanyRequest(BaseModel):
+    name: str
+    active: bool
+
+
+@router.post("/companies/toggle")
+async def toggle_company(req: ToggleCompanyRequest):
+    rows = []
+    updated = False
+    fieldnames = None
+    try:
+        with open(CSV_PATH, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            for row in reader:
+                if row['name'] == req.name:
+                    row['active'] = str(req.active).lower()
+                    updated = True
+                rows.append(row)
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "companies.csv not found"})
+
+    if not updated:
+        return JSONResponse(status_code=404, content={"error": f"Company '{req.name}' not found"})
+
+    with open(CSV_PATH, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return {"success": True}
