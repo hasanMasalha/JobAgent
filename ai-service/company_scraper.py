@@ -6,14 +6,33 @@ import httpx
 
 CSV_PATH = "companies.csv"
 
+_NAME_ALIASES = ('Company', 'company name', 'Company Name')
+_URL_ALIASES = ('Careers URL', 'Careers_URL', 'careers url', 'url', 'URL')
+
+
+def _normalize_row(row: dict) -> dict:
+    """Resolve column name aliases to the standard keys used everywhere."""
+    if not row.get('name'):
+        for alias in _NAME_ALIASES:
+            if row.get(alias):
+                row['name'] = row.pop(alias)
+                break
+    if not row.get('careers_url'):
+        for alias in _URL_ALIASES:
+            if row.get(alias):
+                row['careers_url'] = row.pop(alias)
+                break
+    return row
+
 
 def load_companies() -> list[dict]:
     """Load active companies from CSV"""
     try:
         with open(CSV_PATH, newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
+            rows = [_normalize_row(dict(row)) for row in reader]
             return [
-                row for row in reader
+                row for row in rows
                 if row.get('active', 'true').lower() == 'true'
                 and row.get('careers_url', '')
             ]
