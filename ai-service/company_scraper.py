@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import json
+import re
 
 import httpx
 
@@ -8,6 +9,26 @@ CSV_PATH = "companies.csv"
 
 _NAME_ALIASES = ('Company', 'company name', 'Company Name')
 _URL_ALIASES = ('Careers URL', 'Careers_URL', 'careers url', 'url', 'URL')
+
+ISRAELI_LOCATIONS = [
+    "israel", "tel aviv", "תל אביב", "herzliya", "herzelia",
+    "ramat gan", "petah tikva", "petach tikva", "haifa", "חיפה",
+    "beer sheva", "be'er sheva", "rishon", "netanya", "rehovot",
+    "jerusalem", "ירושלים", "remote - israel", "tlv", ", il",
+    "il,", "(israel)", "- israel",
+]
+
+
+def is_israeli_job(job: dict) -> bool:
+    location = (job.get('location') or '').lower()
+    title = (job.get('title') or '').lower()
+    if any(loc in location for loc in ISRAELI_LOCATIONS):
+        return True
+    if 'israel' in title:
+        return True
+    if not location or location in ('', 'anywhere', 'remote'):
+        return True
+    return False
 
 
 def _normalize_row(row: dict) -> dict:
@@ -46,10 +67,10 @@ async def scrape_greenhouse(company: dict) -> list[dict]:
     if not slug:
         return []
 
-    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs"
-    async with httpx.AsyncClient() as client:
+    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+    async with httpx.AsyncClient(timeout=15) as client:
         try:
-            resp = await client.get(url, timeout=10)
+            resp = await client.get(url)
             if resp.status_code != 200:
                 return []
 
@@ -59,10 +80,14 @@ async def scrape_greenhouse(company: dict) -> list[dict]:
                 if job.get('location'):
                     location = job['location'].get('name', '')
 
+                raw_content = job.get('content', '')
+                description = re.sub(r'<[^>]+>', ' ', raw_content)
+                description = re.sub(r'\s+', ' ', description).strip()[:3000]
+
                 jobs.append({
                     'title': job.get('title', ''),
                     'company': company['name'],
-                    'description': '',
+                    'description': description,
                     'location': location,
                     'url': job.get('absolute_url', ''),
                     'source': 'company_careers',
@@ -89,11 +114,7 @@ async def scrape_lever(company: dict) -> list[dict]:
 
             jobs = []
             for posting in resp.json():
-                description = ' '.join([
-                    section.get('text', '') + ': ' +
-                    ' '.join(section.get('content', []))
-                    for section in posting.get('lists', [])
-                ])
+                description = posting.get('descriptionPlain', '')[:3000]
 
                 jobs.append({
                     'title': posting.get('text', ''),
@@ -258,5 +279,8 @@ async def scrape_all_company_careers() -> list[dict]:
 
         await asyncio.sleep(1)
 
+    all_jobs_raw = all_jobs
+    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
+    print(f"Israel filter: {len(all_jobs_raw)} → {len(all_jobs)} jobs")
     print(f"Company scrape complete: {len(all_jobs)} total jobs")
     return all_jobs
