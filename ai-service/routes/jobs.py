@@ -195,7 +195,7 @@ async def scrape_and_store_company_careers():
 
     jobs_before = len(jobs)
     jobs = [j for j in jobs if is_israeli_job(j)]
-    print(f"Israel filter (route): {jobs_before} → {len(jobs)} jobs")
+    print(f"Israel filter (route): {jobs_before} -> {len(jobs)} jobs")
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)

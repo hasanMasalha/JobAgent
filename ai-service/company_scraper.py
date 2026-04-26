@@ -408,7 +408,7 @@ async def scrape_all_company_careers() -> list[dict]:
 
     all_jobs_raw = all_jobs
     all_jobs = [j for j in all_jobs if is_israeli_job(j)]
-    print(f"Israel filter: {len(all_jobs_raw)} → {len(all_jobs)} jobs")
+    print(f"Israel filter: {len(all_jobs_raw)} -> {len(all_jobs)} jobs")
 
     all_jobs = await enrich_empty_descriptions(all_jobs)
 
