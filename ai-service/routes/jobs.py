@@ -140,6 +140,71 @@ async def enrich_companies():
     return {"status": "done"}
 
 
+@router.post("/companies/scrape-and-store")
+async def scrape_and_store_company_careers():
+    from company_scraper import scrape_all_company_careers
+
+    jobs = await scrape_all_company_careers()
+    if not jobs:
+        return {"new_jobs": 0, "updated_jobs": 0, "total_processed": 0}
+
+    database_url = os.environ["DATABASE_URL"]
+    conn = await asyncpg.connect(database_url)
+
+    new_jobs = 0
+    updated_jobs = 0
+    skipped = 0
+    try:
+        for job in jobs:
+            if not job.get("url", "").strip():
+                skipped += 1
+                continue
+            embed_text = f"{job['title']} {job.get('description', '')[:500]}".strip()
+            embedding = embed(embed_text)
+            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO "Job" (id, title, company, description, location,
+                                   url, source, salary_min, salary_max,
+                                   embedding, scraped_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4,
+                        $5, $6, $7, $8,
+                        $9::vector, now())
+                ON CONFLICT (url) DO UPDATE
+                    SET description = EXCLUDED.description,
+                        embedding    = EXCLUDED.embedding,
+                        scraped_at   = now()
+                    WHERE length("Job".description) < 100
+                RETURNING (xmax = 0) AS is_insert
+                """,
+                job["title"],
+                job["company"],
+                job.get("description", ""),
+                job.get("location", ""),
+                job["url"],
+                job["source"],
+                job.get("salary_min"),
+                job.get("salary_max"),
+                embedding_str,
+            )
+            if row is None:
+                pass
+            elif row["is_insert"]:
+                new_jobs += 1
+            else:
+                updated_jobs += 1
+    finally:
+        await conn.close()
+
+    return {
+        "new_jobs": new_jobs,
+        "updated_jobs": updated_jobs,
+        "skipped": skipped,
+        "total_processed": len(jobs),
+    }
+
+
 class SetAtsRequest(BaseModel):
     name: str
     ats_type: str
