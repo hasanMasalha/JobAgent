@@ -224,6 +224,39 @@ async def enrich_companies_csv():
 
             await asyncio.sleep(1)
 
+    # Playwright pass: detect ATS for companies static scan couldn't resolve
+    html_rows = [
+        r for r in rows
+        if r.get('ats_type') == 'html'
+        and r.get('careers_url', '').strip()
+        and r.get('name', '').strip()
+    ]
+    if html_rows:
+        print(f"\nPlaywright ATS detection for {len(html_rows)} html companies...")
+        from playwright.async_api import async_playwright
+
+        from playwright_scraper import detect_ats_with_playwright
+
+        sem = asyncio.Semaphore(3)
+
+        async def _pw_detect(row: dict, browser) -> None:
+            async with sem:
+                result = await detect_ats_with_playwright(
+                    row['name'].strip(), row['careers_url'].strip(), browser
+                )
+                if result['ats_type'] != 'html':
+                    row['ats_type'] = result['ats_type']
+                    row['slug'] = result['slug']
+                    row['last_crawled'] = datetime.now().strftime('%Y-%m-%d')
+
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True)
+            await asyncio.gather(*[_pw_detect(r, browser) for r in html_rows])
+            await browser.close()
+
+        pw_resolved = sum(1 for r in html_rows if r.get('ats_type') != 'html')
+        print(f"Playwright resolved: {pw_resolved} companies")
+
     greenhouse = sum(1 for r in rows if r.get('ats_type') == 'greenhouse')
     lever = sum(1 for r in rows if r.get('ats_type') == 'lever')
     comeet = sum(1 for r in rows if r.get('ats_type') == 'comeet')

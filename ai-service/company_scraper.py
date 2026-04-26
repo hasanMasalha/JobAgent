@@ -228,7 +228,8 @@ async def scrape_company(company: dict) -> list[dict]:
     elif ats == 'comeet':
         return await scrape_comeet(company)
     elif ats == 'html':
-        return await scrape_html_page(company)
+        from playwright_scraper import scrape_jobs_with_playwright
+        return await scrape_jobs_with_playwright(company)
     else:
         # workday, unknown etc — skip for now
         return []
