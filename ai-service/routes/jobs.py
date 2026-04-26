@@ -146,6 +146,45 @@ async def enrich_companies():
     return {"status": "done"}
 
 
+@router.post("/companies/scrape-test")
+async def scrape_test():
+    from company_scraper import (
+        enrich_empty_descriptions,
+        is_israeli_job,
+        load_companies,
+        scrape_company,
+    )
+
+    companies = load_companies()[:5]
+    all_jobs = []
+    for company in companies:
+        jobs = await scrape_company(company)
+        all_jobs.extend(jobs)
+
+    before = len(all_jobs)
+    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
+    after = len(all_jobs)
+
+    all_jobs = await enrich_empty_descriptions(all_jobs)
+
+    return {
+        "companies_tested": [c['name'] for c in companies],
+        "jobs_before_filter": before,
+        "jobs_after_filter": after,
+        "jobs": [
+            {
+                "title": j["title"],
+                "company": j["company"],
+                "location": j["location"],
+                "description_length": len(j.get("description", "")),
+                "description_preview": j.get("description", "")[:100],
+                "url": j["url"],
+            }
+            for j in all_jobs
+        ],
+    }
+
+
 @router.post("/companies/scrape-and-store")
 async def scrape_and_store_company_careers():
     from company_scraper import scrape_all_company_careers
