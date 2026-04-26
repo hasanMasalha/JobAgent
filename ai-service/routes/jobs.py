@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ats_discovery import auto_discover_israeli_companies
 from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
+from company_scraper import is_israeli_job
 from embedder import embed
 from scraper import scrape_israel_jobs
 
@@ -19,6 +20,11 @@ async def scrape_and_store():
     jobs = await scrape_israel_jobs()
     if not jobs:
         return {"new_jobs": 0, "total_processed": 0}
+
+    jobs = [
+        j for j in jobs
+        if is_israeli_job({'location': j.get('location', '') or j.get('job_location', '')})
+    ]
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)
@@ -140,6 +146,45 @@ async def enrich_companies():
     return {"status": "done"}
 
 
+@router.post("/companies/scrape-test")
+async def scrape_test():
+    from company_scraper import (
+        enrich_empty_descriptions,
+        is_israeli_job,
+        load_companies,
+        scrape_company,
+    )
+
+    companies = load_companies()[:5]
+    all_jobs = []
+    for company in companies:
+        jobs = await scrape_company(company)
+        all_jobs.extend(jobs)
+
+    before = len(all_jobs)
+    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
+    after = len(all_jobs)
+
+    all_jobs = await enrich_empty_descriptions(all_jobs)
+
+    return {
+        "companies_tested": [c['name'] for c in companies],
+        "jobs_before_filter": before,
+        "jobs_after_filter": after,
+        "jobs": [
+            {
+                "title": j["title"],
+                "company": j["company"],
+                "location": j["location"],
+                "description_length": len(j.get("description", "")),
+                "description_preview": j.get("description", "")[:100],
+                "url": j["url"],
+            }
+            for j in all_jobs
+        ],
+    }
+
+
 @router.post("/companies/scrape-and-store")
 async def scrape_and_store_company_careers():
     from company_scraper import scrape_all_company_careers
@@ -147,6 +192,10 @@ async def scrape_and_store_company_careers():
     jobs = await scrape_all_company_careers()
     if not jobs:
         return {"new_jobs": 0, "updated_jobs": 0, "total_processed": 0}
+
+    jobs_before = len(jobs)
+    jobs = [j for j in jobs if is_israeli_job(j)]
+    print(f"Israel filter (route): {jobs_before} → {len(jobs)} jobs")
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)

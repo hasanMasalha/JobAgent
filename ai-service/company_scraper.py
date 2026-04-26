@@ -1,6 +1,8 @@
 import asyncio
 import csv
+import html
 import json
+import re
 
 import httpx
 
@@ -8,6 +10,34 @@ CSV_PATH = "companies.csv"
 
 _NAME_ALIASES = ('Company', 'company name', 'Company Name')
 _URL_ALIASES = ('Careers URL', 'Careers_URL', 'careers url', 'url', 'URL')
+
+_ISRAELI_KEYWORDS = [
+    "israel", "tel aviv", "תל אביב", "herzliya", "herzelia",
+    "ramat gan", "petah tikva", "petach tikva", "haifa", "חיפה",
+    "beer sheva", "be'er sheva", "rishon", "netanya", "rehovot",
+    "jerusalem", "ירושלים", "tlv", "natanya", "kfar saba",
+    "ra'anana", "raanana", "hod hasharon", "modiin", "ashdod",
+    "tel-aviv", "telaviv", "herzeliya", "yavne", "yokneam", "caesarea",
+]
+
+
+def is_israeli_job(job: dict) -> bool:
+    location = (job.get('location') or '').lower().strip()
+    url = (job.get('url') or '').lower().strip()
+
+    if location:
+        # Location is explicit — check it regardless of company flag
+        return any(kw in location for kw in _ISRAELI_KEYWORDS)
+
+    # Empty location: trust companies we knowingly added to the CSV
+    if job.get('known_israeli_company'):
+        return True
+
+    # Unknown company, empty location — check URL for Israeli signals
+    if ".co.il" in url or "/il/" in url:
+        return True
+
+    return False
 
 
 def _normalize_row(row: dict) -> dict:
@@ -46,10 +76,10 @@ async def scrape_greenhouse(company: dict) -> list[dict]:
     if not slug:
         return []
 
-    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs"
-    async with httpx.AsyncClient() as client:
+    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+    async with httpx.AsyncClient(timeout=15) as client:
         try:
-            resp = await client.get(url, timeout=10)
+            resp = await client.get(url)
             if resp.status_code != 200:
                 return []
 
@@ -59,10 +89,14 @@ async def scrape_greenhouse(company: dict) -> list[dict]:
                 if job.get('location'):
                     location = job['location'].get('name', '')
 
+                raw_content = html.unescape(job.get('content', ''))
+                description = re.sub(r'<[^>]+>', ' ', raw_content)
+                description = re.sub(r'\s+', ' ', description).strip()[:3000]
+
                 jobs.append({
                     'title': job.get('title', ''),
                     'company': company['name'],
-                    'description': '',
+                    'description': description,
                     'location': location,
                     'url': job.get('absolute_url', ''),
                     'source': 'company_careers',
@@ -89,16 +123,12 @@ async def scrape_lever(company: dict) -> list[dict]:
 
             jobs = []
             for posting in resp.json():
-                description = ' '.join([
-                    section.get('text', '') + ': ' +
-                    ' '.join(section.get('content', []))
-                    for section in posting.get('lists', [])
-                ])
+                description = posting.get('descriptionPlain', '')[:3000]
 
                 jobs.append({
                     'title': posting.get('text', ''),
                     'company': company['name'],
-                    'description': description[:2000],
+                    'description': description,
                     'location': posting.get(
                         'categories', {}
                     ).get('location', ''),
@@ -217,22 +247,136 @@ Content:
         await client_http.aclose()
 
 
+async def fetch_job_description(url: str, client: httpx.AsyncClient) -> str:
+    if not url or not url.startswith('http'):
+        return ""
+    try:
+        resp = await client.get(url, timeout=15)
+        if resp.status_code != 200:
+            print(f"  DESC FETCH: {resp.status_code} for {url[:60]}")
+            return ""
+
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+
+        # JSON-LD first — parse before stripping any tags
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string or '{}')
+                items = data.get('@graph', [data]) if isinstance(data, dict) else [data]
+                for item in items:
+                    if item.get('@type') == 'JobPosting':
+                        desc = item.get('description', '')
+                        if desc:
+                            clean = re.sub(r'<[^>]+>', ' ', desc)
+                            clean = re.sub(r'\s+', ' ', clean).strip()
+                            if len(clean) > 100:
+                                print(f"  DESC OK (JSON-LD): {url[:50]}")
+                                return clean[:3000]
+            except Exception:
+                continue
+
+        # Strip noise elements before CSS/text extraction
+        for tag in soup.find_all(['nav', 'header', 'footer', 'script', 'style']):
+            tag.decompose()
+        for selector in [
+            '[class*="nav"]', '[class*="header"]', '[class*="footer"]',
+            '[class*="menu"]', '[class*="cookie"]', '[class*="banner"]',
+            '[id*="nav"]', '[id*="header"]', '[id*="footer"]',
+        ]:
+            for tag in soup.select(selector):
+                tag.decompose()
+
+        _NAV_SIGNALS = ('log in', 'contact sales', 'get started', 'sign up', 'pricing')
+
+        for selector in [
+            '.job-description', '#job-description',
+            '[class*="job-description"]', '[class*="jobDescription"]',
+            '[class*="position-description"]', '[class*="job-details"]',
+            '[class*="job_description"]', '[data-ui="job-description"]',
+            '.description', '.posting-requirements',
+            'article', '[role="main"]', 'main',
+        ]:
+            el = soup.select_one(selector)
+            if el:
+                text = el.get_text(separator=' ', strip=True)
+                preview = text[:100].lower()
+                if len(text) > 300 and not any(s in preview for s in _NAV_SIGNALS):
+                    print(f"  DESC OK ({selector}): {url[:50]}")
+                    return text[:3000]
+
+        paragraphs = soup.find_all('p')
+        job_paragraphs = [
+            p.get_text(strip=True) for p in paragraphs
+            if (len(p.get_text(strip=True)) > 80
+                and 'cookie' not in p.get_text().lower()
+                and 'privacy' not in p.get_text().lower()[:50])
+        ]
+        text = ' '.join(job_paragraphs)
+        if len(text) > 300:
+            print(f"  DESC OK (paragraphs): {url[:50]}")
+            return text[:3000]
+
+        print(f"  DESC FAILED (no content found): {url[:60]}")
+        return ""
+    except Exception as e:
+        print(f"  DESC ERROR: {e} for {url[:60]}")
+        return ""
+
+
+async def enrich_empty_descriptions(jobs: list[dict], max_concurrent: int = 5) -> list[dict]:
+    empty = [(i, j) for i, j in enumerate(jobs)
+             if not j.get('description') or len(j.get('description', '')) < 100]
+    if not empty:
+        return jobs
+
+    print(f"Fetching descriptions for {len(empty)} jobs with empty descriptions...")
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"},
+        timeout=15,
+    ) as client:
+        async def fetch_one(idx: int, job: dict) -> None:
+            async with sem:
+                desc = await fetch_job_description(job.get('url', ''), client)
+                if desc:
+                    jobs[idx]['description'] = desc
+                await asyncio.sleep(0.3)
+
+        await asyncio.gather(*[fetch_one(i, j) for i, j in empty], return_exceptions=True)
+
+    filled = sum(1 for i, _ in empty if len(jobs[i].get('description', '')) > 100)
+    print(f"Description enrichment: {filled}/{len(empty)} jobs filled")
+    return jobs
+
+
 async def scrape_company(company: dict) -> list[dict]:
     """Route to correct scraper based on ATS type"""
     ats = company.get('ats_type', 'unknown')
 
-    if ats == 'greenhouse':
-        return await scrape_greenhouse(company)
-    elif ats == 'lever':
-        return await scrape_lever(company)
-    elif ats == 'comeet':
-        return await scrape_comeet(company)
-    elif ats == 'html':
+    _handlers = {
+        'greenhouse': scrape_greenhouse,
+        'lever': scrape_lever,
+        'comeet': scrape_comeet,
+    }
+
+    if ats == 'html':
         from playwright_scraper import scrape_jobs_with_playwright
-        return await scrape_jobs_with_playwright(company)
+        handler = scrape_jobs_with_playwright
     else:
-        # workday, unknown etc — skip for now
-        return []
+        handler = _handlers.get(ats)
+
+    if not handler:
+        return []  # workday, unknown etc — skip for now
+
+    jobs = await handler(company)
+    for job in jobs:
+        job['known_israeli_company'] = True
+    return jobs
 
 
 async def scrape_all_company_careers() -> list[dict]:
@@ -247,9 +391,13 @@ async def scrape_all_company_careers() -> list[dict]:
     print(f"Scraping {len(companies)} companies from CSV...")
     all_jobs = []
 
+    _DEBUG_COMPANIES = {'Payoneer', 'Wix', 'Fiverr', 'eToro'}
     for company in companies:
         try:
             jobs = await scrape_company(company)
+            if company['name'] in _DEBUG_COMPANIES:
+                locations = set(j.get('location', '') for j in jobs)
+                print(f"DEBUG {company['name']}: {len(jobs)} jobs, locations: {locations}")
             if jobs:
                 print(f"  {company['name']}: {len(jobs)} jobs")
                 all_jobs.extend(jobs)
@@ -257,6 +405,12 @@ async def scrape_all_company_careers() -> list[dict]:
             print(f"  {company['name']}: failed — {e}")
 
         await asyncio.sleep(1)
+
+    all_jobs_raw = all_jobs
+    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
+    print(f"Israel filter: {len(all_jobs_raw)} → {len(all_jobs)} jobs")
+
+    all_jobs = await enrich_empty_descriptions(all_jobs)
 
     print(f"Company scrape complete: {len(all_jobs)} total jobs")
     return all_jobs

@@ -200,6 +200,7 @@ async def _extract_job_links(
             or 'mailto:' in href
             or len(text) < 5 or len(text) > 150
             or not _JOB_TITLE_RE.search(text)
+            or not is_valid_job_url(href, careers_url)
         ):
             continue
         seen.add(href)
@@ -214,6 +215,25 @@ async def _extract_job_links(
             'salary_max': None,
         })
     return jobs
+
+
+_BAD_URL_PATTERNS = [
+    r'/career/$', r'/careers/$', r'/jobs/$',
+    r'/career/cat', r'/jobs/category',
+    r'page=', r'category=', r'department=',
+    r'/career/#', r'/jobs/#',
+]
+
+
+def is_valid_job_url(url: str, source_url: str) -> bool:
+    if not url or not url.startswith('http'):
+        return False
+    if url.rstrip('/') == source_url.rstrip('/'):
+        return False
+    for pattern in _BAD_URL_PATTERNS:
+        if re.search(pattern, url):
+            return False
+    return True
 
 
 def _strip_html(text: str) -> str:
