@@ -43,7 +43,7 @@ interface Props {
 const LABEL = "block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5";
 
 const SELECT =
-  "appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 pr-8 text-sm font-medium " +
+  "appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 pr-7 text-xs font-medium " +
   "text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 " +
   "focus:outline-none cursor-pointer transition-colors";
 
@@ -71,128 +71,128 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
   const dirty = !isDefault(filters);
 
   const bar = (
-    <div className="flex flex-wrap items-end gap-3">
-      {/* Sort */}
-      <div>
-        <span className={LABEL}>Sort</span>
-        <div className="relative">
-          <select
-            value={filters.sortBy}
-            onChange={(e) => onChange({ ...filters, sortBy: e.target.value as SortBy })}
-            className={`${SELECT} min-w-[140px]`}
-          >
-            <option value="score">Best match</option>
-            <option value="newest">Newest first</option>
-            <option value="salary">Salary: high to low</option>
-          </select>
-          <Chevron />
+    <div>
+      {/* Filters row */}
+      <div className="flex items-end gap-2">
+        {/* Sort */}
+        <div>
+          <span className={LABEL}>Sort</span>
+          <div className="relative">
+            <select
+              value={filters.sortBy}
+              onChange={(e) => onChange({ ...filters, sortBy: e.target.value as SortBy })}
+              className={`${SELECT} min-w-[110px]`}
+            >
+              <option value="score">Best match</option>
+              <option value="newest">Newest first</option>
+              <option value="salary">Salary: high to low</option>
+            </select>
+            <Chevron />
+          </div>
         </div>
-      </div>
 
-      <Divider />
+        <Divider />
 
-      {/* Work type */}
-      <div>
-        <span className={LABEL}>Work type</span>
-        <div className="relative">
-          <select
-            value={filters.workTypes[0] ?? ""}
-            onChange={(e) => {
-              const v = e.target.value as WorkType | "";
-              onChange({ ...filters, workTypes: v ? [v] : [] });
-            }}
-            className={`${SELECT} min-w-[130px]`}
-          >
-            <option value="">All types</option>
-            <option value="remote">Remote</option>
-            <option value="hybrid">Hybrid</option>
-            <option value="onsite">On-site</option>
-          </select>
-          <Chevron />
+        {/* Work type */}
+        <div>
+          <span className={LABEL}>Work type</span>
+          <div className="relative">
+            <select
+              value={filters.workTypes[0] ?? ""}
+              onChange={(e) => {
+                const v = e.target.value as WorkType | "";
+                onChange({ ...filters, workTypes: v ? [v] : [] });
+              }}
+              className={`${SELECT} min-w-[100px]`}
+            >
+              <option value="">All types</option>
+              <option value="remote">Remote</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="onsite">On-site</option>
+            </select>
+            <Chevron />
+          </div>
         </div>
-      </div>
 
-      <Divider />
+        <Divider />
 
-      {/* Job type */}
-      <div>
-        <span className={LABEL}>Job type</span>
-        <div className="relative">
-          <select
-            value={filters.jobTypes[0] ?? ""}
-            onChange={(e) => {
-              const v = e.target.value as JobType | "";
-              onChange({ ...filters, jobTypes: v ? [v] : [] });
-            }}
-            className={`${SELECT} min-w-[130px]`}
-          >
-            <option value="">All types</option>
-            <option value="full-time">Full-time</option>
-            <option value="contract">Contract</option>
-            <option value="part-time">Part-time</option>
-          </select>
-          <Chevron />
+        {/* Job type */}
+        <div>
+          <span className={LABEL}>Job type</span>
+          <div className="relative">
+            <select
+              value={filters.jobTypes[0] ?? ""}
+              onChange={(e) => {
+                const v = e.target.value as JobType | "";
+                onChange({ ...filters, jobTypes: v ? [v] : [] });
+              }}
+              className={`${SELECT} min-w-[100px]`}
+            >
+              <option value="">All types</option>
+              <option value="full-time">Full-time</option>
+              <option value="contract">Contract</option>
+              <option value="part-time">Part-time</option>
+            </select>
+            <Chevron />
+          </div>
         </div>
-      </div>
 
-      <Divider />
+        <Divider />
 
-      {/* Date posted */}
-      <div>
-        <span className={LABEL}>Date posted</span>
-        <div className="relative">
-          <select
-            value={filters.daysPosted}
-            onChange={(e) => onChange({ ...filters, daysPosted: e.target.value as DaysPosted })}
-            className={`${SELECT} min-w-[130px]`}
-          >
-            <option value="any">Any time</option>
-            <option value="1">Last 24 hours</option>
-            <option value="3">Last 3 days</option>
-            <option value="7">Last week</option>
-          </select>
-          <Chevron />
+        {/* Date posted */}
+        <div>
+          <span className={LABEL}>Date posted</span>
+          <div className="relative">
+            <select
+              value={filters.daysPosted}
+              onChange={(e) => onChange({ ...filters, daysPosted: e.target.value as DaysPosted })}
+              className={`${SELECT} min-w-[100px]`}
+            >
+              <option value="any">Any time</option>
+              <option value="1">Last 24 hours</option>
+              <option value="3">Last 3 days</option>
+              <option value="7">Last week</option>
+            </select>
+            <Chevron />
+          </div>
         </div>
+
+        <Divider />
+
+        {/* Min salary */}
+        <div>
+          <span className={LABEL}>Min salary</span>
+          <input
+            type="number"
+            placeholder="₪ Amount"
+            value={filters.minSalary}
+            onChange={(e) => onChange({ ...filters, minSalary: e.target.value })}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 w-[100px] hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none transition-colors"
+          />
+        </div>
+
+        {/* Spacer + clear filters */}
+        <div className="flex-1 min-w-0" />
+        {dirty && (
+          <button
+            type="button"
+            onClick={() => onChange(DEFAULT_FILTERS)}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap transition-colors self-end pb-1.5"
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            Clear filters
+          </button>
+        )}
       </div>
 
-      <Divider />
-
-      {/* Min salary */}
-      <div>
-        <span className={LABEL}>Min salary</span>
-        <input
-          type="number"
-          placeholder="₪ Amount"
-          value={filters.minSalary}
-          onChange={(e) => onChange({ ...filters, minSalary: e.target.value })}
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 w-[140px] hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none transition-colors"
-        />
-      </div>
-
-      {/* Spacer pushes right side to the end */}
-      <div className="flex-1 min-w-0" />
-
-      {/* Right side: count + clear */}
-      <div className="flex items-end gap-4">
-        {totalCount !== undefined && matchCount !== undefined && (
-          <span className="text-sm text-gray-400 whitespace-nowrap pb-2">
+      {/* Count row — right-aligned below filters */}
+      {totalCount !== undefined && matchCount !== undefined && (
+        <div className="flex justify-end mt-2">
+          <span className="text-xs text-gray-400">
             Showing {matchCount} of {totalCount} matches
           </span>
-        )}
-        {dirty && (
-          <div>
-            <span className={LABEL}>&nbsp;</span>
-            <button
-              type="button"
-              onClick={() => onChange(DEFAULT_FILTERS)}
-              className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap transition-colors py-2"
-            >
-              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-              Clear filters
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 
