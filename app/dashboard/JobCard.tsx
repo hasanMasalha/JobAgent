@@ -9,28 +9,73 @@ export interface Job {
   title: string;
   company: string;
   description: string;
-  location: string;
+  location: string | null;
   url: string;
+  source?: string;
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
-  similarity: number;
-  claude_score: number;
-  reasons: string[];
-  gaps: string[];
+  similarity?: number;
+  claude_score?: number;
+  reasons?: string[];
+  gaps?: string[];
 }
 
-export default function JobCard({ job, initialSaved = false, onDismiss }: { job: Job; initialSaved?: boolean; onDismiss?: (id: string) => void }) {
+interface Props {
+  job: Job;
+  initialSaved?: boolean;
+  onDismiss?: (id: string) => void;
+  showScore?: boolean;
+  showSource?: boolean;
+}
+
+function daysAgo(dateStr: string): string {
+  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60_000);
+  if (mins < 60) return "just now";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function SourcePill({ source }: { source: string }) {
+  const s = source.toLowerCase();
+  if (s === "indeed")
+    return (
+      <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+        Indeed
+      </span>
+    );
+  if (s === "linkedin")
+    return (
+      <span className="text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+        LinkedIn
+      </span>
+    );
+  return (
+    <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+      Company
+    </span>
+  );
+}
+
+export default function JobCard({
+  job,
+  initialSaved = false,
+  onDismiss,
+  showScore = true,
+  showSource = false,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const [saved, setSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const router = useRouter();
 
-  // Fall back to vector similarity when Claude scoring didn't run
-  const score = job.claude_score > 0
-    ? job.claude_score
-    : Math.round(job.similarity * 100);
+  const score =
+    (job.claude_score ?? 0) > 0
+      ? job.claude_score!
+      : Math.round((job.similarity ?? 0) * 100);
   const scoreColor =
     score >= 80
       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400"
@@ -53,12 +98,14 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_id: job.id, action: "dismissed" }),
       });
-      // Let the fade complete before removing from list
       setTimeout(() => onDismiss?.(job.id), 300);
     } catch {
       setDismissing(false);
     }
   }
+
+  const reasons = job.reasons ?? [];
+  const gaps = job.gaps ?? [];
 
   return (
     <div
@@ -74,15 +121,24 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
             {job.company}
             {job.location ? ` · ${job.location}` : ""}
           </p>
+          {showSource && job.source && (
+            <div className="mt-1">
+              <SourcePill source={job.source} />
+            </div>
+          )}
           {salary && (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{salary}</p>
           )}
         </div>
-        <span
-          className={`shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full ${scoreColor}`}
-        >
-          {score}%
-        </span>
+        {showScore ? (
+          <span className={`shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full ${scoreColor}`}>
+            {score}%
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">
+            {daysAgo(job.scraped_at)}
+          </span>
+        )}
       </div>
 
       {/* Description preview */}
@@ -102,13 +158,13 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
 
       {expanded && (
         <div className="mt-3 space-y-3">
-          {job.reasons.length > 0 && (
+          {reasons.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">
                 Why it fits
               </p>
               <ul className="space-y-0.5">
-                {job.reasons.map((r, i) => (
+                {reasons.map((r, i) => (
                   <li key={i} className="text-xs text-gray-700 dark:text-gray-300 flex gap-1.5">
                     <span className="text-green-500 shrink-0">✓</span>
                     {r}
@@ -117,11 +173,11 @@ export default function JobCard({ job, initialSaved = false, onDismiss }: { job:
               </ul>
             </div>
           )}
-          {job.gaps.length > 0 && (
+          {gaps.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Gaps</p>
               <ul className="space-y-0.5">
-                {job.gaps.map((g, i) => (
+                {gaps.map((g, i) => (
                   <li key={i} className="text-xs text-gray-700 dark:text-gray-300 flex gap-1.5">
                     <span className="text-amber-400 shrink-0">!</span>
                     {g}
