@@ -13,6 +13,7 @@ _REQUEST_PATTERNS = [
     (r'boards-api\.greenhouse\.io/v1/boards/([a-zA-Z0-9_-]+)', 'greenhouse', 1),
     (r'job-boards\.greenhouse\.io/([a-zA-Z0-9_-]+)', 'greenhouse', 1),
     (r'api\.lever\.co/v0/postings/([a-zA-Z0-9_-]+)', 'lever', 1),
+    (r'api\.ashbyhq\.com/posting-public/job', 'ashby', None),
     (r'jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)', 'ashby', 1),
     (r'app\.ashbyhq\.com/api/non-user-graphql', 'ashby', None),
     (r'([a-zA-Z0-9-]+)\.wd\d+\.myworkdayjobs\.com', 'workday', 1),
@@ -21,6 +22,9 @@ _REQUEST_PATTERNS = [
     (r'([a-zA-Z0-9-]+)\.icims\.com/jobs', 'icims', 1),
     (r'apply\.workable\.com/([a-zA-Z0-9_-]+)', 'workable', 1),
 ]
+
+# Domains that use Kasada bot-detection, which blocks headless Chromium
+_KASADA_DOMAINS = ('myworkdayjobs.com', 'icims.com')
 
 _UA = (
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -45,6 +49,58 @@ def _parse_request_url(url: str) -> dict | None:
     return None
 
 
+def _is_kasada_domain(url: str) -> bool:
+    return any(d in url for d in _KASADA_DOMAINS)
+
+
+async def _is_kasada_blocked(page: Page, got_403: bool) -> bool:
+    """Return True if Kasada served a bot-detection challenge."""
+    if got_403:
+        return True
+    # Kasada redirects to a /pxt/ challenge path
+    if '/pxt/' in page.url:
+        return True
+    try:
+        content = await page.content()
+        return 'kasada' in content.lower()
+    except Exception:
+        return False
+
+
+async def _detect_with_chrome(name: str, careers_url: str) -> dict:
+    """Retry ATS detection using the installed system Chrome (bypasses Kasada)."""
+    detected: dict = {}
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, channel='chrome')
+            try:
+                page = await browser.new_page(user_agent=_UA)
+
+                def on_request(request):
+                    if detected:
+                        return
+                    result = _parse_request_url(request.url)
+                    if result:
+                        detected.update(result)
+                        print(
+                            f"  {name}: [pw-chrome] {result['ats_type']} "
+                            f"slug={result['slug'][:30] or '(none)'}"
+                        )
+
+                page.on('request', on_request)
+                try:
+                    await page.goto(careers_url, wait_until='domcontentloaded', timeout=30_000)
+                    await page.wait_for_load_state('networkidle', timeout=10_000)
+                except Exception:
+                    pass
+                await page.close()
+            finally:
+                await browser.close()
+    except Exception as e:
+        print(f"  {name}: [pw-chrome] error - {e}")
+    return detected
+
+
 async def detect_ats_with_playwright(
     name: str,
     careers_url: str,
@@ -54,11 +110,15 @@ async def detect_ats_with_playwright(
     Load the careers page with a real browser and detect ATS from the
     network requests it makes. The browser is passed in so callers can
     reuse one instance across multiple companies.
+
+    For Workday and iCIMS URLs, falls back to system Chrome when Kasada
+    bot-detection is identified as the reason no ATS was found.
     """
     detected: dict = {}
 
     try:
         page = await browser.new_page(user_agent=_UA)
+        got_403 = False
 
         def on_request(request):
             if detected:
@@ -71,13 +131,25 @@ async def detect_ats_with_playwright(
                     f"slug={result['slug'][:30] or '(none)'}"
                 )
 
+        def on_response(response):
+            nonlocal got_403
+            if response.status == 403:
+                got_403 = True
+
         page.on('request', on_request)
+        page.on('response', on_response)
 
         try:
             await page.goto(careers_url, wait_until='domcontentloaded', timeout=20_000)
             await page.wait_for_load_state('networkidle', timeout=8_000)
         except Exception:
             pass  # proceed even if networkidle times out
+
+        if not detected and _is_kasada_domain(careers_url):
+            if await _is_kasada_blocked(page, got_403):
+                await page.close()
+                print(f"  {name}: [pw] Kasada detected, retrying with system Chrome")
+                return await _detect_with_chrome(name, careers_url)
 
         await page.close()
 
