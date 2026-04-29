@@ -81,15 +81,15 @@ export default function MyCVPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-4 border-gray-900 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="inline-block w-6 h-6 border-4 border-gray-900 dark:border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!cvText) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 text-sm mb-4">No CV found.</p>
           <Link href="/dashboard/onboarding" className="text-sm font-medium underline">Upload or build a CV</Link>
@@ -99,7 +99,7 @@ export default function MyCVPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
 
