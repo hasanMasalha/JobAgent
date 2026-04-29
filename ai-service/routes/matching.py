@@ -95,34 +95,60 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
 
 # ── Claude scoring (slow, enriches results) ───────────────────────────────────
 
-def _run_claude_scoring(jobs: list, clean_summary: str, skills_list: str, years_experience: int) -> list:
-    if years_experience <= 1:
-        seniority = "junior (0-1 years experience)"
-    elif years_experience <= 3:
-        seniority = "junior-mid (2-3 years experience)"
-    elif years_experience <= 6:
-        seniority = "mid-level (4-6 years experience)"
-    else:
-        seniority = "senior (7+ years experience)"
-
+def _run_claude_scoring(jobs: list, cv_data: dict) -> list:
     jobs_text = "\n".join(
         f'{j["id"]} | {j["title"]} at {j["company"]} | {(j["description"] or "")[:200]}'
         for j in jobs
     )
-    prompt = (
-        "You are a job matching assistant. Score each job 0-100 for this candidate.\n"
-        "Return ONLY a JSON array. No markdown, no explanation.\n"
-        'Format: [{"job_id":"<exact id from input>","score":85,"reasons":["r1","r2"],"gaps":["g1"]}]\n\n'
-        f"Candidate level: {seniority}\n"
-        f"Candidate summary: {clean_summary}\n"
-        f"Skills: {skills_list}\n\n"
-        "Scoring rules:\n"
-        "- Penalise HEAVILY (score below 30) if the job requires significantly more experience than the candidate has.\n"
-        "- A junior candidate should score low on roles labelled Senior, Lead, Staff, Principal, or requiring 5+ years.\n"
-        "- A senior candidate should score low on roles labelled Junior or entry-level.\n"
-        "- Skills match is important but seniority fit is the primary filter.\n\n"
-        f"Jobs (id | title | description):\n{jobs_text}"
-    )
+    prompt = f"""You are a strict job matching assistant for a recruiter.
+Score how well each job fits this candidate.
+
+CANDIDATE PROFILE:
+{cv_data['clean_summary']}
+Skills: {', '.join(cv_data['skills'])}
+Experience: {cv_data['years_experience']} years total
+
+SCORING RULES — follow these strictly:
+
+1. START with a base score of 70 if skills overlap significantly
+
+2. INCREASE score for:
+   +15 if candidate meets or exceeds required years of experience
+   +10 if candidate has direct experience with main tech stack
+   +5  if location/remote preference matches
+
+3. DECREASE score for:
+   -25 if job requires 4+ years and candidate has under 2 years
+   -20 if job requires 3+ years and candidate has under 1 year
+   -15 if job requires senior/lead/principal title explicitly
+   -15 if job requires specific certification candidate lacks
+   -10 if tech stack is mostly unfamiliar (under 30% overlap)
+   -5  if job is a completely different domain (e.g. CV is backend, job is mobile)
+
+4. HARD CAPS:
+   - If job says "5+ years" or "senior" and candidate has under 2 years:
+     MAXIMUM score is 45 regardless of skill match
+   - If job says "4+ years" and candidate has under 2 years:
+     MAXIMUM score is 55 regardless of skill match
+   - If job says "junior" or "entry level":
+     MINIMUM score is 60 if skills match
+
+5. SET score to 0 if:
+   - Job requires specific license or clearance candidate doesn't have
+   - Job is clearly non-technical (sales, HR) and CV is technical
+
+Return ONLY valid JSON array, no explanation:
+[{{
+  "job_id": "...",
+  "score": 45,
+  "reasons": ["skill overlap with Python/FastAPI", "TypeScript mentioned"],
+  "gaps": ["needs 4+ years, candidate has ~1 year", "no AWS production experience"],
+  "experience_match": "junior applying to senior role"
+}}]
+
+CANDIDATE: {cv_data['years_experience']} years experience
+JOBS TO SCORE:
+{jobs_text}"""
     message = _client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=8192,
@@ -150,6 +176,7 @@ def _merge_scores(jobs: list, scores: list) -> list:
         job["claude_score"] = scored.get("score", 0)
         job["reasons"] = scored.get("reasons", [])
         job["gaps"] = scored.get("gaps", [])
+        job["experience_match"] = scored.get("experience_match", "")
         job["similarity"] = float(job["similarity"])
     jobs.sort(key=lambda j: j["claude_score"], reverse=True)
     return jobs
@@ -228,12 +255,14 @@ async def match_jobs(req: MatchRequest):
         skills_json = cv_row["skills_json"] or {}
         if isinstance(skills_json, str):
             skills_json = json.loads(skills_json)
-        clean_summary = cv_row["clean_summary"] or ""
-        skills_list = ", ".join(skills_json.get("skills", []))
-        years_experience = int(skills_json.get("years_experience") or 0)
+        cv_data = {
+            "clean_summary": cv_row["clean_summary"] or "",
+            "skills": skills_json.get("skills", []),
+            "years_experience": int(skills_json.get("years_experience") or 0),
+        }
 
         # 3. Claude scoring
-        scores = _run_claude_scoring(jobs, clean_summary, skills_list, years_experience)
+        scores = _run_claude_scoring(jobs, cv_data)
         if scores:
             results = _merge_scores(jobs, scores)
         else:
