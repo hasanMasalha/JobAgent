@@ -26,7 +26,7 @@ function ScoreRing({ score }: { score: number }) {
   return (
     <div className="relative inline-flex items-center justify-center">
       <svg width="96" height="96" className="-rotate-90">
-        <circle cx="48" cy="48" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="8" />
+        <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="8" className="text-gray-200 dark:text-gray-600" />
         <circle
           cx="48"
           cy="48"
@@ -104,20 +104,20 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-900">Improve with AI</h2>
-          <button onClick={() => onClose(cvId ?? undefined)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Improve with AI</h2>
+          <button onClick={() => onClose(cvId ?? undefined)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">×</button>
         </div>
 
         {state === "idle" && (
           <>
-            <p className="text-sm text-gray-600 mb-5">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
               Claude will rewrite your CV applying all the suggested improvements — stronger verbs, quantified achievements, cleaner language. Your current CV will be replaced with the improved version.
             </p>
             <button
               onClick={handleImprove}
-              className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+              className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
             >
               Rewrite my CV
             </button>
@@ -126,14 +126,14 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
 
         {state === "loading" && (
           <div className="text-center py-8">
-            <div className="inline-block w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm text-gray-500">Claude is improving your CV…</p>
+            <div className="inline-block w-6 h-6 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">Claude is improving your CV…</p>
           </div>
         )}
 
         {state === "done" && (
           <>
-            <div className="flex items-center gap-2 text-green-700 mb-4">
+            <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-4">
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -142,13 +142,13 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors mb-2"
+              className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 transition-colors mb-2"
             >
               {downloading ? "Preparing…" : "Download improved CV (.docx)"}
             </button>
             <button
               onClick={() => onClose(cvId ?? undefined)}
-              className="w-full border py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+              className="w-full border dark:border-gray-600 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Close
             </button>
@@ -157,10 +157,10 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
 
         {state === "error" && (
           <>
-            <p className="text-sm text-red-600 mb-4">{errorMsg}</p>
+            <p className="text-sm text-red-600 dark:text-red-400 mb-4">{errorMsg}</p>
             <button
               onClick={() => setState("idle")}
-              className="w-full border py-2 rounded-lg text-sm hover:bg-gray-50"
+              className="w-full border dark:border-gray-600 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Try again
             </button>
@@ -214,17 +214,17 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
 
   if (loading) {
     return (
-      <div className="bg-white border rounded-2xl p-6 text-center">
-        <div className="inline-block w-5 h-5 border-4 border-black border-t-transparent rounded-full animate-spin mb-2" />
-        <p className="text-sm text-gray-500">Scoring your CV…</p>
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-6 text-center">
+        <div className="inline-block w-5 h-5 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-2" />
+        <p className="text-sm text-gray-500 dark:text-gray-400">Scoring your CV…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white border rounded-2xl p-6 text-center">
-        <p className="text-sm text-red-500">{error}</p>
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-6 text-center">
+        <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
       </div>
     );
   }
@@ -239,16 +239,16 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
     <>
       {showModal && <ImproveModal onClose={handleModalClose} />}
 
-      <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
         {/* Header row */}
-        <div className="px-6 pt-6 pb-4 flex items-center gap-5 border-b">
+        <div className="px-6 pt-6 pb-4 flex items-center gap-5 border-b dark:border-gray-700">
           <ScoreRing score={score.score} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-semibold text-gray-900">CV Score</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">CV Score</span>
               <GradeBadge grade={score.grade} />
             </div>
-            <p className="text-sm text-gray-600 leading-snug">{score.summary}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-snug">{score.summary}</p>
           </div>
         </div>
 
@@ -256,11 +256,11 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
           {/* Strengths */}
           {score.strengths.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Strengths</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Strengths</p>
               <ul className="space-y-1.5">
                 {score.strengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <svg className="w-4 h-4 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <svg className="w-4 h-4 text-green-500 dark:text-green-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                     {s}
@@ -273,14 +273,14 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
           {/* Improvements */}
           {sortedImprovements.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Improvements</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Improvements</p>
               <ul className="space-y-3">
                 {sortedImprovements.map((item, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className={`mt-0.5 shrink-0 inline-block w-2 h-2 rounded-full ${item.priority === "high" ? "bg-red-400" : "bg-amber-400"}`} />
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{item.issue}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.fix}</p>
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{item.issue}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.fix}</p>
                     </div>
                   </li>
                 ))}
@@ -291,7 +291,7 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
           {/* CTA */}
           <button
             onClick={() => setShowModal(true)}
-            className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+            className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
           >
             Improve with AI
           </button>
