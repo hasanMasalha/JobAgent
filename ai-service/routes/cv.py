@@ -27,7 +27,12 @@ async def process_cv(req: ProcessCVRequest):
                 "content": (
                     "Extract from this CV. Return only valid JSON, no markdown:\n"
                     '{"skills": ["string"], "job_titles": ["string"], '
-                    '"years_experience": 0, "clean_summary": "string"}\n\n'
+                    '"years_experience": 0, '
+                    '"seniority_level": "junior|mid|senior", '
+                    '"clean_summary": "string"}\n\n'
+                    "years_experience: count only professional work experience, not education. "
+                    "Internships count as 0.5 years. Bootcamps do NOT count as experience.\n"
+                    "seniority_level: junior = 0-2 yrs, mid = 3-5 yrs, senior = 6+ yrs.\n\n"
                     + req.raw_text
                 ),
             }
@@ -49,6 +54,7 @@ async def process_cv(req: ProcessCVRequest):
         "skills": extracted.get("skills", []),
         "job_titles": extracted.get("job_titles", []),
         "years_experience": extracted.get("years_experience", 0),
+        "seniority_level": extracted.get("seniority_level", "junior"),
     }
     clean_summary = extracted.get("clean_summary", "")
 
