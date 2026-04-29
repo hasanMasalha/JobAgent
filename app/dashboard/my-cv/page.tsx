@@ -17,7 +17,7 @@ function CVPreview({ cvText }: { cvText: string }) {
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}</style>
-      <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
+      <div className="bg-white px-8 py-7 text-[13px] leading-relaxed text-gray-800" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
         {lines.map((line, i) => {
           const trimmed = line.trim();
           if (!nameWritten && trimmed) {
@@ -125,7 +125,7 @@ export default function MyCVPage() {
           <div className="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700 px-5 py-2">
             <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">preview</span>
           </div>
-          <div className="max-h-[70vh] overflow-y-auto">
+          <div className="max-h-[70vh] overflow-y-auto bg-white">
             <CVPreview cvText={cvText} />
           </div>
         </div>
