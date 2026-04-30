@@ -19,30 +19,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "cv_id is required" }, { status: 400 });
     }
 
-    const rows = await db.$queryRaw<{ raw_text: string; skills_json: { skills?: string[] } | null }[]>`
-      SELECT raw_text, skills_json FROM "CV" WHERE id = ${cvId} AND user_id = ${user.id} LIMIT 1
+    const rows = await db.$queryRaw<{ raw_text: string; skills_json: { skills?: string[] } | null; hyperlinks_json: string | null }[]>`
+      SELECT raw_text, skills_json, hyperlinks_json FROM "CV" WHERE id = ${cvId} AND user_id = ${user.id} LIMIT 1
     `;
 
     if (!rows.length || !rows[0].raw_text) {
       return NextResponse.json({ error: "No CV found" }, { status: 404 });
     }
 
-    const { raw_text, skills_json } = rows[0];
+    const { raw_text, skills_json, hyperlinks_json } = rows[0];
 
     // Derive job title from skills_json or first line of CV
     const firstLine = raw_text.split("\n").find((l) => l.trim()) ?? "CV";
     const jobTitle = skills_json?.skills?.[0] ?? firstLine;
+    const hyperlinks = JSON.parse(hyperlinks_json ?? "[]");
 
-    const buffer = await generateCVDocx(raw_text, jobTitle);
+    const buffer = await generateCVDocx(raw_text, jobTitle, hyperlinks);
 
-    const safeName = firstLine.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_") || "CV";
+    const nameFromCv = firstLine.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const nameFromEmail = (user.email ?? "").split("@")[0];
+    const displayName = (nameFromCv || nameFromEmail || "CV")
+      .replace(/\s+/g, "_")
+      .slice(0, 60);
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${safeName}_CV.docx"`,
+        "Content-Disposition": `attachment; filename="${displayName}_CV.docx"`,
       },
     });
   } catch (err) {

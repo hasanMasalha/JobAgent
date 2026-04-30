@@ -44,18 +44,85 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await cvFile.arrayBuffer());
     let rawText: string;
+    const allLinks: { text: string; url: string; context: string }[] = [];
+
+    const URL_PATTERNS = [
+      {
+        regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g,
+        buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}/${m[2]}`,
+        buildText: (m: RegExpExecArray) => `github.com/${m[1]}/${m[2]}`,
+      },
+      {
+        regex: /github\.com\/([a-zA-Z0-9_-]+)(?!\/[a-zA-Z0-9])/g,
+        buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}`,
+        buildText: (m: RegExpExecArray) => `github.com/${m[1]}`,
+      },
+      {
+        regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/g,
+        buildUrl: (m: RegExpExecArray) => `https://linkedin.com/in/${m[1]}`,
+        buildText: (m: RegExpExecArray) => `linkedin.com/in/${m[1]}`,
+      },
+      {
+        regex: /https?:\/\/(?!linkedin|github)[^\s,;)>\]'"]+/g,
+        buildUrl: (m: RegExpExecArray) => m[0],
+        buildText: (m: RegExpExecArray) => m[0],
+      },
+    ];
+
+    const scanTextForUrls = (text: string) => {
+      for (const pattern of URL_PATTERNS) {
+        const regex = new RegExp(pattern.regex.source, "g");
+        let m: RegExpExecArray | null;
+        while ((m = regex.exec(text)) !== null) {
+          const url = pattern.buildUrl(m);
+          const txt = pattern.buildText(m);
+          if (!allLinks.some((l) => l.url === url)) {
+            allLinks.push({ text: txt, url, context: "inline" });
+          }
+        }
+      }
+    };
 
     if (isPdf) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
       const result = await pdfParse(buffer);
       rawText = result.text;
+      // PDFs lose all hyperlinks — detect via regex only
+      scanTextForUrls(rawText);
     } else {
       // .docx
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const mammoth = require("mammoth");
-      const result = await mammoth.extractRawText({ buffer });
-      rawText = result.value;
+      const [htmlResult, rawResult] = await Promise.all([
+        mammoth.convertToHtml({ buffer }),
+        mammoth.extractRawText({ buffer }),
+      ]);
+      rawText = rawResult.value;
+
+      // Method 1: extract anchor hrefs from HTML output
+      // Use [\s\S]*? to handle nested tags like <a href="..."><span>text</span></a>
+      const linkRegex = /<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+      const html: string = htmlResult.value;
+      let match: RegExpExecArray | null;
+      while ((match = linkRegex.exec(html)) !== null) {
+        const url = match[1];
+        const text = match[2].replace(/<[^>]+>/g, "").trim();
+        if (url.startsWith("mailto:")) continue;
+        if (!text && !url) continue;
+        const before = html.substring(Math.max(0, match.index - 200), match.index).toLowerCase();
+        const context =
+          before.includes("project") ? "project" :
+          before.includes("experience") ? "experience" :
+          before.includes("education") ? "education" :
+          "contact";
+        if (!allLinks.some((l) => l.url === url)) {
+          allLinks.push({ text: text || url, url, context });
+        }
+      }
+
+      // Method 2: detect raw URLs as fallback
+      scanTextForUrls(rawText);
     }
 
     // Send to Python service for Claude extraction + embedding
@@ -87,15 +154,17 @@ export async function POST(req: NextRequest) {
     `;
 
     // Upsert CV row (one CV per user)
+    const hyperlinksJson = JSON.stringify(allLinks);
     await db.$executeRaw`
-      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, updated_at)
+      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, hyperlinks_json, updated_at)
       VALUES (gen_random_uuid(), ${user.id}, ${rawText}, ${JSON.stringify(skills_json)}::jsonb,
-              ${clean_summary}, ${JSON.stringify(embedding)}::vector, now())
+              ${clean_summary}, ${JSON.stringify(embedding)}::vector, ${hyperlinksJson}, now())
       ON CONFLICT (user_id) DO UPDATE
         SET raw_text = EXCLUDED.raw_text,
             skills_json = EXCLUDED.skills_json,
             clean_summary = EXCLUDED.clean_summary,
             embedding = EXCLUDED.embedding,
+            hyperlinks_json = EXCLUDED.hyperlinks_json,
             updated_at = now()
     `;
 

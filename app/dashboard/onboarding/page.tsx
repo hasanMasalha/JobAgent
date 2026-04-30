@@ -193,10 +193,10 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{isUpdate ? "Replace CV" : "Upload existing CV"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">PDF document</p>
+                  <p className="text-xs text-gray-500 mt-0.5">PDF or Word document (.pdf, .docx)</p>
                 </div>
                 <span className="text-xs font-medium border border-gray-300 px-3 py-1 rounded-lg group-hover:border-black transition-colors">
-                  {isUpdate ? "Upload new PDF" : "Upload CV"}
+                  {isUpdate ? "Upload new CV" : "Upload CV"}
                 </span>
               </button>
 
@@ -231,7 +231,7 @@ export default function OnboardingPage() {
               <label className="block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-gray-400 transition-colors">
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.docx"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -244,7 +244,7 @@ export default function OnboardingPage() {
                   <span className="text-sm font-medium">{file.name}</span>
                 ) : (
                   <span className="text-sm text-gray-400">
-                    {isUpdate ? "Click to choose a new PDF (optional)" : "Click to choose a PDF"}
+                    {isUpdate ? "Click to choose a new PDF or Word file (optional)" : "Click to choose a PDF or Word file (.docx)"}
                   </span>
                 )}
               </label>

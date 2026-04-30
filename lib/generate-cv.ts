@@ -1,11 +1,112 @@
 import {
   Document, Packer, Paragraph, TextRun, AlignmentType,
-  BorderStyle, LevelFormat,
+  BorderStyle, LevelFormat, ExternalHyperlink, UnderlineType,
 } from 'docx'
+
+interface CVHyperlink {
+  text: string
+  url: string
+  context: string
+}
+
+// URL patterns used as fallback detection directly on line text
+const LINE_URL_PATTERNS: { regex: RegExp; buildUrl: (m: RegExpExecArray) => string }[] = [
+  {
+    regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g,
+    buildUrl: (m) => `https://github.com/${m[1]}/${m[2]}`,
+  },
+  {
+    regex: /github\.com\/([a-zA-Z0-9_-]+)/g,
+    buildUrl: (m) => `https://github.com/${m[1]}`,
+  },
+  {
+    regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/g,
+    buildUrl: (m) => `https://linkedin.com/in/${m[1]}`,
+  },
+  {
+    regex: /https?:\/\/[^\s,;)>\]'"]+/g,
+    buildUrl: (m) => m[0],
+  },
+]
+
+interface LinkMatch {
+  start: number
+  end: number
+  url: string
+  displayText: string
+}
+
+function linkifyLine(
+  lineText: string,
+  hyperlinks: CVHyperlink[],
+  runStyle: { font: string; size: number; color: string }
+): (TextRun | ExternalHyperlink)[] {
+  const matches: LinkMatch[] = []
+
+  // Find positions of stored hyperlinks in this line
+  for (const link of hyperlinks) {
+    // Try display text first, then raw URL
+    for (const term of [link.text, link.url].filter(Boolean)) {
+      const idx = lineText.toLowerCase().indexOf(term.toLowerCase())
+      if (idx !== -1) {
+        matches.push({ start: idx, end: idx + term.length, url: link.url, displayText: lineText.substring(idx, idx + term.length) })
+        break
+      }
+    }
+  }
+
+  // Find positions of pattern-detected URLs (fallback for plain-text URLs)
+  for (const pattern of LINE_URL_PATTERNS) {
+    const regex = new RegExp(pattern.regex.source, 'g')
+    let m: RegExpExecArray | null
+    while ((m = regex.exec(lineText)) !== null) {
+      const url = pattern.buildUrl(m)
+      const start = m.index
+      const end = start + m[0].length
+      // Skip if this range overlaps an already-found match
+      if (!matches.some((e) => e.start < end && e.end > start)) {
+        matches.push({ start, end, url, displayText: m[0] })
+      }
+    }
+  }
+
+  if (!matches.length) {
+    return [new TextRun({ text: lineText, ...runStyle })]
+  }
+
+  // Process in line order so multiple links per line all get rendered
+  matches.sort((a, b) => a.start - b.start)
+
+  const runs: (TextRun | ExternalHyperlink)[] = []
+  let pos = 0
+  for (const match of matches) {
+    if (match.start < pos) continue  // overlapping, already consumed
+    if (match.start > pos) {
+      runs.push(new TextRun({ text: lineText.substring(pos, match.start), ...runStyle }))
+    }
+    runs.push(new ExternalHyperlink({
+      link: match.url,
+      children: [new TextRun({
+        text: match.displayText,
+        font: runStyle.font,
+        size: runStyle.size,
+        color: '1D4ED8',
+        underline: { type: UnderlineType.SINGLE },
+      })],
+    }))
+    pos = match.end
+  }
+  if (pos < lineText.length) {
+    runs.push(new TextRun({ text: lineText.substring(pos), ...runStyle }))
+  }
+
+  return runs
+}
 
 export async function generateCVDocx(
   cvText: string,
-  _jobTitle: string = 'CV'
+  _jobTitle: string = 'CV',
+  hyperlinks: CVHyperlink[] = []
 ): Promise<Buffer> {
 
   const FONT = 'Calibri'
@@ -16,10 +117,8 @@ export async function generateCVDocx(
 
   const children: Paragraph[] = []
 
-  // Parse the CV text into structured sections
   const lines = cvText.split('\n').map(l => l.trim()).filter(Boolean)
 
-  // Known section headers to detect
   const SECTION_HEADERS = [
     'summary', 'work experience', 'experience', 'education',
     'skills', 'projects', 'languages', 'certifications',
@@ -45,7 +144,7 @@ export async function generateCVDocx(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    // First line = candidate name — large, bold, centered
+    // First line = candidate name — large, bold, centered (never a link)
     if (isFirstLine) {
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
@@ -53,7 +152,7 @@ export async function generateCVDocx(
         children: [new TextRun({
           text: line,
           font: FONT,
-          size: 32,        // 16pt
+          size: 32,
           bold: true,
           color: COLOR_NAME,
         })]
@@ -69,18 +168,13 @@ export async function generateCVDocx(
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 0, after: 120 },
-        children: [new TextRun({
-          text: line,
-          font: FONT,
-          size: 18,        // 9pt
-          color: COLOR_CONTACT,
-        })]
+        children: linkifyLine(line, hyperlinks, { font: FONT, size: 18, color: COLOR_CONTACT }),
       }))
       isSecondLine = false
       continue
     }
 
-    // Section headers — blue, bold, with bottom border line
+    // Section headers — never links
     if (isSectionHeader(line)) {
       children.push(new Paragraph({
         spacing: { before: 160, after: 0 },
@@ -95,27 +189,22 @@ export async function generateCVDocx(
         children: [new TextRun({
           text: line.toUpperCase(),
           font: FONT,
-          size: 20,        // 10pt
+          size: 20,
           bold: true,
           color: COLOR_SECTION,
-          characterSpacing: 40,  // slight letter spacing
+          characterSpacing: 40,
         })]
       }))
       continue
     }
 
-    // Bullet points — proper docx bullets, not unicode
+    // Bullet points
     if (isBullet(line)) {
       const text = line.replace(/^[-•*o]\s+/, '')
       children.push(new Paragraph({
         numbering: { reference: 'cv-bullets', level: 0 },
         spacing: { before: 0, after: 40 },
-        children: [new TextRun({
-          text,
-          font: FONT,
-          size: 19,        // 9.5pt
-          color: COLOR_BODY,
-        })]
+        children: linkifyLine(text, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
       }))
       continue
     }
@@ -145,12 +234,7 @@ export async function generateCVDocx(
     // Regular body text
     children.push(new Paragraph({
       spacing: { before: 0, after: 40 },
-      children: [new TextRun({
-        text: line,
-        font: FONT,
-        size: 19,          // 9.5pt
-        color: COLOR_BODY,
-      })]
+      children: linkifyLine(line, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
     }))
   }
 
