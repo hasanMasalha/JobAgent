@@ -9,85 +9,98 @@ interface CVHyperlink {
   context: string
 }
 
-// URL patterns used as a fallback when stored hyperlinks don't cover a line
-const LINE_URL_PATTERNS: { regex: RegExp; buildUrl: (m: RegExpMatchArray) => string }[] = [
+// URL patterns used as fallback detection directly on line text
+const LINE_URL_PATTERNS: { regex: RegExp; buildUrl: (m: RegExpExecArray) => string }[] = [
   {
-    regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/,
+    regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g,
     buildUrl: (m) => `https://github.com/${m[1]}/${m[2]}`,
   },
   {
-    regex: /github\.com\/([a-zA-Z0-9_-]+)/,
+    regex: /github\.com\/([a-zA-Z0-9_-]+)/g,
     buildUrl: (m) => `https://github.com/${m[1]}`,
   },
   {
-    regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/,
+    regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/g,
     buildUrl: (m) => `https://linkedin.com/in/${m[1]}`,
   },
   {
-    regex: /https?:\/\/[^\s,;)>\]'"]+/,
+    regex: /https?:\/\/[^\s,;)>\]'"]+/g,
     buildUrl: (m) => m[0],
   },
 ]
+
+interface LinkMatch {
+  start: number
+  end: number
+  url: string
+  displayText: string
+}
 
 function linkifyLine(
   lineText: string,
   hyperlinks: CVHyperlink[],
   runStyle: { font: string; size: number; color: string }
 ): (TextRun | ExternalHyperlink)[] {
-  // Build combined link list: stored links + pattern-detected ones from this line
-  const allLinks: CVHyperlink[] = [...hyperlinks]
-  for (const pattern of LINE_URL_PATTERNS) {
-    const m = lineText.match(pattern.regex)
-    if (m) {
-      const url = pattern.buildUrl(m)
-      if (!allLinks.some((l) => l.url === url)) {
-        allLinks.push({ text: m[0], url, context: 'inline' })
+  const matches: LinkMatch[] = []
+
+  // Find positions of stored hyperlinks in this line
+  for (const link of hyperlinks) {
+    // Try display text first, then raw URL
+    for (const term of [link.text, link.url].filter(Boolean)) {
+      const idx = lineText.toLowerCase().indexOf(term.toLowerCase())
+      if (idx !== -1) {
+        matches.push({ start: idx, end: idx + term.length, url: link.url, displayText: lineText.substring(idx, idx + term.length) })
+        break
       }
     }
   }
 
-  if (!allLinks.length) {
+  // Find positions of pattern-detected URLs (fallback for plain-text URLs)
+  for (const pattern of LINE_URL_PATTERNS) {
+    const regex = new RegExp(pattern.regex.source, 'g')
+    let m: RegExpExecArray | null
+    while ((m = regex.exec(lineText)) !== null) {
+      const url = pattern.buildUrl(m)
+      const start = m.index
+      const end = start + m[0].length
+      // Skip if this range overlaps an already-found match
+      if (!matches.some((e) => e.start < end && e.end > start)) {
+        matches.push({ start, end, url, displayText: m[0] })
+      }
+    }
+  }
+
+  if (!matches.length) {
     return [new TextRun({ text: lineText, ...runStyle })]
   }
 
+  // Process in line order so multiple links per line all get rendered
+  matches.sort((a, b) => a.start - b.start)
+
   const runs: (TextRun | ExternalHyperlink)[] = []
-  let remaining = lineText
-
-  for (const link of allLinks) {
-    // Try matching by anchor text first, then by raw URL
-    const searchTerms = [link.text, link.url].filter(Boolean)
-    let found = false
-
-    for (const term of searchTerms) {
-      const idx = remaining.toLowerCase().indexOf(term.toLowerCase())
-      if (idx === -1) continue
-
-      if (idx > 0) {
-        runs.push(new TextRun({ text: remaining.substring(0, idx), ...runStyle }))
-      }
-      runs.push(new ExternalHyperlink({
-        link: link.url,
-        children: [new TextRun({
-          text: remaining.substring(idx, idx + term.length),
-          font: runStyle.font,
-          size: runStyle.size,
-          color: '1D4ED8',
-          underline: { type: UnderlineType.SINGLE },
-        })],
-      }))
-      remaining = remaining.substring(idx + term.length)
-      found = true
-      break
+  let pos = 0
+  for (const match of matches) {
+    if (match.start < pos) continue  // overlapping, already consumed
+    if (match.start > pos) {
+      runs.push(new TextRun({ text: lineText.substring(pos, match.start), ...runStyle }))
     }
-
-    if (!found) continue
+    runs.push(new ExternalHyperlink({
+      link: match.url,
+      children: [new TextRun({
+        text: match.displayText,
+        font: runStyle.font,
+        size: runStyle.size,
+        color: '1D4ED8',
+        underline: { type: UnderlineType.SINGLE },
+      })],
+    }))
+    pos = match.end
+  }
+  if (pos < lineText.length) {
+    runs.push(new TextRun({ text: lineText.substring(pos), ...runStyle }))
   }
 
-  if (remaining) {
-    runs.push(new TextRun({ text: remaining, ...runStyle }))
-  }
-
-  return runs.length > 0 ? runs : [new TextRun({ text: lineText, ...runStyle })]
+  return runs
 }
 
 export async function generateCVDocx(

@@ -101,13 +101,15 @@ export async function POST(req: NextRequest) {
       rawText = rawResult.value;
 
       // Method 1: extract anchor hrefs from HTML output
-      const linkRegex = /<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g;
+      // Use [\s\S]*? to handle nested tags like <a href="..."><span>text</span></a>
+      const linkRegex = /<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
       const html: string = htmlResult.value;
       let match: RegExpExecArray | null;
       while ((match = linkRegex.exec(html)) !== null) {
         const url = match[1];
-        const text = match[2].trim();
+        const text = match[2].replace(/<[^>]+>/g, "").trim();
         if (url.startsWith("mailto:")) continue;
+        if (!text && !url) continue;
         const before = html.substring(Math.max(0, match.index - 200), match.index).toLowerCase();
         const context =
           before.includes("project") ? "project" :
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
           before.includes("education") ? "education" :
           "contact";
         if (!allLinks.some((l) => l.url === url)) {
-          allLinks.push({ text, url, context });
+          allLinks.push({ text: text || url, url, context });
         }
       }
 
