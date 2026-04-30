@@ -28,13 +28,14 @@ model User {
 }
 
 model CV {
-  id            String                      @id @default(uuid())
-  user_id       String
-  raw_text      String
-  skills_json   Json?
-  clean_summary String?
-  embedding     Unsupported("vector(384)")?
-  updated_at    DateTime                    @updatedAt
+  id              String                      @id @default(uuid())
+  user_id         String
+  raw_text        String
+  skills_json     Json?
+  clean_summary   String?
+  embedding       Unsupported("vector(384)")?
+  hyperlinks_json String?                     @default("[]")
+  updated_at      DateTime                    @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

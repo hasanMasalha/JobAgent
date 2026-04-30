@@ -183,16 +183,27 @@ export async function POST(req: NextRequest) {
       ON CONFLICT (id) DO NOTHING
     `;
 
+    // Build hyperlinks from personal info provided in the builder form
+    const builtHyperlinks: { text: string; url: string; context: string }[] = []
+    if (formData.personal.linkedin) {
+      builtHyperlinks.push({ text: 'LinkedIn', url: formData.personal.linkedin, context: 'contact' })
+    }
+    if (formData.personal.portfolio) {
+      builtHyperlinks.push({ text: 'Portfolio', url: formData.personal.portfolio, context: 'contact' })
+    }
+    const hyperlinksJson = JSON.stringify(builtHyperlinks)
+
     // Upsert CV row
     await db.$executeRaw`
-      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, updated_at)
+      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, hyperlinks_json, updated_at)
       VALUES (gen_random_uuid(), ${user.id}, ${cvText}, ${JSON.stringify(skills_json)}::jsonb,
-              ${clean_summary}, ${JSON.stringify(embedding)}::vector, now())
+              ${clean_summary}, ${JSON.stringify(embedding)}::vector, ${hyperlinksJson}, now())
       ON CONFLICT (user_id) DO UPDATE
         SET raw_text = EXCLUDED.raw_text,
             skills_json = EXCLUDED.skills_json,
             clean_summary = EXCLUDED.clean_summary,
             embedding = EXCLUDED.embedding,
+            hyperlinks_json = EXCLUDED.hyperlinks_json,
             updated_at = now()
     `;
 

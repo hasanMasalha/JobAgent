@@ -41,7 +41,12 @@ export async function GET(
       );
     }
 
-    const buffer = await generateCVDocx(tailored_cv, job_title);
+    const cvRows = await db.$queryRaw<{ hyperlinks_json: string | null }[]>`
+      SELECT hyperlinks_json FROM "CV" WHERE user_id = ${user.id} LIMIT 1
+    `;
+    const hyperlinks = JSON.parse(cvRows[0]?.hyperlinks_json ?? "[]");
+
+    const buffer = await generateCVDocx(tailored_cv, job_title, hyperlinks);
 
     const displayName = user_name?.trim() || (user.email?.split("@")[0] ?? "CV");
     const filename = `CV_${displayName}`
