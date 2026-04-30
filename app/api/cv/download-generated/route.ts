@@ -36,14 +36,18 @@ export async function GET(req: NextRequest) {
 
     const buffer = await generateCVDocx(raw_text, jobTitle, hyperlinks);
 
-    const safeName = firstLine.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_") || "CV";
+    const nameFromCv = firstLine.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const nameFromEmail = (user.email ?? "").split("@")[0];
+    const displayName = (nameFromCv || nameFromEmail || "CV")
+      .replace(/\s+/g, "_")
+      .slice(0, 60);
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${safeName}_CV.docx"`,
+        "Content-Disposition": `attachment; filename="${displayName}_CV.docx"`,
       },
     });
   } catch (err) {

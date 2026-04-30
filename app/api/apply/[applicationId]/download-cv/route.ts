@@ -32,7 +32,7 @@ export async function GET(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    const { tailored_cv, job_title, user_name } = rows[0];
+    const { tailored_cv, job_title } = rows[0];
 
     if (!tailored_cv) {
       return NextResponse.json(
@@ -48,10 +48,14 @@ export async function GET(
 
     const buffer = await generateCVDocx(tailored_cv, job_title, hyperlinks);
 
-    const displayName = user_name?.trim() || (user.email?.split("@")[0] ?? "CV");
-    const filename = `CV_${displayName}`
-      .replace(/[^a-zA-Z0-9_\-]/g, "_")
-      .slice(0, 60) + ".docx";
+    const nameFromCv = (tailored_cv.split("\n").find((l) => l.trim()) ?? "")
+      .replace(/[^a-zA-Z0-9 ]/g, "")
+      .trim();
+    const nameFromEmail = (user.email ?? "").split("@")[0];
+    const displayName = (nameFromCv || nameFromEmail || "CV")
+      .replace(/\s+/g, "_")
+      .slice(0, 60);
+    const filename = `${displayName}_CV.docx`;
 
     return new Response(buffer, {
       headers: {
