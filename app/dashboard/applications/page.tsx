@@ -392,7 +392,7 @@ export default function ApplicationsPage() {
                           href={app.job_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                          className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
                         >
                           View job ↗
                         </a>
