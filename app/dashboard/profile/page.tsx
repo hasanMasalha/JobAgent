@@ -35,6 +35,11 @@ function ProfileContent() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [savingEmail, setSavingEmail] = useState(false);
 
+  // Google Calendar state
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
+
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
@@ -68,6 +73,15 @@ function ProfileContent() {
     fetch("/api/linkedin/session-status")
       .then((r) => r.json())
       .then((d) => { if (d.connected) setLinkedinConnected(true); })
+      .catch(() => {});
+
+    // Check Google Calendar connection status on mount
+    fetch("/api/auth/google/status")
+      .then((r) => r.json())
+      .then((d) => {
+        setGoogleConnected(d.connected);
+        setGoogleEmail(d.email ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -144,6 +158,20 @@ function ProfileContent() {
       });
     } finally {
       setSavingEmail(false);
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    setGoogleDisconnecting(true);
+    try {
+      await fetch("/api/auth/google", { method: "DELETE" });
+      setGoogleConnected(false);
+      setGoogleEmail(null);
+      showToast("Google Calendar disconnected", "success");
+    } catch {
+      showToast("Failed to disconnect", "error");
+    } finally {
+      setGoogleDisconnecting(false);
     }
   }
 
@@ -461,6 +489,51 @@ function ProfileContent() {
         {!linkedinConnected && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
             Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
+          </p>
+        )}
+      </div>
+
+      {/* Google Calendar Connection */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Google Calendar</h2>
+            <p className="text-xs text-gray-500 mt-0.5">For scheduling interviews from the chat assistant</p>
+          </div>
+          {googleConnected ? (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                Connected
+              </span>
+              <button
+                onClick={handleDisconnectGoogle}
+                disabled={googleDisconnecting}
+                className="text-xs text-gray-500 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {googleDisconnecting ? "Disconnecting…" : "Disconnect"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
+                Not connected
+              </span>
+              <a
+                href="/api/auth/google"
+                className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+              >
+                Connect Google Calendar
+              </a>
+            </div>
+          )}
+        </div>
+        {googleConnected && googleEmail && (
+          <p className="text-xs text-gray-500 mt-3">Connected as {googleEmail}</p>
+        )}
+        {!googleConnected && (
+          <p className="text-xs text-gray-400 mt-3">
+            Connect to automatically schedule interviews directly from the chat assistant
           </p>
         )}
       </div>
