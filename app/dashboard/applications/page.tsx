@@ -383,7 +383,7 @@ export default function ApplicationsPage() {
                           href={app.job_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                          className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
                         >
                           Apply now →
                         </a>
@@ -392,7 +392,7 @@ export default function ApplicationsPage() {
                           href={app.job_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                          className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
                         >
                           View job ↗
                         </a>
