@@ -26,7 +26,7 @@ const STATUS_STYLES: Record<string, string> = {
   draft:        "bg-gray-100 text-gray-500",
   manual:       "bg-yellow-100 text-yellow-700",
   cancelled:    "bg-gray-100 text-gray-400",
-  failed:       "bg-red-50 text-red-400",
+  failed:       "bg-orange-100 text-orange-600",
 };
 
 interface CalendarModalProps {
@@ -364,6 +364,11 @@ export default function ApplicationsPage() {
                           Action needed — update after applying
                         </option>
                       )}
+                      {app.status === "failed" && (
+                        <option value="" disabled className="bg-white text-gray-400 font-normal">
+                          Manual apply needed
+                        </option>
+                      )}
                       {ALLOWED_STATUSES.map((s) => (
                         <option key={s} value={s} className="bg-white text-gray-800 font-normal">
                           {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -372,13 +377,13 @@ export default function ApplicationsPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {app.status === "manual" ? (
+                    <div className="flex items-center gap-2">
+                      {app.status === "manual" || app.status === "failed" ? (
                         <a
                           href={app.job_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                          className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
                         >
                           Apply now →
                         </a>
@@ -387,25 +392,29 @@ export default function ApplicationsPage() {
                           href={app.job_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline font-medium"
+                          className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
                         >
                           View job ↗
                         </a>
                       )}
                       {app.has_tailored_cv && (
-                        <button
-                          onClick={() => handleDownloadCV(app.id)}
-                          disabled={downloading === app.id}
-                          className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors"
-                          title="Download tailored CV"
-                        >
-                          {downloading === app.id ? "…" : "CV ↓"}
-                        </button>
+                        <>
+                          <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
+                          <button
+                            onClick={() => handleDownloadCV(app.id)}
+                            disabled={downloading === app.id}
+                            className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors whitespace-nowrap"
+                            title="Download tailored CV"
+                          >
+                            {downloading === app.id ? "…" : "CV ↓"}
+                          </button>
+                        </>
                       )}
+                      <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
                       <button
                         onClick={() => handleDelete(app.id)}
                         disabled={deleting === app.id}
-                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 whitespace-nowrap"
                         title="Delete application"
                       >
                         {deleting === app.id ? "…" : "Delete"}
