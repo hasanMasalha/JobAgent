@@ -8,6 +8,7 @@ interface Application {
   status: string;
   applied_at: string;
   cover_letter: string | null;
+  has_tailored_cv: boolean;
   job_title: string;
   company: string;
   job_url: string;
@@ -152,6 +153,7 @@ export default function ApplicationsPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [calendarModal, setCalendarModal] = useState<Application | null>(null);
   const [toast, setToast] = useState<{ message: string; url?: string } | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/applications")
@@ -212,6 +214,32 @@ export default function ApplicationsPage() {
       alert(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeleting(null);
+    }
+  }
+
+  async function handleDownloadCV(id: string) {
+    setDownloading(id);
+    try {
+      const res = await fetch(`/api/apply/${id}/download-cv`);
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? "Download failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const cd = res.headers.get("content-disposition") ?? "";
+      const match = cd.match(/filename="([^"]+)"/);
+      a.download = match?.[1] ?? "CV_tailored.docx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -363,6 +391,16 @@ export default function ApplicationsPage() {
                         >
                           View job ↗
                         </a>
+                      )}
+                      {app.has_tailored_cv && (
+                        <button
+                          onClick={() => handleDownloadCV(app.id)}
+                          disabled={downloading === app.id}
+                          className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors"
+                          title="Download tailored CV"
+                        >
+                          {downloading === app.id ? "…" : "CV ↓"}
+                        </button>
                       )}
                       <button
                         onClick={() => handleDelete(app.id)}
