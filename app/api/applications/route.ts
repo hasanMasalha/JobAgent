@@ -19,6 +19,7 @@ export async function GET(_req: NextRequest) {
         status: string;
         applied_at: Date;
         cover_letter: string | null;
+        has_tailored_cv: boolean;
         job_title: string;
         company: string;
         job_url: string;
@@ -30,6 +31,7 @@ export async function GET(_req: NextRequest) {
         a.status,
         a.applied_at,
         a.cover_letter,
+        (a.tailored_cv IS NOT NULL AND a.tailored_cv <> '') AS has_tailored_cv,
         j.title  AS job_title,
         j.company,
         j.url    AS job_url,
