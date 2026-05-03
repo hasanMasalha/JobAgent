@@ -19,12 +19,26 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [toolLabel, setToolLabel] = useState<string | null>(null);
+  const [showHint, setShowHint] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history, streaming, toolLabel]);
+
+  const autoResize = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const newHeight = Math.min(textarea.scrollHeight, 200);
+    textarea.style.height = newHeight + "px";
+    textarea.style.overflowY = textarea.scrollHeight > 200 ? "auto" : "hidden";
+  };
+
+  useEffect(() => {
+    autoResize();
+  }, [input]);
 
   async function sendMessage(text: string) {
     if (!text.trim() || streaming) return;
@@ -33,6 +47,10 @@ export default function ChatPage() {
     const nextHistory = [...history, userMsg];
     setHistory(nextHistory);
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.overflowY = "hidden";
+    }
     setStreaming(true);
     setToolLabel(null);
 
@@ -193,12 +211,24 @@ export default function ChatPage() {
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              autoResize();
+            }}
             onKeyDown={handleKeyDown}
+            onFocus={() => setShowHint(true)}
+            onBlur={() => setShowHint(false)}
             placeholder="Ask about your job search…"
             rows={1}
             disabled={streaming}
-            className="flex-1 resize-none text-sm text-gray-800 placeholder-gray-400 outline-none bg-transparent max-h-32 disabled:opacity-50"
+            style={{
+              height: "auto",
+              minHeight: "44px",
+              maxHeight: "200px",
+              resize: "none",
+              overflowY: "hidden",
+            }}
+            className="flex-1 text-sm text-gray-800 placeholder-gray-400 outline-none bg-transparent disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage(input)}
@@ -212,7 +242,9 @@ export default function ChatPage() {
             </svg>
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5 text-center">Enter to send · Shift+Enter for new line</p>
+        {showHint && (
+          <p className="text-xs text-gray-400 mt-1.5 text-center">Enter to send · Shift+Enter for new line</p>
+        )}
       </div>
     </div>
   );
