@@ -1,6 +1,6 @@
 # JobAgent — AI-Powered Job Assistant
 
-An AI-powered job assistant for the Israeli market. Scrapes jobs daily from Indeed Israel, LinkedIn, and AllJobs and another Job platforms matches them to your CV using vector embeddings, tailors your CV per role using Claude, and automates LinkedIn Easy Apply — only when you explicitly confirm each application.
+An AI-powered job assistant for the Israeli market. Scrapes jobs daily from Indeed Israel, LinkedIn, AllJobs and more Job platforms matches them to your CV using vector embeddings, tailors your CV per role using Claude, and automates LinkedIn Easy Apply — only when you explicitly confirm each application.
 
 ---
 
