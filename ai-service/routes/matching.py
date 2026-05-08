@@ -70,7 +70,7 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
                1 - (j.embedding <=> cv.embedding::vector) AS similarity
         FROM "Job" j, "CV" cv
         WHERE cv.user_id = $1
-          AND j.scraped_at > NOW() - INTERVAL '7 days'
+          AND j.scraped_at > NOW() - INTERVAL '30 days'
           AND j.id NOT IN (
             SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1
           )
