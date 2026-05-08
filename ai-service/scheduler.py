@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import UTC
 
 import asyncpg
 import httpx
@@ -62,11 +63,38 @@ async def _run_match_all():
             logger.exception("[scheduler] Match failed for user %s", user_id)
 
 
+async def _recovery_scrape_if_stale():
+    """Run an immediate scrape on startup if the newest job is older than 24 hours."""
+    try:
+        database_url = os.environ["DATABASE_URL"]
+        conn = await asyncpg.connect(database_url)
+        try:
+            last_scraped = await conn.fetchval('SELECT MAX(scraped_at) FROM "Job"')
+        finally:
+            await conn.close()
+
+        from datetime import datetime
+        now = datetime.now(UTC)
+        if last_scraped is None or (now - last_scraped.replace(tzinfo=UTC)).total_seconds() > 86400:
+            age = "never" if last_scraped is None else f"{(now - last_scraped.replace(tzinfo=UTC)).days}d ago"
+            logger.info("[scheduler] Recovery scrape triggered — last scrape was %s", age)
+            await _run_scrape()
+        else:
+            logger.info("[scheduler] No recovery scrape needed — last scrape was recent")
+    except Exception:
+        logger.exception("[scheduler] Recovery scrape check failed")
+
+
 def start_scheduler():
     scheduler.add_job(_run_scrape, CronTrigger(hour=5, minute=0, timezone="UTC"), id="daily_scrape")
     scheduler.add_job(_run_match_all, CronTrigger(hour=6, minute=0, timezone="UTC"), id="daily_match")
+    # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
+    from datetime import datetime, timedelta
+    scheduler.add_job(_recovery_scrape_if_stale, "date",
+                      run_date=datetime.now(UTC) + timedelta(seconds=5),
+                      id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — scrape@05:00 UTC, match@06:00 UTC")
+    logger.info("[scheduler] Started — scrape@05:00 UTC, match@06:00 UTC, recovery check in 5s")
 
 
 def stop_scheduler():
