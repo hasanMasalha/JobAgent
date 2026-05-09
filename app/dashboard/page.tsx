@@ -109,6 +109,7 @@ export default function DashboardPage() {
   // --- My Matches state ---
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -191,9 +192,10 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [matchRes, savedRes] = await Promise.all([
+      const [matchRes, savedRes, appliedRes] = await Promise.all([
         fetch(`/api/match${isRefresh ? "?refresh=true" : ""}`),
         fetch("/api/jobs/saved"),
+        fetch("/api/applications?ids_only=true"),
       ]);
       const matchData = await matchRes.json();
       if (!matchRes.ok) throw new Error(matchData.error ?? "Failed to load jobs");
@@ -202,6 +204,10 @@ export default function DashboardPage() {
       if (savedRes.ok) {
         const savedData = await savedRes.json();
         setSavedIds(new Set((savedData.jobs ?? []).map((j: { id: string }) => j.id)));
+      }
+      if (appliedRes.ok) {
+        const appliedData = await appliedRes.json();
+        setAppliedJobIds(new Set(appliedData.appliedJobIds ?? []));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
@@ -222,12 +228,13 @@ export default function DashboardPage() {
 
   const filteredJobs = useMemo(() => {
     const filtered = jobs
+      .filter((job) => !appliedJobIds.has(job.id))
       .filter((job) => workTypeMatch(job, filters.workTypes))
       .filter((job) => jobTypeMatch(job, filters.jobTypes))
       .filter((job) => dateMatch(job, filters.daysPosted))
       .filter((job) => salaryMatch(job, filters.minSalary));
     return applySort(filtered, filters.sortBy);
-  }, [jobs, filters]);
+  }, [jobs, appliedJobIds, filters]);
 
   const hasBrowseFilter = browseSearch || browseLocation || browseCompany || browseSource;
   const browseFrom = browseTotal === 0 ? 0 : (browsePage - 1) * 20 + 1;
@@ -333,6 +340,7 @@ export default function DashboardPage() {
                     job={job}
                     initialSaved={savedIds.has(job.id)}
                     onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                    onApply={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
                   />
                 ))}
               </div>

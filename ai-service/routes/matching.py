@@ -74,6 +74,9 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
           AND j.id NOT IN (
             SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1
           )
+          AND j.id NOT IN (
+            SELECT job_id FROM "Application" WHERE user_id = $1
+          )
           AND 1 - (j.embedding <=> cv.embedding::vector) > 0.50
         ORDER BY j.embedding <=> cv.embedding::vector
         LIMIT 50
@@ -242,8 +245,12 @@ async def match_jobs(req: MatchRequest):
                     'SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1',
                     req.user_id,
                 )
-                dismissed_ids = {r["job_id"] for r in dismissed}
-                return [j for j in cached if j["id"] not in dismissed_ids]
+                applied = await conn.fetch(
+                    'SELECT job_id FROM "Application" WHERE user_id = $1',
+                    req.user_id,
+                )
+                excluded_ids = {r["job_id"] for r in dismissed} | {r["job_id"] for r in applied}
+                return [j for j in cached if j["id"] not in excluded_ids]
 
         # 2. Vector search
         jobs, cv_row = await _vector_search(conn, req.user_id)
