@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 
@@ -242,15 +241,13 @@ async def match_jobs(req: MatchRequest):
         if not req.force_refresh:
             cached = await _get_db_cache(conn, req.user_id)
             if cached is not None:
-                dismissed, applied = await asyncio.gather(
-                    conn.fetch(
-                        'SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1',
-                        req.user_id,
-                    ),
-                    conn.fetch(
-                        'SELECT job_id FROM "Application" WHERE user_id = $1',
-                        req.user_id,
-                    ),
+                dismissed = await conn.fetch(
+                    'SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1',
+                    req.user_id,
+                )
+                applied = await conn.fetch(
+                    'SELECT job_id FROM "Application" WHERE user_id = $1',
+                    req.user_id,
                 )
                 excluded_ids = {r["job_id"] for r in dismissed} | {r["job_id"] for r in applied}
                 return [j for j in cached if j["id"] not in excluded_ids]
