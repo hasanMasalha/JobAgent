@@ -25,6 +25,7 @@ interface Props {
   job: Job;
   initialSaved?: boolean;
   onDismiss?: (id: string) => void;
+  onApply?: (id: string) => void;
   showScore?: boolean;
   showSource?: boolean;
 }
@@ -63,6 +64,7 @@ export default function JobCard({
   job,
   initialSaved = false,
   onDismiss,
+  onApply,
   showScore = true,
   showSource = false,
 }: Props) {
@@ -210,7 +212,10 @@ export default function JobCard({
           View job
         </a>
         <button
-          onClick={() => router.push(`/dashboard/apply/${job.id}`)}
+          onClick={() => {
+            onApply?.(job.id);
+            router.push(`/dashboard/apply/${job.id}`);
+          }}
           className="text-xs font-medium bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors"
         >
           Apply

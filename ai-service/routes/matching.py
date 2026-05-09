@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -73,6 +74,9 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
           AND j.scraped_at > NOW() - INTERVAL '30 days'
           AND j.id NOT IN (
             SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1
+          )
+          AND j.id NOT IN (
+            SELECT job_id FROM "Application" WHERE user_id = $1
           )
           AND 1 - (j.embedding <=> cv.embedding::vector) > 0.50
         ORDER BY j.embedding <=> cv.embedding::vector
@@ -238,12 +242,18 @@ async def match_jobs(req: MatchRequest):
         if not req.force_refresh:
             cached = await _get_db_cache(conn, req.user_id)
             if cached is not None:
-                dismissed = await conn.fetch(
-                    'SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1',
-                    req.user_id,
+                dismissed, applied = await asyncio.gather(
+                    conn.fetch(
+                        'SELECT job_id FROM "UserJobInteraction" WHERE user_id = $1',
+                        req.user_id,
+                    ),
+                    conn.fetch(
+                        'SELECT job_id FROM "Application" WHERE user_id = $1',
+                        req.user_id,
+                    ),
                 )
-                dismissed_ids = {r["job_id"] for r in dismissed}
-                return [j for j in cached if j["id"] not in dismissed_ids]
+                excluded_ids = {r["job_id"] for r in dismissed} | {r["job_id"] for r in applied}
+                return [j for j in cached if j["id"] not in excluded_ids]
 
         # 2. Vector search
         jobs, cv_row = await _vector_search(conn, req.user_id)

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const supabase = createServerClient();
     const {
@@ -11,6 +11,13 @@ export async function GET(_req: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (req.nextUrl.searchParams.get("ids_only") === "true") {
+      const idRows = await db.$queryRaw<{ job_id: string }[]>`
+        SELECT job_id FROM "Application" WHERE user_id = ${user.id}
+      `;
+      return NextResponse.json({ appliedJobIds: idRows.map((r) => r.job_id) });
     }
 
     const rows = await db.$queryRaw<
