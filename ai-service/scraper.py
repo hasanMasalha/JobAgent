@@ -3,6 +3,7 @@ import asyncio
 from jobspy import scrape_jobs
 
 from company_scraper import scrape_all_company_careers
+from linkedin_fetcher import fetch_all_linkedin_jobs
 from scraper_alljobs import scrape_alljobs
 from scraper_drushim import scrape_drushim
 
@@ -66,6 +67,18 @@ async def scrape_israel_jobs() -> list[dict]:
             )
 
         await asyncio.sleep(2)
+
+    # Add LinkedIn feed results, deduplicating by URL
+    print("Starting LinkedIn feed scrape...")
+    try:
+        linkedin_jobs = await fetch_all_linkedin_jobs()
+        for job in linkedin_jobs:
+            url = job.get("url", "").strip()
+            if url and url not in seen_urls and job.get("description", "") == "":
+                seen_urls.add(url)
+                results.append(job)
+    except Exception as e:
+        print(f"[scraper] LinkedIn feed scrape failed: {e}")
 
     # Add Drushim and Alljobs results, deduplicating by URL
     for extra in await asyncio.gather(scrape_drushim(), scrape_alljobs(), return_exceptions=True):
