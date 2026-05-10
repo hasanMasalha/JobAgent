@@ -74,7 +74,7 @@ async def scrape_israel_jobs() -> list[dict]:
         linkedin_jobs = await fetch_all_linkedin_jobs()
         for job in linkedin_jobs:
             url = job.get("url", "").strip()
-            if url and url not in seen_urls and job.get("description", "") == "":
+            if url and url not in seen_urls:
                 seen_urls.add(url)
                 results.append(job)
     except Exception as e:
