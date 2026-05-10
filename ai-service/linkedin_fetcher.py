@@ -107,11 +107,20 @@ async def fetch_linkedin_jobs_for_term(
                         if location and not any(kw in location_lower for kw in _ISRAELI_KEYWORDS):
                             continue
 
+                        # Try to grab a snippet from the card; fall back to
+                        # a synthesized string so storage never drops the job.
+                        desc_el = card.find(
+                            class_=re.compile(r"description|snippet|summary|job-snippet")
+                        )
+                        description = desc_el.get_text(strip=True) if desc_el else ""
+                        if not description:
+                            description = f"{title} at {company}, {location}".strip(", ")
+
                         jobs.append(
                             {
                                 "title": title,
                                 "company": company,
-                                "description": "",
+                                "description": description,
                                 "location": location,
                                 "url": job_url,
                                 "source": "linkedin",

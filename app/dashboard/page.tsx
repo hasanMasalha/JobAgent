@@ -405,8 +405,8 @@ export default function DashboardPage() {
               className="px-3 py-1.5 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All sources</option>
-              <option value="Indeed">Indeed</option>
-              <option value="LinkedIn">LinkedIn</option>
+              <option value="indeed">Indeed</option>
+              <option value="linkedin">LinkedIn</option>
               <option value="company_careers">Company Careers</option>
             </select>
             {hasBrowseFilter && (
