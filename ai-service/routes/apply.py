@@ -364,60 +364,65 @@ async def _handle_easy_apply_modal(
     screenshot_path: str,
 ) -> dict:
     max_steps = 10
+    os.makedirs("screenshots", exist_ok=True)
 
     for step in range(max_steps):
-        await page.wait_for_timeout(1000)
+        await page.wait_for_timeout(1500)
+
+        # Per-step screenshot for debugging
+        try:
+            await page.screenshot(
+                path=f"screenshots/easy_apply_step_{step + 1}.png", full_page=False
+            )
+        except Exception:
+            pass
 
         # ── 1. Submit button → final step ────────────────────────────────────
+        # "Review your application" is a NAVIGATION button, NOT submit — keep it out of here
         submit = page.locator(
-            "button[aria-label*='Submit'], "
-            "button:has-text('Submit application'), "
-            "button:has-text('Review your application')"
+            "button[aria-label*='Submit application'], "
+            "button:has-text('Submit application')"
         )
         if await submit.count() > 0:
-            # Take screenshot before submitting
+            print(f"Step {step + 1}: Review — submitting")
             try:
                 await page.screenshot(path=screenshot_path, full_page=False)
             except Exception:
                 pass
             await submit.last.click()
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
             return {"status": "applied", "message": "Application submitted via LinkedIn Easy Apply"}
 
-        # ── 2. CV / Resume upload ─────────────────────────────────────────────
-        try:
+        # ── 2. Resume step (detected by heading) ─────────────────────────────
+        resume_heading = page.locator(
+            "h3:has-text('Resume'), legend:has-text('Resume'), h2:has-text('Resume')"
+        ).first
+        if await resume_heading.count() > 0:
+            print(f"Step {step + 1}: Resume selection")
             file_input = page.locator("input[type='file']").first
-            if await file_input.is_visible(timeout=1000):
-                await file_input.set_input_files(pdf_path)
-            else:
-                upload_btn = page.locator(
-                    "button:has-text('Upload resume'), "
-                    "label:has-text('Upload resume'), "
-                    "button:has-text('Upload')"
-                ).first
-                if await upload_btn.is_visible(timeout=800):
-                    await upload_btn.click()
-                    await page.wait_for_timeout(600)
-                    await page.locator("input[type='file']").first.set_input_files(pdf_path)
-        except Exception:
-            pass
+            uploaded = False
+            if await file_input.count() > 0 and pdf_path:
+                try:
+                    await file_input.set_input_files(pdf_path)
+                    await page.wait_for_timeout(1500)
+                    uploaded = True
+                    print("  Uploaded tailored CV")
+                except Exception:
+                    pass
+            if not uploaded:
+                # Select first saved resume radio if no file upload
+                first_radio = page.locator("input[type='radio']").first
+                if await first_radio.count() > 0:
+                    await first_radio.click()
+                    print("  Selected first saved resume")
+            await page.wait_for_timeout(500)
 
-        # ── 3. Cover letter textarea ──────────────────────────────────────────
-        try:
-            cl = page.locator(
-                "textarea[id*='cover'], textarea[name*='cover'], "
-                "textarea[placeholder*='cover'], textarea[placeholder*='Cover'], "
-                "textarea[placeholder*='Write a cover']"
-            ).first
-            if await cl.is_visible(timeout=800):
-                current = await cl.input_value()
-                if not current:
-                    await cl.fill(cover_letter)
-        except Exception:
-            pass
-
-        # ── 4. Text / tel inputs that are empty ───────────────────────────────
-        try:
+        # ── 3. Additional Questions step (detected by heading) ────────────────
+        questions_heading = page.locator(
+            "h3:has-text('Additional Questions'), h2:has-text('Additional Questions')"
+        ).first
+        if await questions_heading.count() > 0:
+            print(f"Step {step + 1}: Additional Questions")
             inputs: list[ElementHandle] = await page.query_selector_all(
                 "input[type='text'], input[type='tel'], input[type='number'], textarea"
             )
@@ -435,10 +440,45 @@ async def _handle_easy_apply_modal(
                         await asyncio.sleep(0.3)
                 except Exception:
                     pass
+
+        # ── 4. Contact / generic text inputs (all other steps) ───────────────
+        else:
+            try:
+                inputs = await page.query_selector_all(
+                    "input[type='text'], input[type='tel'], input[type='number'], textarea"
+                )
+                for inp in inputs[:10]:
+                    try:
+                        current_val = await inp.input_value()
+                        if current_val:
+                            continue
+                        label = await _get_field_label(page, inp)
+                        if not label:
+                            continue
+                        value = await _get_answer_for_field(label, user)
+                        if value:
+                            await inp.fill(value)
+                            await asyncio.sleep(0.3)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # ── 5. Cover letter textarea ──────────────────────────────────────────
+        try:
+            cl = page.locator(
+                "textarea[id*='cover'], textarea[name*='cover'], "
+                "textarea[placeholder*='cover'], textarea[placeholder*='Cover'], "
+                "textarea[placeholder*='Write a cover']"
+            ).first
+            if await cl.is_visible(timeout=800):
+                current = await cl.input_value()
+                if not current:
+                    await cl.fill(cover_letter)
         except Exception:
             pass
 
-        # ── 5. Dropdowns — pick first non-placeholder option ──────────────────
+        # ── 6. Dropdowns — prefer "Yes", else first non-placeholder option ────
         try:
             selects: list[ElementHandle] = await page.query_selector_all("select")
             for sel in selects[:5]:
@@ -446,14 +486,18 @@ async def _handle_easy_apply_modal(
                     options: list[ElementHandle] = await sel.query_selector_all("option")
                     if len(options) > 1:
                         current = await sel.input_value()
-                        if not current or current == options[0].get_attribute("value"):
-                            await sel.select_option(index=1)
+                        option_texts = [await o.inner_text() for o in options]
+                        if not current or current == await options[0].get_attribute("value"):
+                            if "Yes" in option_texts:
+                                await sel.select_option(label="Yes")
+                            else:
+                                await sel.select_option(index=1)
                 except Exception:
                     pass
         except Exception:
             pass
 
-        # ── 6. Radio buttons — prefer "Yes", else first option ────────────────
+        # ── 7. Radio buttons — prefer "Yes", else first option ────────────────
         try:
             fieldsets = await page.locator("fieldset").all()
             for fieldset in fieldsets[:8]:
@@ -467,7 +511,6 @@ async def _handle_easy_apply_modal(
                     )
                     if already_checked:
                         continue
-                    # Try to find a "Yes" option
                     yes_clicked = False
                     for radio in radios:
                         try:
@@ -488,11 +531,9 @@ async def _handle_easy_apply_modal(
         except Exception:
             pass
 
-        # ── 7. Checkboxes (e.g. privacy policy) ──────────────────────────────
+        # ── 8. Checkboxes (e.g. privacy policy) ──────────────────────────────
         try:
-            checkboxes = await page.locator(
-                "input[type='checkbox']:not(:checked)"
-            ).all()
+            checkboxes = await page.locator("input[type='checkbox']:not(:checked)").all()
             for cb in checkboxes[:3]:
                 try:
                     await cb.click()
@@ -501,21 +542,41 @@ async def _handle_easy_apply_modal(
         except Exception:
             pass
 
-        # ── 8. Click Next / Continue / Review ────────────────────────────────
-        next_btn = page.locator(
-            "button[aria-label*='Next'], "
-            "button[aria-label*='Continue'], "
-            "button[aria-label*='Review'], "
-            "button:has-text('Next'), "
-            "button:has-text('Continue')"
-        ).last
-        if await next_btn.count() > 0:
-            await next_btn.click()
-        else:
-            return {
-                "status": "failed",
-                "message": f"Stuck on step {step + 1} — no Next or Submit button found",
-            }
+        # ── 9. Navigate: Review your application → Next → Continue ────────────
+        # "Review your application" advances to the review/submit page — try it first
+        navigated = False
+        for btn_text in ["Review your application", "Review", "Next", "Continue"]:
+            btn = page.locator(f"button:has-text('{btn_text}')").last
+            if await btn.count() > 0:
+                print(f"  Clicking '{btn_text}' button")
+                await btn.scroll_into_view_if_needed()
+                await btn.click()
+                await page.wait_for_timeout(1000)
+                navigated = True
+                break
+
+        if not navigated:
+            # Try aria-label variants as fallback
+            btn = page.locator(
+                "button[aria-label*='Next'], "
+                "button[aria-label*='Continue'], "
+                "button[aria-label*='Review']"
+            ).last
+            if await btn.count() > 0:
+                await btn.click()
+                await page.wait_for_timeout(1000)
+            else:
+                print(f"  No navigation button found on step {step + 1}")
+                try:
+                    await page.screenshot(
+                        path=f"screenshots/stuck_step_{step + 1}.png", full_page=False
+                    )
+                except Exception:
+                    pass
+                return {
+                    "status": "failed",
+                    "message": f"Stuck on step {step + 1} — no Next or Submit button found",
+                }
 
     return {"status": "failed", "message": "Exceeded maximum steps (10)"}
 
@@ -561,6 +622,10 @@ async def apply_to_job(req: ApplyRequest):
             req.application_id,
             req.user_id,
         )
+        cv = await conn.fetchrow(
+            'SELECT skills_json FROM "Cv" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            req.user_id,
+        )
     finally:
         await conn.close()
 
@@ -575,6 +640,15 @@ async def apply_to_job(req: ApplyRequest):
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""
 
+    # Extract skills and years_experience from CV for answering screening questions
+    import json as _json
+    skills_json: dict = {}
+    if cv and cv["skills_json"]:
+        try:
+            skills_json = _json.loads(cv["skills_json"]) if isinstance(cv["skills_json"], str) else cv["skills_json"]
+        except Exception:
+            pass
+
     user_data = {
         "first_name": first_name,
         "last_name": last_name,
@@ -583,6 +657,8 @@ async def apply_to_job(req: ApplyRequest):
         "city": "",
         "linkedin_url": "",
         "portfolio_url": "",
+        "years_experience": skills_json.get("years_experience", 0),
+        "skills": skills_json.get("skills", []),
     }
 
     tailored_cv = application["tailored_cv"] or ""
