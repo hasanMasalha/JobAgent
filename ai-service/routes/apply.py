@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import tempfile
 
 import anthropic
@@ -671,6 +672,26 @@ async def _playwright_apply(
             await ctx.close()
 
 
+def _run_in_proactor_thread(*args) -> dict:
+    """Run _playwright_apply in a thread with an explicit ProactorEventLoop.
+
+    uvicorn imports the app *inside* asyncio.run(), so setting the policy in
+    main.py is too late — the loop is already a SelectorEventLoop by then.
+    Creating a ProactorEventLoop explicitly in a worker thread is the only
+    reliable way to give Playwright subprocess support on Windows.
+    """
+    if sys.platform == "win32":
+        loop = asyncio.ProactorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_playwright_apply(*args))
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+
 # ── main handler ───────────────────────────────────────────────────────────────
 
 @router.post("/apply")
@@ -744,7 +765,8 @@ async def apply_to_job(req: ApplyRequest):
     os.makedirs("screenshots", exist_ok=True)
     screenshot_path = os.path.join("screenshots", f"{req.application_id}.png")
 
-    return await _playwright_apply(
+    return await asyncio.to_thread(
+        _run_in_proactor_thread,
         req.job_url, is_linkedin, is_indeed,
         user_data, pdf_path, cover_letter,
         screenshot_path, profile_dir,

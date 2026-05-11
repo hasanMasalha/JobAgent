@@ -1,14 +1,6 @@
-import asyncio
-import sys
-
 from dotenv import load_dotenv
 
 load_dotenv("../.env")
-
-# Playwright spawns a subprocess; Windows SelectorEventLoop can't do that.
-# Set ProactorEventLoop before uvicorn creates its event loop.
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from contextlib import asynccontextmanager
 
