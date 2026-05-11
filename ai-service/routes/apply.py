@@ -597,15 +597,9 @@ async def _apply_linkedin(
     await page.wait_for_load_state("domcontentloaded", timeout=15_000)
     await page.wait_for_timeout(2000)
 
-    # Detect LinkedIn auth wall — cookies may have expired
+    # Detect LinkedIn auth wall — session expired or cookies not loaded
     current_url = page.url
     if any(s in current_url for s in ("/login", "/checkpoint", "authwall", "/signup")):
-        return {
-            "status": "failed",
-            "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
-        }
-    join_heading = page.locator("h1:has-text('Join LinkedIn'), h1:has-text('Sign in'), h2:has-text('Join LinkedIn')")
-    if await join_heading.count() > 0:
         return {
             "status": "failed",
             "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
