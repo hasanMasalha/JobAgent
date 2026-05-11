@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 import tempfile
 
 import anthropic
@@ -671,28 +670,6 @@ async def _playwright_apply(
             await ctx.close()
 
 
-def _playwright_thread_worker(
-    job_url: str,
-    is_linkedin: bool,
-    is_indeed: bool,
-    user_data: dict,
-    pdf_path: str,
-    cover_letter: str,
-    screenshot_path: str,
-    profile_dir: str,
-) -> dict:
-    # Windows SelectorEventLoop cannot create subprocesses; use ProactorEventLoop.
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    return asyncio.run(
-        _playwright_apply(
-            job_url, is_linkedin, is_indeed,
-            user_data, pdf_path, cover_letter,
-            screenshot_path, profile_dir,
-        )
-    )
-
-
 # ── main handler ───────────────────────────────────────────────────────────────
 
 @router.post("/apply")
@@ -766,8 +743,7 @@ async def apply_to_job(req: ApplyRequest):
     os.makedirs("screenshots", exist_ok=True)
     screenshot_path = os.path.join("screenshots", f"{req.application_id}.png")
 
-    return await asyncio.to_thread(
-        _playwright_thread_worker,
+    return await _playwright_apply(
         req.job_url, is_linkedin, is_indeed,
         user_data, pdf_path, cover_letter,
         screenshot_path, profile_dir,
