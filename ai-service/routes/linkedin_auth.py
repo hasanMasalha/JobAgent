@@ -88,8 +88,11 @@ async def start_linkedin_login(user_id: str) -> dict:
 
         print("LinkedIn login page open — waiting for user...")
 
-        # Poll all open pages for successful login
-        # Check every 2 seconds for up to 120 seconds
+        # Poll only the main login page — not popups.
+        # Google OAuth opens a popup whose URL contains "linkedin.com" as a
+        # query parameter (origin=), which caused false-positive matches when
+        # we iterated over all context.pages. Only the main page redirects to
+        # /feed after a successful login.
         timeout = 120
         elapsed = 0
 
@@ -97,41 +100,29 @@ async def start_linkedin_login(user_id: str) -> dict:
             await asyncio.sleep(2)
             elapsed += 2
 
-            # Check every open page in context (main page + any popups)
-            for open_page in context.pages:
-                try:
-                    current_url = open_page.url
+            try:
+                current_url = page.url
+                login_success = (
+                    'linkedin.com/feed' in current_url or
+                    'linkedin.com/in/' in current_url or
+                    'linkedin.com/mynetwork' in current_url or
+                    'linkedin.com/jobs' in current_url or
+                    'linkedin.com/messaging' in current_url or
+                    'linkedin.com/notifications' in current_url or
+                    'linkedin.com/home' in current_url
+                )
 
-                    # Only accept pages that are unambiguously post-login.
-                    # The loose "any linkedin.com not /login" check caused false
-                    # positives on the home page and redirect URLs.
-                    login_success = (
-                        'linkedin.com/feed' in current_url or
-                        'linkedin.com/in/' in current_url or
-                        'linkedin.com/mynetwork' in current_url or
-                        'linkedin.com/jobs' in current_url or
-                        'linkedin.com/messaging' in current_url or
-                        'linkedin.com/notifications' in current_url or
-                        'linkedin.com/home' in current_url
-                    )
+                if login_success:
+                    print(f"Login detected: {current_url}")
+                    await asyncio.sleep(2)
+                    await context.close()
+                    return {
+                        'status': 'success',
+                        'message': 'LinkedIn connected successfully'
+                    }
 
-                    if login_success:
-                        print(f"Login detected on: {current_url}")
-
-                        # Give LinkedIn a moment to fully load
-                        await asyncio.sleep(2)
-
-                        # Session is auto-saved in persistent context
-                        # browser_profile/{user_id}/ has everything
-                        await context.close()
-
-                        return {
-                            'status': 'success',
-                            'message': 'LinkedIn connected successfully'
-                        }
-
-                except Exception:
-                    continue
+            except Exception:
+                pass
 
         # Timeout reached
         await context.close()
