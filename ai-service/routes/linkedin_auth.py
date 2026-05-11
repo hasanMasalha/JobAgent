@@ -1,14 +1,15 @@
+import asyncio
 import os
 import threading
-import time
 
 from fastapi import APIRouter
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 router = APIRouter()
 
 # In-memory status map: user_id -> "pending" | "success" | "timeout" | "error"
 _login_sessions: dict[str, str] = {}
+_login_threads: dict[str, threading.Thread] = {}
 
 
 def _profile_dir(user_id: str) -> str:
@@ -25,45 +26,126 @@ def _has_saved_session(user_id: str) -> bool:
     )
 
 
+async def start_linkedin_login(user_id: str) -> dict:
+    profile_dir = f"browser_profile/{user_id}"
+    os.makedirs(profile_dir, exist_ok=True)
+
+    async with async_playwright() as p:
+        # Use persistent context so session is saved automatically
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir=profile_dir,
+            headless=False,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',
+            ],
+            ignore_default_args=['--enable-automation'],
+            user_agent=(
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/120.0.0.0 Safari/537.36'
+            ),
+            viewport={'width': 1280, 'height': 800},
+        )
+
+        page = await context.new_page()
+
+        # When LinkedIn opens a popup (Google OAuth),
+        # Playwright captures it here and brings it to focus
+        async def handle_new_page(new_page):
+            print(f"Popup detected: {new_page.url}")
+            # Bring popup to front so user can see and interact
+            await new_page.bring_to_front()
+            # Wait for it to fully load
+            try:
+                await new_page.wait_for_load_state(
+                    'domcontentloaded',
+                    timeout=10000
+                )
+            except Exception:
+                pass
+
+        # Listen for ANY new page/popup opened by LinkedIn
+        context.on('page', lambda pg: asyncio.ensure_future(
+            handle_new_page(pg)
+        ))
+
+        # Navigate to LinkedIn login
+        await page.goto(
+            'https://www.linkedin.com/login',
+            wait_until='domcontentloaded'
+        )
+        await page.bring_to_front()
+
+        print("LinkedIn login page open — waiting for user...")
+
+        # Poll all open pages for successful login
+        # Check every 2 seconds for up to 120 seconds
+        timeout = 120
+        elapsed = 0
+
+        while elapsed < timeout:
+            await asyncio.sleep(2)
+            elapsed += 2
+
+            # Check every open page in context (main page + any popups)
+            for open_page in context.pages:
+                try:
+                    current_url = open_page.url
+
+                    # LinkedIn login success indicators
+                    login_success = (
+                        'linkedin.com/feed' in current_url or
+                        'linkedin.com/in/' in current_url or
+                        'linkedin.com/mynetwork' in current_url or
+                        'linkedin.com/jobs' in current_url or
+                        (
+                            'linkedin.com' in current_url and
+                            '/login' not in current_url and
+                            '/checkpoint' not in current_url and
+                            '/authwall' not in current_url and
+                            'linkedin.com/uas/' not in current_url
+                        )
+                    )
+
+                    if login_success:
+                        print(f"Login detected on: {current_url}")
+
+                        # Give LinkedIn a moment to fully load
+                        await asyncio.sleep(2)
+
+                        # Session is auto-saved in persistent context
+                        # browser_profile/{user_id}/ has everything
+                        await context.close()
+
+                        return {
+                            'status': 'success',
+                            'message': 'LinkedIn connected successfully'
+                        }
+
+                except Exception:
+                    continue
+
+        # Timeout reached
+        await context.close()
+        return {
+            'status': 'timeout',
+            'message': 'Login not completed within 2 minutes'
+        }
+
+
 def _run_login_flow(user_id: str) -> None:
-    """Open a visible browser, wait for the user to log in, then close.
-    Uses sync_playwright in a plain thread — avoids asyncio subprocess
-    incompatibility with uvicorn's event loop on Windows."""
-    profile = _profile_dir(user_id)
-    os.makedirs(profile, exist_ok=True)
+    """Run async login in a dedicated event loop (thread-safe, avoids uvicorn loop conflicts)."""
     _login_sessions[user_id] = "pending"
-
     try:
-        with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context(
-                profile,
-                headless=False,   # intentionally visible — user must type credentials
-                args=["--no-sandbox", "--disable-setuid-sandbox"],
-            )
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto("https://www.linkedin.com/login", timeout=20_000)
-
-            # Poll until URL leaves the login/checkpoint pages (max 120 s)
-            deadline = time.time() + 120
-            while time.time() < deadline:
-                time.sleep(2)
-                url = page.url
-                if (
-                    "linkedin.com/login" not in url
-                    and "linkedin.com/checkpoint" not in url
-                    and "linkedin.com/authwall" not in url
-                    and "linkedin.com" in url
-                ):
-                    _login_sessions[user_id] = "success"
-                    ctx.close()
-                    return
-
-            _login_sessions[user_id] = "timeout"
-            ctx.close()
-
+        result = asyncio.run(start_linkedin_login(user_id))
+        if _login_sessions.get(user_id) != "success":
+            _login_sessions[user_id] = result.get("status", "error")
     except Exception as exc:
         print(f"[linkedin_auth] login flow error for {user_id}: {exc}")
-        _login_sessions[user_id] = "error"
+        if _login_sessions.get(user_id) != "success":
+            _login_sessions[user_id] = "error"
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -74,10 +156,14 @@ async def start_login(payload: dict):
     if not user_id:
         return {"status": "error", "detail": "user_id required"}
 
-    if _login_sessions.get(user_id) == "pending":
+    # Only block if a thread is genuinely still running — stale "pending" from a
+    # crashed/timed-out thread must not prevent a new browser from opening.
+    existing = _login_threads.get(user_id)
+    if existing and existing.is_alive():
         return {"status": "pending"}
 
     thread = threading.Thread(target=_run_login_flow, args=(user_id,), daemon=True)
+    _login_threads[user_id] = thread
     thread.start()
     return {"status": "started"}
 
