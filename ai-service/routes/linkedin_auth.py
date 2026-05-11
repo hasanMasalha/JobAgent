@@ -49,6 +49,14 @@ async def start_linkedin_login(user_id: str) -> dict:
             viewport={'width': 1280, 'height': 800},
         )
 
+        # Close any tabs restored from the previous session so they can't
+        # trigger a false-positive "already logged in" detection below.
+        for restored in list(context.pages):
+            try:
+                await restored.close()
+            except Exception:
+                pass
+
         page = await context.new_page()
 
         # When LinkedIn opens a popup (Google OAuth),
@@ -94,19 +102,17 @@ async def start_linkedin_login(user_id: str) -> dict:
                 try:
                     current_url = open_page.url
 
-                    # LinkedIn login success indicators
+                    # Only accept pages that are unambiguously post-login.
+                    # The loose "any linkedin.com not /login" check caused false
+                    # positives on the home page and redirect URLs.
                     login_success = (
                         'linkedin.com/feed' in current_url or
                         'linkedin.com/in/' in current_url or
                         'linkedin.com/mynetwork' in current_url or
                         'linkedin.com/jobs' in current_url or
-                        (
-                            'linkedin.com' in current_url and
-                            '/login' not in current_url and
-                            '/checkpoint' not in current_url and
-                            '/authwall' not in current_url and
-                            'linkedin.com/uas/' not in current_url
-                        )
+                        'linkedin.com/messaging' in current_url or
+                        'linkedin.com/notifications' in current_url or
+                        'linkedin.com/home' in current_url
                     )
 
                     if login_success:
