@@ -634,7 +634,7 @@ async def _playwright_apply(
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             profile_dir,
-            headless=True,
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -647,6 +647,7 @@ async def _playwright_apply(
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
+            viewport={"width": 1280, "height": 800},
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
