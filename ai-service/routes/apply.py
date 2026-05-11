@@ -620,7 +620,8 @@ async def _playwright_apply(
 ) -> dict:
     if is_linkedin:
         has_cookies = (
-            os.path.exists(os.path.join(profile_dir, "Default", "Cookies"))
+            os.path.exists(os.path.join(profile_dir, "Default", "Network", "Cookies"))
+            or os.path.exists(os.path.join(profile_dir, "Default", "Cookies"))
             or os.path.exists(os.path.join(profile_dir, "Cookies"))
         )
         if not has_cookies:

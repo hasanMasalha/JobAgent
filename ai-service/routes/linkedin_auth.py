@@ -17,12 +17,12 @@ def _profile_dir(user_id: str) -> str:
 
 
 def _has_saved_session(user_id: str) -> bool:
-    """Check if the persistent profile directory has a Cookies file."""
+    """True if the profile has a Cookies file — Chromium 120+ uses Default/Network/Cookies."""
     base = _profile_dir(user_id)
     return (
-        os.path.exists(os.path.join(base, "Default", "Cookies"))
+        os.path.exists(os.path.join(base, "Default", "Network", "Cookies"))
+        or os.path.exists(os.path.join(base, "Default", "Cookies"))
         or os.path.exists(os.path.join(base, "Cookies"))
-        or (os.path.isdir(base) and any(os.scandir(base)))
     )
 
 
