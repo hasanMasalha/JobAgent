@@ -669,13 +669,7 @@ async def _playwright_apply(
             ),
             viewport={"width": 1280, "height": 800},
         )
-        # Close tabs restored from the previous session — start clean
-        for restored in list(ctx.pages):
-            try:
-                await restored.close()
-            except Exception:
-                pass
-        page = await ctx.new_page()
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
             await page.goto(job_url, timeout=30_000)
             if is_indeed:
