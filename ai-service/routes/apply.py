@@ -506,10 +506,15 @@ async def _handle_easy_apply_modal(
                     radios = await fieldset.locator("input[type='radio']").all()
                     if not radios:
                         continue
-                    already_checked = any(
-                        await r.is_checked() for r in radios
-                        if not isinstance(await r.is_checked(), Exception)
-                    )
+                    # Can't use await inside a generator passed to any() — iterate explicitly
+                    already_checked = False
+                    for r in radios:
+                        try:
+                            if await r.is_checked():
+                                already_checked = True
+                                break
+                        except Exception:
+                            pass
                     if already_checked:
                         continue
                     yes_clicked = False
@@ -589,7 +594,22 @@ async def _apply_linkedin(
     cover_letter: str,
     screenshot_path: str,
 ) -> dict:
+    await page.wait_for_load_state("domcontentloaded", timeout=15_000)
     await page.wait_for_timeout(2000)
+
+    # Detect LinkedIn auth wall — cookies may have expired
+    current_url = page.url
+    if any(s in current_url for s in ("/login", "/checkpoint", "authwall", "/signup")):
+        return {
+            "status": "failed",
+            "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
+        }
+    join_heading = page.locator("h1:has-text('Join LinkedIn'), h1:has-text('Sign in'), h2:has-text('Join LinkedIn')")
+    if await join_heading.count() > 0:
+        return {
+            "status": "failed",
+            "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
+        }
 
     easy_apply = page.locator("button:has-text('Easy Apply')").first
     try:
@@ -649,7 +669,13 @@ async def _playwright_apply(
             ),
             viewport={"width": 1280, "height": 800},
         )
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        # Close tabs restored from the previous session — start clean
+        for restored in list(ctx.pages):
+            try:
+                await restored.close()
+            except Exception:
+                pass
+        page = await ctx.new_page()
         try:
             await page.goto(job_url, timeout=30_000)
             if is_indeed:

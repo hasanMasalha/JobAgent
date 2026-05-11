@@ -150,9 +150,10 @@ export default function ApplyPage() {
               saved — open the job and paste it when applying.
             </p>
             <a
-              href={data?.cover_letter ? undefined : "#"}
+              href={data?.job_url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
-              onClick={() => window.open(data!.job_url, "_blank")}
             >
               Open job &amp; apply →
             </a>
@@ -163,12 +164,12 @@ export default function ApplyPage() {
               View in applications
             </button>
           </div>
-          {data?.cover_letter && (
+          {coverLetter && (
             <div className="mt-5">
               <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Your saved cover letter</p>
               <textarea
                 readOnly
-                value={data.cover_letter}
+                value={coverLetter}
                 rows={10}
                 className="w-full border rounded-xl p-4 text-sm text-gray-700 bg-gray-50 resize-none"
               />
