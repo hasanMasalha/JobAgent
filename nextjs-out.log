@@ -1,0 +1,739 @@
+
+> jobagent@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 15s
+ ○ Compiling / ...
+ ✓ Compiled / in 11.9s (503 modules)
+ GET / 307 in 12800ms
+ ✓ Compiled /middleware in 1334ms (367 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 2.7s (649 modules)
+ GET /login 200 in 3241ms
+ GET / 307 in 87ms
+ GET /login 200 in 61ms
+ ✓ Compiled /favicon.ico in 164ms (371 modules)
+ GET /favicon.ico 200 in 321ms
+ GET / 307 in 166ms
+ GET /login 200 in 88ms
+ ○ Compiling /dashboard/profile ...
+ ✓ Compiled /dashboard/profile in 1262ms (772 modules)
+ GET /dashboard/profile 200 in 6821ms
+ ✓ Compiled /api/auth/google/status in 234ms (478 modules)
+ ✓ Compiled (482 modules)
+ GET /api/linkedin/session-status 200 in 1769ms
+ GET /api/auth/google/status 200 in 1959ms
+ GET /api/linkedin/session-status 200 in 339ms
+ GET /api/profile 200 in 2256ms
+ GET /api/auth/google/status 200 in 557ms
+ GET /api/profile 200 in 676ms
+ GET /dashboard/profile 200 in 1676ms
+ GET /favicon.ico 200 in 92ms
+ GET /favicon.ico 200 in 61ms
+ GET /api/linkedin/session-status 200 in 433ms
+ GET /api/linkedin/session-status 200 in 326ms
+ GET /api/profile 200 in 1407ms
+ GET /api/auth/google/status 200 in 1429ms
+ GET /api/profile 200 in 535ms
+ GET /api/auth/google/status 200 in 534ms
+ ✓ Compiled /dashboard in 422ms (806 modules)
+ ✓ Compiled /api/jobs/browse in 513ms (487 modules)
+ GET /api/profile 200 in 1565ms
+ ✓ Compiled /api/jobs/saved in 198ms (489 modules)
+ ✓ Compiled (493 modules)
+ GET /api/profile 200 in 608ms
+ GET /api/applications?ids_only=true 200 in 1104ms
+ GET /api/jobs/saved 200 in 1133ms
+ GET /api/jobs/browse?page=1 200 in 2037ms
+ GET /api/applications?ids_only=true 200 in 527ms
+ GET /api/jobs/saved 200 in 521ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 236ms
+ GET /api/match 200 in 4812ms
+ GET /api/match 200 in 4236ms
+ ✓ Compiled /dashboard/apply/[jobId] in 346ms (820 modules)
+ ✓ Compiled /api/apply/prepare in 372ms (552 modules)
+ POST /api/apply/prepare 200 in 23530ms
+ POST /api/apply/prepare 200 in 23656ms
+ ✓ Compiled /api/apply/submit in 358ms (554 modules)
+[apply/submit] python call failed: SyntaxError: Unexpected token 'I', "Internal S"... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at parseJSONFromBytes (node:internal/deps/undici/undici:5738:19)
+    at successSteps (node:internal/deps/undici/undici:5719:27)
+    at fullyReadBody (node:internal/deps/undici/undici:4609:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async consumeBody (node:internal/deps/undici/undici:5728:7)
+    at async POST (webpack-internal:///(rsc)/./app/api/apply/submit/route.ts:72:26)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13)
+ POST /api/apply/submit 200 in 4210ms
+ ✓ Compiled /dashboard/applications in 397ms (850 modules)
+ GET /api/applications 200 in 979ms
+ GET /api/applications 200 in 731ms
+ ✓ Compiled /api/linkedin/session-status in 218ms (527 modules)
+ ✓ Compiled (529 modules)
+ GET /api/linkedin/session-status 200 in 966ms
+ GET /api/auth/google/status 200 in 1225ms
+ GET /api/linkedin/session-status 200 in 317ms
+ GET /api/profile 200 in 1556ms
+ GET /api/auth/google/status 200 in 528ms
+ GET /api/profile 200 in 530ms
+ ✓ Compiled /api/linkedin/start-session in 314ms (531 modules)
+ POST /api/linkedin/start-session 200 in 700ms
+ GET /api/linkedin/session-status 200 in 323ms
+ ✓ Compiled in 1300ms (339 modules)
+ ✓ Compiled in 1665ms (773 modules)
+ ✓ Compiled /api/linkedin/session-status in 262ms (460 modules)
+ ✓ Compiled in 2ms (464 modules)
+ ✓ Compiled in 1ms (464 modules)
+ ✓ Compiled in 2ms (464 modules)
+ GET /dashboard/profile?_rsc=1kb5q 200 in 2769ms
+ GET /api/linkedin/session-status 200 in 2855ms
+ GET /dashboard/profile?_rsc=1kb5q 200 in 2716ms
+ GET /api/linkedin/session-status 200 in 344ms
+ GET /api/profile 200 in 3581ms
+ GET /api/auth/google/status 200 in 3926ms
+ GET /dashboard/profile?_rsc=1kb5q 200 in 549ms
+ GET /api/auth/google/status 200 in 538ms
+ GET /api/profile 200 in 1384ms
+ GET /api/profile 200 in 1471ms
+ ✓ Compiled /api/applications in 442ms (466 modules)
+ GET /api/profile 200 in 679ms
+ ✓ Compiled /api/jobs/browse in 1ms (470 modules)
+ ✓ Compiled in 1ms (472 modules)
+ ✓ Compiled in 1ms (472 modules)
+ ✓ Compiled in 0ms (472 modules)
+ GET /api/applications?ids_only=true 200 in 3032ms
+ GET /api/jobs/browse?page=1 200 in 2901ms
+ GET /api/applications?ids_only=true 200 in 551ms
+ GET /api/jobs/saved 200 in 3941ms
+ GET /api/jobs/saved 200 in 542ms
+ GET /api/match 200 in 6396ms
+ GET /api/match 200 in 4227ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 235ms
+ ○ Compiling /api/apply/prepare ...
+ ✓ Compiled /api/apply/prepare in 684ms (523 modules)
+ POST /api/apply/prepare 200 in 25106ms
+ POST /api/apply/prepare 200 in 26954ms
+ ✓ Compiled /api/apply/submit in 406ms (519 modules)
+ GET /dashboard/apply/d6ef7de1-aecb-49f8-9b66-8ca8f6fac91d?_rsc=1yxtk 200 in 1431ms
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 4958ms
+ ✓ Compiled in 1331ms (799 modules)
+ GET /dashboard/apply/d6ef7de1-aecb-49f8-9b66-8ca8f6fac91d?_rsc=1yxtk 200 in 1511ms
+ GET /dashboard/apply/d6ef7de1-aecb-49f8-9b66-8ca8f6fac91d 200 in 1589ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 546ms (466 modules)
+ GET /favicon.ico 200 in 680ms
+ GET /favicon.ico 200 in 35ms
+ ✓ Compiled /api/apply/prepare in 216ms (542 modules)
+ POST /api/apply/prepare 200 in 22527ms
+ POST /api/apply/prepare 200 in 22735ms
+ ✓ Compiled /api/apply/submit in 208ms (544 modules)
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 3938ms
+ ✓ Compiled /api/profile in 323ms (546 modules)
+ ✓ Compiled /api/jobs/browse in 402ms (548 modules)
+ GET /api/profile 200 in 1929ms
+ ✓ Compiled /api/applications in 450ms (550 modules)
+ ✓ Compiled (554 modules)
+ GET /api/jobs/browse?page=1 200 in 1656ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 231ms
+ GET /api/profile 200 in 2133ms
+ GET /api/applications?ids_only=true 200 in 2208ms
+ GET /api/jobs/saved 200 in 2229ms
+ GET /api/applications?ids_only=true 200 in 524ms
+ GET /api/jobs/saved 200 in 520ms
+ GET /api/match 200 in 5070ms
+ GET /api/match 200 in 4065ms
+ POST /api/apply/prepare 200 in 21291ms
+ POST /api/apply/prepare 200 in 22210ms
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 3610ms
+ GET /api/profile 200 in 1447ms
+[match] TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async GET (webpack-internal:///(rsc)/./app/api/match/route.ts:21:27)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  [cause]: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7)
+      at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+ GET /api/match 500 in 454ms
+ GET /api/profile 200 in 593ms
+[match] TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async GET (webpack-internal:///(rsc)/./app/api/match/route.ts:21:27)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  [cause]: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7)
+      at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+ GET /api/match 500 in 331ms
+ GET /api/jobs/browse?page=1 200 in 1371ms
+ GET /api/jobs/saved 200 in 1494ms
+ GET /api/applications?ids_only=true 200 in 1518ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 232ms
+ GET /api/jobs/saved 200 in 528ms
+ GET /api/applications?ids_only=true 200 in 537ms
+ GET /dashboard 200 in 1591ms
+ GET /favicon.ico 200 in 74ms
+ GET /favicon.ico 200 in 26ms
+ GET /api/profile 200 in 1402ms
+ GET /api/profile 200 in 592ms
+ GET /api/applications?ids_only=true 200 in 1486ms
+ GET /api/jobs/saved 200 in 1492ms
+ GET /api/jobs/browse?page=1 200 in 535ms
+ GET /api/applications?ids_only=true 200 in 543ms
+ GET /api/jobs/saved 200 in 547ms
+ GET /api/jobs/browse?page=1&source=indeed 200 in 644ms
+ GET /api/match 200 in 4196ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 230ms
+ GET /api/match 200 in 4153ms
+ POST /api/apply/prepare 200 in 22265ms
+ POST /api/apply/prepare 200 in 22597ms
+ POST /api/apply/submit 200 in 3996ms
+ ○ Compiling /api/linkedin/session-status ...
+ ✓ Compiled /api/linkedin/session-status in 625ms (556 modules)
+ ✓ Compiled (558 modules)
+ GET /api/linkedin/session-status 200 in 1337ms
+ GET /api/profile 200 in 1485ms
+ GET /api/auth/google/status 200 in 1564ms
+ GET /api/linkedin/session-status 200 in 328ms
+ GET /api/profile 200 in 548ms
+ GET /api/auth/google/status 200 in 1407ms
+ ✓ Compiled /api/linkedin/start-session in 240ms (560 modules)
+ POST /api/linkedin/start-session 200 in 642ms
+ GET /api/linkedin/session-status 200 in 357ms
+ GET /api/profile 200 in 1455ms
+ GET /api/jobs/browse?page=1 200 in 456ms
+ GET /api/applications?ids_only=true 200 in 2290ms
+ GET /api/jobs/saved 200 in 2294ms
+ GET /api/profile 200 in 2319ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 236ms
+ GET /api/jobs/saved 200 in 535ms
+ GET /api/applications?ids_only=true 200 in 538ms
+ GET /api/match 200 in 5076ms
+ GET /api/match 200 in 4073ms
+ POST /api/apply/prepare 200 in 22146ms
+ POST /api/apply/prepare 200 in 23457ms
+ POST /api/apply/submit 200 in 3873ms
+ GET /api/linkedin/session-status 200 in 550ms
+ GET /api/linkedin/session-status 200 in 341ms
+ GET /api/profile 200 in 1619ms
+ GET /api/auth/google/status 200 in 1622ms
+ GET /api/profile 200 in 546ms
+ GET /api/auth/google/status 200 in 533ms
+ POST /api/linkedin/start-session 200 in 352ms
+ GET /api/linkedin/session-status 200 in 354ms
+ GET /api/profile 200 in 1420ms
+ GET /api/profile 200 in 691ms
+ GET /api/applications?ids_only=true 200 in 1600ms
+ GET /api/jobs/saved 200 in 1602ms
+ GET /api/applications?ids_only=true 200 in 550ms
+ GET /api/jobs/saved 200 in 555ms
+ GET /api/jobs/browse?page=1 200 in 529ms
+ GET /api/match 200 in 4469ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 227ms
+ GET /api/match 200 in 4119ms
+ POST /api/apply/prepare 200 in 21082ms
+ POST /api/apply/prepare 200 in 23528ms
+ POST /api/apply/submit 200 in 3943ms
+ POST /api/apply/submit 200 in 3874ms
+ ○ Compiling / ...
+ ✓ Compiled / in 636ms (528 modules)
+ GET / 307 in 1336ms
+ GET /dashboard 200 in 1605ms
+ ✓ Compiled /favicon.ico in 302ms (549 modules)
+ GET /favicon.ico 200 in 468ms
+ ✓ Compiled /api/profile in 342ms (551 modules)
+ GET /api/profile 200 in 1840ms
+ ○ Compiling /api/applications ...
+ ✓ Compiled /api/applications in 747ms (551 modules)
+ ✓ Compiled in 1ms (555 modules)
+ ✓ Compiled in 0ms (555 modules)
+ GET /api/profile 200 in 2680ms
+ ✓ Compiled in 1ms (555 modules)
+ GET /api/applications?ids_only=true 200 in 4726ms
+ GET /api/jobs/saved 200 in 4779ms
+ GET /api/applications?ids_only=true 200 in 675ms
+ ○ Compiling /api/auth/google/status ...
+ GET /api/jobs/saved 200 in 854ms
+ ✓ Compiled /api/auth/google/status in 669ms (557 modules)
+ ✓ Compiled (559 modules)
+ GET /api/linkedin/session-status 200 in 1624ms
+ GET /api/profile 200 in 1794ms
+ GET /api/linkedin/session-status 200 in 342ms
+ GET /api/profile 200 in 533ms
+ GET /api/auth/google/status 200 in 2694ms
+ GET /api/auth/google/status 200 in 525ms
+ GET /api/match 200 in 8072ms
+ GET /api/match 200 in 4240ms
+ GET /api/profile 200 in 1433ms
+ GET /api/profile 200 in 567ms
+ ✓ Compiled /api/jobs/browse in 345ms (506 modules)
+ GET /api/applications?ids_only=true 200 in 1499ms
+ GET /api/jobs/saved 200 in 1503ms
+ GET /api/jobs/browse?page=1 200 in 865ms
+ GET /api/applications?ids_only=true 200 in 557ms
+ GET /api/jobs/saved 200 in 568ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 231ms
+ GET /api/match 200 in 4209ms
+ ✓ Compiled /api/apply/prepare in 241ms (559 modules)
+ GET /api/match 200 in 4308ms
+ POST /api/apply/prepare 200 in 21804ms
+ POST /api/apply/prepare 200 in 22239ms
+ ✓ Compiled /api/apply/submit in 246ms (558 modules)
+ POST /api/apply/submit 200 in 4288ms
+ GET /api/linkedin/session-status 200 in 573ms
+ GET /api/linkedin/session-status 200 in 340ms
+ GET /api/auth/google/status 200 in 1617ms
+ GET /api/profile 200 in 1645ms
+ GET /api/auth/google/status 200 in 544ms
+ GET /api/profile 200 in 528ms
+ ✓ Compiled /api/linkedin/start-session in 266ms (531 modules)
+ POST /api/linkedin/start-session 200 in 686ms
+ GET /api/linkedin/session-status 200 in 346ms
+ POST /api/linkedin/start-session 200 in 477ms
+ GET /api/linkedin/session-status 200 in 369ms
+ GET /dashboard/profile 200 in 1665ms
+ ✓ Compiled /favicon.ico in 319ms (466 modules)
+ GET /favicon.ico 200 in 603ms
+ GET /favicon.ico 200 in 56ms
+ ✓ Compiled /api/auth/google/status in 211ms (489 modules)
+ ✓ Compiled (493 modules)
+ GET /api/linkedin/session-status 200 in 1105ms
+ GET /api/auth/google/status 200 in 1184ms
+ GET /api/linkedin/session-status 200 in 338ms
+ GET /api/auth/google/status 200 in 545ms
+ GET /api/profile 200 in 2063ms
+ GET /api/profile 200 in 547ms
+ ✓ Compiled /api/linkedin/start-session in 171ms (495 modules)
+ POST /api/linkedin/start-session 200 in 686ms
+ GET /api/linkedin/session-status 200 in 343ms
+ ○ Compiling /api/jobs/browse ...
+ ✓ Compiled /api/jobs/browse in 2.1s (497 modules)
+ GET /api/profile 200 in 3239ms
+ ✓ Compiled /api/applications in 298ms (499 modules)
+ ✓ Compiled (503 modules)
+ GET /api/profile 200 in 1134ms
+ GET /api/jobs/browse?page=1 200 in 3570ms
+ GET /api/jobs/saved 200 in 2023ms
+ GET /api/applications?ids_only=true 200 in 2056ms
+ GET /api/jobs/saved 200 in 560ms
+ GET /api/applications?ids_only=true 200 in 538ms
+ GET /api/match 200 in 4840ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 235ms
+ GET /api/match 200 in 4370ms
+ ○ Compiling /api/apply/prepare ...
+ ✓ Compiled /api/apply/prepare in 575ms (558 modules)
+ POST /api/apply/prepare 200 in 26479ms
+ POST /api/apply/prepare 200 in 26637ms
+ ✓ Compiled /api/apply/submit in 383ms (525 modules)
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 5027ms
+ ✓ Compiled /api/auth/google/status in 361ms (527 modules)
+ ✓ Compiled (529 modules)
+ GET /api/linkedin/session-status 200 in 1322ms
+ GET /api/auth/google/status 200 in 1490ms
+ GET /api/profile 200 in 1513ms
+ GET /api/auth/google/status 200 in 565ms
+ GET /api/linkedin/session-status 200 in 816ms
+ GET /api/profile 200 in 1416ms
+ ✓ Compiled /api/linkedin/start-session in 314ms (531 modules)
+ POST /api/linkedin/start-session 200 in 751ms
+ GET /api/linkedin/session-status 200 in 355ms
+ GET /dashboard/profile 200 in 2188ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1130ms (466 modules)
+ GET /favicon.ico 200 in 1435ms
+ GET /favicon.ico 200 in 36ms
+ ✓ Compiled /api/auth/google/status in 350ms (489 modules)
+ ✓ Compiled (493 modules)
+ GET /api/linkedin/session-status 200 in 3074ms
+ GET /api/auth/google/status 200 in 3254ms
+ GET /api/linkedin/session-status 200 in 335ms
+ GET /api/profile 200 in 3562ms
+ GET /api/auth/google/status 200 in 559ms
+ GET /api/profile 200 in 570ms
+ ✓ Compiled /api/linkedin/start-session in 224ms (495 modules)
+ POST /api/linkedin/start-session 200 in 829ms
+ GET /api/linkedin/session-status 200 in 415ms
+ GET /dashboard/profile 200 in 1678ms
+ GET /favicon.ico 200 in 61ms
+ GET /favicon.ico 200 in 35ms
+ GET /api/linkedin/session-status 200 in 417ms
+ GET /api/linkedin/session-status 200 in 336ms
+ GET /api/profile 200 in 1438ms
+ GET /api/auth/google/status 200 in 1462ms
+ GET /api/profile 200 in 543ms
+ GET /api/auth/google/status 200 in 552ms
+ POST /api/linkedin/start-session 200 in 440ms
+ GET /api/linkedin/session-status 200 in 386ms
+ GET /dashboard/profile 200 in 1513ms
+ GET /favicon.ico 200 in 24ms
+ GET /favicon.ico 200 in 21ms
+ GET /api/linkedin/session-status 200 in 397ms
+ GET /api/linkedin/session-status 200 in 325ms
+ GET /api/profile 200 in 1392ms
+ GET /api/auth/google/status 200 in 1482ms
+ GET /api/profile 200 in 550ms
+ GET /api/auth/google/status 200 in 580ms
+ GET /dashboard/profile 200 in 1424ms
+ GET /favicon.ico 200 in 51ms
+ GET /favicon.ico 200 in 30ms
+ GET /api/linkedin/session-status 200 in 407ms
+ GET /api/linkedin/session-status 200 in 331ms
+ GET /api/auth/google/status 200 in 1419ms
+ GET /api/profile 200 in 1438ms
+ GET /api/auth/google/status 200 in 576ms
+ GET /api/profile 200 in 669ms
+ POST /api/linkedin/start-session 200 in 366ms
+ GET /api/linkedin/session-status 200 in 356ms
+ GET /api/profile 200 in 551ms
+ ○ Compiling /api/jobs/browse ...
+ GET /api/profile 200 in 662ms
+ ✓ Compiled /api/jobs/browse in 700ms (497 modules)
+ ✓ Compiled (503 modules)
+ GET /api/jobs/saved 200 in 1850ms
+ GET /api/applications?ids_only=true 200 in 1897ms
+ GET /api/jobs/browse?page=1 200 in 1607ms
+ GET /api/jobs/saved 200 in 530ms
+ GET /api/applications?ids_only=true 200 in 526ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 1099ms
+ GET /api/match 200 in 5592ms
+ ✓ Compiled /api/apply/prepare in 496ms (558 modules)
+ GET /api/match 200 in 4960ms
+ POST /api/apply/prepare 200 in 23585ms
+ POST /api/apply/prepare 200 in 25361ms
+ ✓ Compiled /api/apply/submit in 339ms (560 modules)
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 4678ms
+ GET /api/profile 200 in 1392ms
+ GET /api/jobs/browse?page=1 200 in 1067ms
+ GET /api/profile 200 in 601ms
+ GET /api/applications?ids_only=true 200 in 2110ms
+ GET /api/jobs/saved 200 in 2293ms
+ GET /api/applications?ids_only=true 200 in 580ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 301ms
+ GET /api/jobs/saved 200 in 618ms
+ GET /api/match 200 in 4803ms
+ GET /api/match 200 in 4149ms
+ POST /api/apply/prepare 200 in 20712ms
+ POST /api/apply/prepare 200 in 21646ms
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 3912ms
+ GET /dashboard/apply/d6ef7de1-aecb-49f8-9b66-8ca8f6fac91d 200 in 1710ms
+ GET /favicon.ico 200 in 77ms
+ GET /favicon.ico 200 in 30ms
+ GET /api/profile 200 in 1404ms
+ GET /api/jobs/browse?page=1 200 in 649ms
+ GET /api/applications?ids_only=true 200 in 540ms
+ GET /api/profile 200 in 1431ms
+ GET /api/jobs/saved 200 in 1442ms
+ GET /api/applications?ids_only=true 200 in 532ms
+ GET /api/jobs/saved 200 in 540ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 231ms
+ GET /api/match 200 in 4343ms
+ GET /api/match 200 in 4174ms
+[apply/prepare] SyntaxError: Bad control character in string literal in JSON at position 2031 (line 9 column 92)
+    at JSON.parse (<anonymous>)
+    at POST (webpack-internal:///(rsc)/./app/api/apply/prepare/route.ts:101:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\hasan\OneDrive\שולחן העבודה\JobAgent\node_modules\next\dist\server\lib\start-server.js:141:13)
+ POST /api/apply/prepare 500 in 21807ms
+ POST /api/apply/prepare 200 in 23554ms
+ POST /api/apply/prepare 200 in 20452ms
+ POST /api/apply/prepare 200 in 21922ms
+ POST /api/apply/submit 200 in 22777ms
+ GET /api/applications 200 in 2174ms
+ GET /api/applications 200 in 750ms
+ GET /api/profile 200 in 1401ms
+ GET /api/applications?ids_only=true 200 in 634ms
+ GET /api/jobs/browse?page=1 200 in 657ms
+ GET /api/profile 200 in 1415ms
+ GET /api/jobs/saved 200 in 1505ms
+ GET /api/applications?ids_only=true 200 in 566ms
+ GET /api/jobs/saved 200 in 546ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 242ms
+ GET /api/match 200 in 4121ms
+ GET /api/match 200 in 4165ms
+ POST /api/apply/prepare 200 in 21567ms
+ POST /api/apply/prepare 200 in 22352ms
+ POST /api/apply/submit 200 in 15495ms
+ GET /api/profile 200 in 1484ms
+ GET /api/profile 200 in 590ms
+ GET /api/jobs/browse?page=1 200 in 1548ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 237ms
+ GET /api/applications?ids_only=true 200 in 1534ms
+ GET /api/jobs/saved 200 in 1541ms
+ GET /api/applications?ids_only=true 200 in 554ms
+ GET /api/jobs/saved 200 in 556ms
+ GET /api/match 200 in 4255ms
+ GET /api/match 200 in 4069ms
+ POST /api/apply/prepare 200 in 23867ms
+ POST /api/apply/prepare 200 in 24315ms
+ POST /api/apply/submit 200 in 17582ms
+ GET /favicon.ico 200 in 191ms
+ GET /api/profile 200 in 1782ms
+ GET /api/match 200 in 404ms
+ GET /api/profile 200 in 441ms
+ GET /api/jobs/browse?page=1 200 in 862ms
+ GET /api/jobs/saved 200 in 427ms
+ GET /api/applications?ids_only=true 200 in 427ms
+ GET /dashboard/apply/37cf812f-06be-4d8a-9fdb-99ea4562ded0 200 in 2155ms
+ GET /favicon.ico 200 in 100ms
+ GET /api/profile 200 in 1138ms
+ GET /api/profile 200 in 767ms
+ GET /api/jobs/browse?page=1 200 in 772ms
+ GET /api/jobs/saved 200 in 769ms
+ GET /api/applications?ids_only=true 200 in 554ms
+ GET /api/jobs/saved 200 in 615ms
+ GET /api/applications?ids_only=true 200 in 625ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 307ms
+ GET /api/match 200 in 4235ms
+ POST /api/apply/prepare 200 in 9759ms
+ POST /api/apply/prepare 200 in 9761ms
+ GET /api/match 200 in 2805ms
+ GET /dashboard 200 in 1362ms
+ GET /favicon.ico 200 in 56ms
+ GET /favicon.ico 200 in 32ms
+ GET /api/profile 200 in 758ms
+ GET /api/profile 200 in 743ms
+ GET /api/applications?ids_only=true 200 in 874ms
+ GET /api/jobs/saved 200 in 997ms
+ GET /api/applications?ids_only=true 200 in 611ms
+ GET /api/jobs/saved 200 in 748ms
+ GET /api/match 200 in 4612ms
+ GET /api/jobs/browse?page=1 200 in 653ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 228ms
+ GET /api/match 200 in 4126ms
+ POST /api/apply/prepare 200 in 21850ms
+ POST /api/apply/prepare 200 in 24099ms
+ POST /api/apply/submit 200 in 19617ms
+ GET /api/linkedin/session-status 200 in 428ms
+ GET /api/linkedin/session-status 200 in 389ms
+ GET /api/profile 200 in 1461ms
+ GET /api/auth/google/status 200 in 1545ms
+ GET /api/profile 200 in 540ms
+ GET /api/auth/google/status 200 in 535ms
+ POST /api/linkedin/start-session 200 in 388ms
+ GET /api/linkedin/session-status 200 in 332ms
+ GET /api/profile 200 in 1597ms
+ GET /api/profile 200 in 707ms
+ GET /api/jobs/browse?page=1 200 in 1807ms
+ GET /api/applications?ids_only=true 200 in 1549ms
+ GET /api/jobs/saved 200 in 1567ms
+ GET /api/applications?ids_only=true 200 in 555ms
+ GET /api/jobs/saved 200 in 548ms
+ GET /api/match 200 in 4354ms
+ GET /api/match 200 in 4029ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 241ms
+ POST /api/apply/prepare 200 in 22178ms
+ POST /api/apply/prepare 200 in 22380ms
+ POST /api/apply/submit 200 in 14313ms
+ ✓ Compiled in 5.6s (773 modules)
+ GET /dashboard/apply/37cf812f-06be-4d8a-9fdb-99ea4562ded0?_rsc=5mvds 200 in 3104ms
+ ✓ Compiled in 2.7s (773 modules)
+ GET /dashboard/apply/37cf812f-06be-4d8a-9fdb-99ea4562ded0?_rsc=5mvds 200 in 1571ms
+ ✓ Compiled /api/profile in 376ms (460 modules)
+ GET /api/profile 200 in 2125ms
+ ✓ Compiled /api/applications in 261ms (462 modules)
+ ✓ Compiled (466 modules)
+ GET /api/profile 200 in 1641ms
+ GET /api/jobs/saved 200 in 2601ms
+ GET /api/applications?ids_only=true 200 in 2605ms
+ GET /api/jobs/saved 200 in 567ms
+ GET /api/applications?ids_only=true 200 in 577ms
+ GET /api/match 200 in 5035ms
+ GET /dashboard 200 in 1256ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 545ms (495 modules)
+ GET /favicon.ico 200 in 846ms
+ GET /favicon.ico 200 in 41ms
+ GET /api/profile 200 in 576ms
+ GET /api/profile 200 in 587ms
+ GET /api/applications?ids_only=true 200 in 612ms
+ GET /api/jobs/saved 200 in 638ms
+ GET /api/applications?ids_only=true 200 in 556ms
+ GET /api/jobs/saved 200 in 549ms
+ GET /api/match 200 in 4220ms
+ GET /api/match 200 in 4214ms
+ ✓ Compiled /api/jobs/browse in 363ms (497 modules)
+ GET /api/jobs/browse?page=1 200 in 1916ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 236ms
+ ✓ Compiled /api/apply/prepare in 337ms (552 modules)
+ POST /api/apply/prepare 200 in 24565ms
+ POST /api/apply/prepare 200 in 24632ms
+ ✓ Compiled /api/apply/submit in 360ms (554 modules)
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 6633ms
+ GET /api/profile 200 in 1553ms
+ GET /api/profile 200 in 546ms
+ GET /api/jobs/saved 200 in 779ms
+ GET /api/jobs/saved 200 in 542ms
+ GET /api/applications?ids_only=true 200 in 1445ms
+ GET /api/jobs/browse?page=1 200 in 754ms
+ GET /api/applications?ids_only=true 200 in 548ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 232ms
+ GET /api/match 200 in 4169ms
+ GET /api/match 200 in 4171ms
+ POST /api/apply/prepare 200 in 22006ms
+ POST /api/apply/prepare 200 in 22420ms
+[apply/submit] python error: 500 Internal Server Error
+ POST /api/apply/submit 200 in 5431ms
+ ✓ Compiled /api/auth/google/status in 402ms (527 modules)
+ ✓ Compiled (529 modules)
+ GET /api/linkedin/session-status 200 in 1420ms
+ GET /api/auth/google/status 200 in 1548ms
+ GET /api/profile 200 in 1582ms
+ GET /api/linkedin/session-status 200 in 344ms
+ GET /api/auth/google/status 200 in 560ms
+ GET /api/profile 200 in 1399ms
+ ✓ Compiled /api/linkedin/start-session in 473ms (460 modules)
+ POST /api/linkedin/start-session 200 in 939ms
+ ✓ Compiled /api/linkedin/session-status in 195ms (462 modules)
+ GET /api/linkedin/session-status 200 in 574ms
+ ✓ Compiled /api/profile in 236ms (464 modules)
+ ✓ Compiled /api/jobs/browse in 299ms (466 modules)
+ GET /api/profile 200 in 1710ms
+ ○ Compiling /api/match ...
+ ✓ Compiled /api/match in 516ms (468 modules)
+ GET /api/profile 200 in 711ms
+ GET /api/jobs/browse?page=1 200 in 1883ms
+ ✓ Compiled (472 modules)
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 433ms
+ GET /api/applications?ids_only=true 200 in 1582ms
+ GET /api/jobs/saved 200 in 1640ms
+ GET /api/applications?ids_only=true 200 in 542ms
+ GET /api/jobs/saved 200 in 530ms
+ GET /api/match 200 in 5147ms
+ ○ Compiling /api/apply/prepare ...
+ ✓ Compiled /api/apply/prepare in 553ms (527 modules)
+ GET /api/match 200 in 4138ms
+ POST /api/apply/prepare 200 in 24365ms
+ POST /api/apply/prepare 200 in 24614ms
+ ✓ Compiled /api/apply/submit in 395ms (529 modules)
+ POST /api/apply/submit 200 in 8581ms
+ ○ Compiling /api/auth/google/status ...
+ ✓ Compiled /api/auth/google/status in 574ms (464 modules)
+ GET /api/linkedin/session-status 200 in 1236ms
+ GET /api/linkedin/session-status 200 in 341ms
+ GET /api/profile 200 in 1697ms
+ GET /api/profile 200 in 560ms
+ GET /api/auth/google/status 200 in 2332ms
+ GET /api/auth/google/status 200 in 550ms
+ ✓ Compiled /api/linkedin/start-session in 232ms (466 modules)
+ POST /api/linkedin/start-session 200 in 610ms
+ GET /api/linkedin/session-status 200 in 338ms
+ GET /api/profile 200 in 1060ms
+ ✓ Compiled /api/applications in 406ms (468 modules)
+ ✓ Compiled (474 modules)
+ GET /api/applications?ids_only=true 200 in 1631ms
+ GET /api/jobs/saved 200 in 1637ms
+ GET /api/jobs/browse?page=1 200 in 1845ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 246ms
+ GET /api/profile 200 in 2526ms
+ GET /api/applications?ids_only=true 200 in 578ms
+ GET /api/jobs/saved 200 in 584ms
+ GET /api/match 200 in 5283ms
+ GET /api/match 200 in 4092ms
+ ✓ Compiled /api/apply/prepare in 495ms (529 modules)
+ POST /api/apply/prepare 200 in 25524ms
+ POST /api/apply/prepare 200 in 26428ms
+ ✓ Compiled /api/apply/submit in 321ms (525 modules)
+ POST /api/apply/submit 200 in 9835ms
+ GET /api/profile 200 in 1590ms
+ GET /api/profile 200 in 589ms
+ GET /api/applications?ids_only=true 200 in 1467ms
+ GET /api/jobs/saved 200 in 1501ms
+ GET /api/jobs/browse?page=1 200 in 1585ms
+ GET /api/applications?ids_only=true 200 in 525ms
+ GET /api/jobs/saved 200 in 536ms
+ GET /api/jobs/browse?page=1&source=linkedin 200 in 239ms
+ GET /api/match 200 in 4331ms
+ GET /api/match 200 in 4096ms
+ POST /api/apply/prepare 200 in 20721ms
+ POST /api/apply/prepare 200 in 21038ms
+ POST /api/apply/submit 200 in 9414ms

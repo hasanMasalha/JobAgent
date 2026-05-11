@@ -1,0 +1,7 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\hasan\\OneDrive\\\u05e9\u05d5\u05dc\u05d7\u05df \u05d4\u05e2\u05d1\u05d5\u05d3\u05d4\\JobAgent\\ai-service']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [4824] using StatReload
+INFO:     Started server process [10696]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'routes\apply.py'. Reloading...
