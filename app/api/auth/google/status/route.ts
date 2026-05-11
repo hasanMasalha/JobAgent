@@ -30,5 +30,6 @@ export async function GET() {
     } catch { /* ignore — email is best-effort */ }
   }
 
-  return NextResponse.json({ connected, email });
+  const configured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REDIRECT_URI);
+  return NextResponse.json({ connected, email, configured });
 }

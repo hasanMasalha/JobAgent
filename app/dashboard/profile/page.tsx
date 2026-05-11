@@ -37,6 +37,7 @@ function ProfileContent() {
 
   // Google Calendar state
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState(true);
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
 
@@ -80,9 +81,17 @@ function ProfileContent() {
       .then((r) => r.json())
       .then((d) => {
         setGoogleConnected(d.connected);
+        setGoogleConfigured(d.configured ?? false);
         setGoogleEmail(d.email ?? null);
       })
       .catch(() => {});
+
+    // Show toast if redirected back with google_not_configured
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("toast") === "google_not_configured") {
+      showToast("Google Calendar is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI to .env.", "error");
+      window.history.replaceState({}, "", "/dashboard/profile");
+    }
   }, []);
 
   // Cleanup polling on unmount
@@ -519,12 +528,16 @@ function ProfileContent() {
               <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
                 Not connected
               </span>
-              <a
-                href="/api/auth/google"
-                className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-              >
-                Connect Google Calendar
-              </a>
+              {googleConfigured ? (
+                <a
+                  href="/api/auth/google"
+                  className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                >
+                  Connect Google Calendar
+                </a>
+              ) : (
+                <span className="text-xs text-gray-400 italic">Not configured</span>
+              )}
             </div>
           )}
         </div>

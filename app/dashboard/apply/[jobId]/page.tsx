@@ -97,8 +97,9 @@ export default function ApplyPage() {
         showToast("Cover letter saved — finish applying via the link below", "error");
         // Don't auto-redirect — let user see the manual apply button
       } else {
-        showToast("Something went wrong — check applications", "error");
-        setTimeout(() => router.push("/dashboard/applications"), 2000);
+        // "failed" — show the actual reason from Python (e.g. no LinkedIn session)
+        setError(json.message ?? "Something went wrong");
+        setStage("error");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Submission failed";

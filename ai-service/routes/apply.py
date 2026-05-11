@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import tempfile
 
 import anthropic
@@ -594,7 +595,11 @@ async def _apply_linkedin(
     try:
         await easy_apply.wait_for(state="visible", timeout=5000)
     except Exception:
-        return {"status": "manual", "message": "No Easy Apply button — apply via the job link"}
+        try:
+            await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
+        except Exception:
+            pass
+        return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
 
     await easy_apply.click()
     await page.wait_for_timeout(1500)
@@ -602,10 +607,98 @@ async def _apply_linkedin(
     return await _handle_easy_apply_modal(page, user, pdf_path, cover_letter, screenshot_path)
 
 
+# ── Playwright runner (thread-isolated to get ProactorEventLoop on Windows) ────
+
+async def _playwright_apply(
+    job_url: str,
+    is_linkedin: bool,
+    is_indeed: bool,
+    user_data: dict,
+    pdf_path: str,
+    cover_letter: str,
+    screenshot_path: str,
+    profile_dir: str,
+) -> dict:
+    if is_linkedin:
+        has_cookies = (
+            os.path.exists(os.path.join(profile_dir, "Default", "Cookies"))
+            or os.path.exists(os.path.join(profile_dir, "Cookies"))
+        )
+        if not has_cookies:
+            return {
+                "status": "failed",
+                "message": "LinkedIn session not found. Please connect your LinkedIn account in Settings → LinkedIn before applying.",
+            }
+
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            profile_dir,
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        )
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        try:
+            await page.goto(job_url, timeout=30_000)
+            if is_indeed:
+                return await _apply_indeed(
+                    page,
+                    user_data["first_name"],
+                    user_data["last_name"],
+                    user_data["email"],
+                    "",
+                    pdf_path,
+                    cover_letter,
+                    screenshot_path,
+                )
+            else:
+                return await _apply_linkedin(
+                    page, user_data, pdf_path, cover_letter, screenshot_path
+                )
+        except Exception as e:
+            return {"status": "failed", "message": str(e)}
+        finally:
+            await ctx.close()
+
+
+def _playwright_thread_worker(
+    job_url: str,
+    is_linkedin: bool,
+    is_indeed: bool,
+    user_data: dict,
+    pdf_path: str,
+    cover_letter: str,
+    screenshot_path: str,
+    profile_dir: str,
+) -> dict:
+    # Windows SelectorEventLoop cannot create subprocesses; use ProactorEventLoop.
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    return asyncio.run(
+        _playwright_apply(
+            job_url, is_linkedin, is_indeed,
+            user_data, pdf_path, cover_letter,
+            screenshot_path, profile_dir,
+        )
+    )
+
+
 # ── main handler ───────────────────────────────────────────────────────────────
 
 @router.post("/apply")
 async def apply_to_job(req: ApplyRequest):
+    import json as _json
+
     is_linkedin = "linkedin.com" in req.job_url
     is_indeed = "indeed.com" in req.job_url
 
@@ -623,7 +716,7 @@ async def apply_to_job(req: ApplyRequest):
             req.user_id,
         )
         cv = await conn.fetchrow(
-            'SELECT skills_json FROM "Cv" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            'SELECT skills_json FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
             req.user_id,
         )
     finally:
@@ -640,8 +733,6 @@ async def apply_to_job(req: ApplyRequest):
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""
 
-    # Extract skills and years_experience from CV for answering screening questions
-    import json as _json
     skills_json: dict = {}
     if cv and cv["skills_json"]:
         try:
@@ -675,43 +766,12 @@ async def apply_to_job(req: ApplyRequest):
     os.makedirs("screenshots", exist_ok=True)
     screenshot_path = os.path.join("screenshots", f"{req.application_id}.png")
 
-    async with async_playwright() as p:
-        ctx = await p.chromium.launch_persistent_context(
-            profile_dir,
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-            ],
-            ignore_default_args=["--enable-automation"],
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        try:
-            await page.goto(req.job_url, timeout=30_000)
-
-            if is_indeed:
-                result = await _apply_indeed(
-                    page, first_name, last_name, email, "",
-                    pdf_path, cover_letter, screenshot_path,
-                )
-            else:
-                result = await _apply_linkedin(
-                    page, user_data, pdf_path, cover_letter, screenshot_path,
-                )
-
-            return result
-
-        except Exception as e:
-            return {"status": "failed", "message": str(e)}
-        finally:
-            await ctx.close()
+    return await asyncio.to_thread(
+        _playwright_thread_worker,
+        req.job_url, is_linkedin, is_indeed,
+        user_data, pdf_path, cover_letter,
+        screenshot_path, profile_dir,
+    )
 
 
 # ── PDF download ───────────────────────────────────────────────────────────────
