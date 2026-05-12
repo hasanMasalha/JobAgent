@@ -594,7 +594,14 @@ async def _apply_linkedin(
     cover_letter: str,
     screenshot_path: str,
 ) -> dict:
-    await page.wait_for_load_state("domcontentloaded", timeout=15_000)
+    # Wait for the page to be fully interactive, not just HTML-parsed.
+    # LinkedIn's Easy Apply button is rendered by React after domcontentloaded,
+    # so waiting for networkidle gives JS time to inject it.
+    try:
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+    except Exception:
+        # networkidle can time out on heavy pages — domcontentloaded is the fallback
+        await page.wait_for_load_state("domcontentloaded", timeout=15_000)
     await page.wait_for_timeout(2000)
 
     # Detect LinkedIn auth wall — session expired or cookies not loaded
@@ -607,7 +614,7 @@ async def _apply_linkedin(
 
     easy_apply = page.locator("button:has-text('Easy Apply')").first
     try:
-        await easy_apply.wait_for(state="visible", timeout=5000)
+        await easy_apply.wait_for(state="visible", timeout=15_000)
     except Exception:
         try:
             await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
