@@ -159,6 +159,19 @@ async def start_login(payload: dict):
     return {"status": "started"}
 
 
+@router.get("/linkedin/login-poll/{user_id}")
+async def login_poll(user_id: str):
+    """Fast in-memory check for the polling loop during an active login flow.
+
+    Returns only the in-memory login_status — no Playwright, no disk I/O.
+    The profile page polls this every 3 s while the headed login browser is open
+    so the heavy session-status endpoint never runs concurrently with the login.
+    """
+    status = _login_sessions.get(user_id)
+    connected = status == "success"
+    return {"connected": connected, "login_status": status}
+
+
 @router.get("/linkedin/session-status/{user_id}")
 async def session_status(user_id: str):
     """Real session validation via headless Playwright.

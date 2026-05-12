@@ -114,12 +114,14 @@ function ProfileContent() {
       return;
     }
 
-    // Poll every 3 s for up to 2 minutes
+    // Poll every 3 s for up to 2 minutes.
+    // Uses /login-poll (fast in-memory check) — NOT /session-status — so the
+    // heavy Playwright validation never runs while the login browser is open.
     let elapsed = 0;
     pollRef.current = setInterval(async () => {
       elapsed += 3;
       try {
-        const res = await fetch("/api/linkedin/session-status");
+        const res = await fetch("/api/linkedin/login-poll");
         const data = await res.json();
         if (data.connected) {
           clearInterval(pollRef.current!);
