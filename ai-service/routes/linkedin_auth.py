@@ -172,9 +172,58 @@ async def login_poll(user_id: str):
     return {"connected": connected, "login_status": status}
 
 
+def _run_session_check(user_id: str) -> dict:
+    """Run the headless Playwright session check in its own event loop.
+
+    Playwright uses asyncio.create_subprocess_exec internally which raises
+    NotImplementedError when called directly inside uvicorn's Windows event
+    loop.  Running it in a thread with asyncio.run() gives it a fresh loop
+    that supports subprocesses on all platforms.
+    """
+    async def _check() -> dict:
+        profile_dir = _profile_dir(user_id)
+        async with async_playwright() as p:
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox'],
+            )
+            page = await context.new_page()
+            await page.goto(
+                'https://www.linkedin.com/feed',
+                wait_until='domcontentloaded',
+                timeout=15000,
+            )
+            await page.wait_for_timeout(2000)
+            is_valid = _is_logged_in_url(page.url)
+            print(f"[session-status] {user_id}: {'valid' if is_valid else 'expired'} ({page.url})")
+            await context.close()
+
+            if not is_valid:
+                for cookie_file in [
+                    os.path.join(profile_dir, "Default", "Network", "Cookies"),
+                    os.path.join(profile_dir, "Default", "Cookies"),
+                ]:
+                    if os.path.exists(cookie_file):
+                        try:
+                            os.remove(cookie_file)
+                            print(f"[session-status] cleared expired cookies: {cookie_file}")
+                        except Exception:
+                            pass
+                return {"connected": False, "login_status": "expired"}
+
+            return {"connected": True, "login_status": _login_sessions.get(user_id)}
+
+    try:
+        return asyncio.run(_check())
+    except Exception as e:
+        print(f"[session-status] check failed for {user_id}: {e}")
+        return {"connected": False, "login_status": "check_failed"}
+
+
 @router.get("/linkedin/session-status/{user_id}")
 async def session_status(user_id: str):
-    """Real session validation via headless Playwright.
+    """Real session validation via headless Playwright (runs in a thread).
 
     Clears the saved cookies when the session has expired so that the profile
     page stops showing "Connected" after the user's LinkedIn session goes stale.
@@ -196,41 +245,5 @@ async def session_status(user_id: str):
     if not os.path.isdir(profile_dir):
         return {"connected": False, "login_status": None}
 
-    try:
-        async with async_playwright() as p:
-            context = await p.chromium.launch_persistent_context(
-                user_data_dir=profile_dir,
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox'],
-            )
-            page = await context.new_page()
-            await page.goto(
-                'https://www.linkedin.com/feed',
-                wait_until='domcontentloaded',
-                timeout=15000,
-            )
-            await page.wait_for_timeout(2000)
-            is_valid = _is_logged_in_url(page.url)
-            print(f"[session-status] {user_id}: {'valid' if is_valid else 'expired'} ({page.url})")
-            await context.close()
-
-            if not is_valid:
-                # Delete cookies so the profile page stops showing "Connected"
-                # and the user is prompted to reconnect.
-                for cookie_file in [
-                    os.path.join(profile_dir, "Default", "Network", "Cookies"),
-                    os.path.join(profile_dir, "Default", "Cookies"),
-                ]:
-                    if os.path.exists(cookie_file):
-                        try:
-                            os.remove(cookie_file)
-                            print(f"[session-status] cleared expired cookies: {cookie_file}")
-                        except Exception:
-                            pass
-                return {"connected": False, "login_status": "expired"}
-
-            return {"connected": True, "login_status": in_memory}
-
-    except Exception as e:
-        print(f"[session-status] check failed for {user_id}: {e}")
-        return {"connected": False, "login_status": "check_failed"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run_session_check, user_id)
