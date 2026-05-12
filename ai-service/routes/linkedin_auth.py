@@ -103,9 +103,6 @@ async def start_linkedin_login(user_id: str) -> dict:
 
         print("LinkedIn login page open — waiting for user...")
 
-        # Poll only the main page — not restored/popup pages — to avoid false
-        # positives from Google OAuth popups whose URLs contain "linkedin.com"
-        # as a query parameter.
         timeout = 120
         elapsed = 0
 
@@ -114,13 +111,29 @@ async def start_linkedin_login(user_id: str) -> dict:
             elapsed += 2
 
             try:
-                if _is_logged_in_url(page.url):
-                    print(f"Login detected: {page.url}")
-                    await asyncio.sleep(2)
+                current_url = page.url
+                print(f"[login] elapsed={elapsed}s url={current_url}")
+
+                if _is_logged_in_url(current_url):
+                    print(f"[login] success detected at: {current_url}")
+                    await asyncio.sleep(3)
                     await context.close()
                     return {'status': 'success', 'message': 'LinkedIn connected successfully'}
-            except Exception:
-                pass
+
+                # Also check all context pages — LinkedIn may redirect via a popup
+                for ctx_page in context.pages:
+                    try:
+                        if _is_logged_in_url(ctx_page.url):
+                            print(f"[login] success on ctx page: {ctx_page.url}")
+                            await asyncio.sleep(3)
+                            await context.close()
+                            return {'status': 'success', 'message': 'LinkedIn connected successfully'}
+                    except Exception:
+                        continue
+
+            except Exception as e:
+                print(f"[login] poll error: {e}")
+                continue
 
         await context.close()
         return {'status': 'timeout', 'message': 'Login not completed within 2 minutes'}
@@ -147,16 +160,35 @@ async def start_login(payload: dict):
     if not user_id:
         return {"status": "error", "detail": "user_id required"}
 
-    # Only block if a thread is genuinely still running — stale "pending" from a
-    # crashed/timed-out thread must not prevent a new browser from opening.
+    # Clear stale error/timeout so the user can retry without hitting
+    # "Something went wrong" immediately on a subsequent attempt.
+    if _login_sessions.get(user_id) in ("error", "timeout"):
+        _login_sessions.pop(user_id, None)
+
+    # If a thread is genuinely still running, don't start another.
     existing = _login_threads.get(user_id)
     if existing and existing.is_alive():
-        return {"status": "pending"}
+        return {"status": "already_pending"}
 
     thread = threading.Thread(target=_run_login_flow, args=(user_id,), daemon=True)
     _login_threads[user_id] = thread
     thread.start()
     return {"status": "started"}
+
+
+@router.post("/linkedin/force-connected")
+async def force_connected(payload: dict):
+    """Manual fallback: mark the session as connected without Playwright validation.
+
+    Called when the user has logged in but automatic detection failed.
+    Trusts the user — no browser check performed.
+    """
+    user_id: str = payload.get("user_id", "")
+    if not user_id:
+        return {"status": "error", "detail": "user_id required"}
+    _login_sessions[user_id] = "success"
+    print(f"[force-connected] {user_id} manually marked as connected")
+    return {"status": "ok"}
 
 
 @router.get("/linkedin/login-poll/{user_id}")

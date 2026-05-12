@@ -267,7 +267,7 @@ function ProfileContent() {
                   A browser window is opening on this machine. Log in to LinkedIn normally —
                   the window will close automatically once you&apos;re signed in.
                 </p>
-                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-5">
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-3">
                   <span className="inline-flex gap-0.5">
                     <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -275,6 +275,19 @@ function ProfileContent() {
                   </span>
                   <span className="text-sm text-blue-700">Waiting for login… (up to 2 minutes)</span>
                 </div>
+                <button
+                  onClick={async () => {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    await fetch("/api/linkedin/force-connected", { method: "POST" });
+                    setLinkedinConnected(true);
+                    setLinkedinConnecting(false);
+                    setLinkedinModal(false);
+                    showToast("LinkedIn connected!", "success");
+                  }}
+                  className="text-sm text-blue-600 hover:underline mb-5 block"
+                >
+                  I&apos;ve logged in — mark as connected
+                </button>
               </>
             ) : null}
             {linkedinError && (
