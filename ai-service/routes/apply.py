@@ -638,15 +638,57 @@ async def _apply_linkedin(
             break
         await page.wait_for_timeout(1000)
 
-    if easy_apply is None:
-        try:
-            await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
-        except Exception:
-            pass
-        return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
+    _js_click = """
+        () => {
+            const buttons = document.querySelectorAll('button');
+            for (const btn of buttons) {
+                if (btn.textContent.includes('Easy Apply') ||
+                        btn.getAttribute('aria-label')?.includes('Easy Apply')) {
+                    btn.click();
+                    return true;
+                }
+            }
+            const allElements = document.querySelectorAll('*');
+            for (const el of allElements) {
+                if (el.shadowRoot) {
+                    const shadowBtns = el.shadowRoot.querySelectorAll('button');
+                    for (const btn of shadowBtns) {
+                        if (btn.textContent.includes('Easy Apply')) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+    """
 
-    await easy_apply.click()
-    await page.wait_for_timeout(1500)
+    if easy_apply is None:
+        # Playwright locator found nothing — try direct JS evaluation in every frame.
+        # LinkedIn may serve a page without the button in Playwright's accessible DOM
+        # while still rendering it visually; JS evaluation bypasses locator detection.
+        js_clicked = False
+        for frame in page.frames:
+            try:
+                js_clicked = await frame.evaluate(_js_click)
+                if js_clicked:
+                    print(f"[apply] Clicked Easy Apply via JS in frame '{frame.name}'")
+                    break
+            except Exception:
+                continue
+
+        if not js_clicked:
+            try:
+                await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
+            except Exception:
+                pass
+            return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
+
+        await page.wait_for_timeout(2000)
+    else:
+        await easy_apply.click()
+        await page.wait_for_timeout(1500)
 
     return await _handle_easy_apply_modal(page, user, pdf_path, cover_letter, screenshot_path)
 
@@ -684,6 +726,10 @@ async def _playwright_apply(
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--flag-switches-begin",
+                "--disable-site-isolation-trials",
+                "--flag-switches-end",
             ],
             ignore_default_args=["--enable-automation"],
             user_agent=(
@@ -693,6 +739,13 @@ async def _playwright_apply(
             ),
             viewport={"width": 1280, "height": 800},
         )
+        # Remove automation fingerprint signals that LinkedIn uses to detect bots
+        await ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            window.chrome = { runtime: {} };
+        """)
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
             await page.goto(job_url, timeout=30_000)
