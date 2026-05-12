@@ -14,6 +14,7 @@ interface PrepareResult {
   job_title: string;
   company: string;
   job_url: string;
+  match_score: number | null;
 }
 
 export default function ApplyPage() {
@@ -85,7 +86,7 @@ export default function ApplyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(310_000), // slightly above the 5 min backend timeout
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Submission failed");
@@ -96,6 +97,8 @@ export default function ApplyPage() {
       } else if (json.status === "manual") {
         showToast("Cover letter saved — finish applying via the link below", "error");
         // Don't auto-redirect — let user see the manual apply button
+      } else if (json.status === "timeout") {
+        // Don't redirect — amber message shown in render below
       } else {
         // "failed" — show the actual reason from Python (e.g. no LinkedIn session)
         setError(json.message ?? "Something went wrong");
@@ -139,6 +142,37 @@ export default function ApplyPage() {
 
   /* ── Submitting / Done ── */
   if (stage === "submitting") {
+    // Timeout — show amber confirmation prompt
+    if (submitResult?.status === "timeout") {
+      return (
+        <div className="max-w-2xl mx-auto mt-12">
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-6">
+            <p className="text-lg font-semibold text-amber-900 mb-1">
+              Application may have been submitted successfully
+            </p>
+            <p className="text-sm text-amber-800 mb-4">
+              The submission took longer than expected. Please check your LinkedIn Sent
+              Applications to confirm, then update the status here.
+            </p>
+            <a
+              href="https://www.linkedin.com/my-items/saved-jobs/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            >
+              Check LinkedIn Sent Applications →
+            </a>
+            <button
+              onClick={() => router.push("/dashboard/applications")}
+              className="ml-3 text-sm text-amber-700 hover:underline"
+            >
+              View in applications
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // Manual apply — stay on page and show clear CTA
     if (submitResult?.status === "manual") {
       return (
@@ -213,6 +247,8 @@ export default function ApplyPage() {
   }
 
   /* ── Ready ── */
+  const lowMatch = data?.match_score !== null && data?.match_score !== undefined && data.match_score < 0.45;
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
@@ -220,6 +256,14 @@ export default function ApplyPage() {
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{data!.job_title}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{data!.company}</p>
       </div>
+
+      {/* Low-match warning */}
+      {lowMatch && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+          <span className="font-semibold">Warning:</span> This role may not match your background
+          well. The CV tailoring will be limited to avoid misrepresentation.
+        </div>
+      )}
 
       {/* CV Changes */}
       {data!.cv_changes.length > 0 && (

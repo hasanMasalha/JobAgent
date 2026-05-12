@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_url, application_id, user_id: user.id }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(300_000), // 5 minutes — Easy Apply modal can be slow
       });
       if (pythonRes.ok) {
         pythonData = await pythonRes.json();
@@ -58,15 +58,26 @@ export async function POST(req: NextRequest) {
         pythonData = { status: "failed", message: `Apply service error (${pythonRes.status})` };
       }
     } catch (e) {
-      console.error("[apply/submit] python call failed:", e);
-      pythonData = { status: "failed", message: e instanceof Error ? e.message : "Could not reach apply service" };
+      const isTimeout =
+        e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+      if (isTimeout) {
+        pythonData = {
+          status: "timeout",
+          message:
+            "Application may have been submitted — check your LinkedIn to confirm, " +
+            "then update status in Applications page.",
+        };
+      } else {
+        console.error("[apply/submit] python call failed:", e);
+        pythonData = { status: "failed", message: e instanceof Error ? e.message : "Could not reach apply service" };
+      }
     }
 
-    // Update application status
+    // Update application status (timeout → manual so user can confirm manually)
     const finalStatus =
       pythonData.status === "applied"
         ? "applied"
-        : pythonData.status === "manual"
+        : pythonData.status === "manual" || pythonData.status === "timeout"
         ? "manual"
         : "failed";
 

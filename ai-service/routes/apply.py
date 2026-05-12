@@ -325,6 +325,48 @@ async def _ask_claude_for_answer(label: str, user: dict) -> str:
         return ""
 
 
+async def get_years_answer(
+    label_text: str,
+    user_skills: list,
+    years_experience: int,
+) -> str:
+    """Return years-of-experience answer without fabricating skill knowledge."""
+    label_lower = label_text.lower()
+
+    # Generic questions about total career experience
+    generic_patterns = [
+        "years of work experience",
+        "years of professional experience",
+        "total years",
+        "overall experience",
+    ]
+    if any(p in label_lower for p in generic_patterns):
+        return str(min(years_experience, 10))
+
+    # Technology-specific question — extract the tech keyword(s)
+    stop_words = {
+        "years", "experience", "how", "many", "have", "you", "with",
+        "work", "working", "using", "knowledge", "familiarity", "the",
+        "and", "for", "are",
+    }
+    tech_keywords = [
+        word for word in label_lower.split()
+        if len(word) > 2 and word not in stop_words
+    ]
+
+    user_skills_lower = [s.lower() for s in user_skills]
+    has_skill = any(
+        any(kw in skill or skill in kw for skill in user_skills_lower)
+        for kw in tech_keywords
+    )
+
+    if has_skill:
+        return str(min(max(1, years_experience // 2), 5))
+
+    print(f"  No match for '{label_text}' in skills — answering 0")
+    return "0"
+
+
 async def _get_answer_for_field(label: str, user: dict) -> str:
     """Map common LinkedIn field labels to user data, Claude for the rest."""
     label_lower = label.lower()
@@ -345,9 +387,17 @@ async def _get_answer_for_field(label: str, user: dict) -> str:
     if "website" in label_lower or "portfolio" in label_lower:
         return user.get("portfolio_url", "")
 
-    # Questions that benefit from a reasoned answer
+    # Year-of-experience questions — use skill-aware helper, never fabricate
+    if "year" in label_lower:
+        return await get_years_answer(
+            label,
+            user.get("skills", []),
+            int(user.get("years_experience", 0)),
+        )
+
+    # Authorization / sponsorship / salary — Claude answers these
     if any(w in label_lower for w in [
-        "year", "experience", "authorized", "authoris", "require",
+        "experience", "authorized", "authoris", "require",
         "sponsor", "salary", "expect", "notice", "reloc",
     ]):
         return await _ask_claude_for_answer(label, user)
