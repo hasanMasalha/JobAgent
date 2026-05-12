@@ -1,6 +1,7 @@
 import asyncio
 import os
 import threading
+from urllib.parse import urlparse
 
 from fastapi import APIRouter
 from playwright.async_api import async_playwright
@@ -17,13 +18,40 @@ def _profile_dir(user_id: str) -> str:
 
 
 def _has_saved_session(user_id: str) -> bool:
-    """Check if the persistent profile directory has a Cookies file."""
+    """Return True only when a non-empty Cookies file exists in the profile."""
     base = _profile_dir(user_id)
-    return (
-        os.path.exists(os.path.join(base, "Default", "Cookies"))
-        or os.path.exists(os.path.join(base, "Cookies"))
-        or (os.path.isdir(base) and any(os.scandir(base)))
-    )
+    if not os.path.isdir(base):
+        return False
+    # Chromium 120+ writes cookies to Default/Network/Cookies; older builds use
+    # Default/Cookies or Cookies at the root.  Check all three, require >1 KB so
+    # a freshly-created but empty file doesn't produce a false positive.
+    cookie_paths = [
+        os.path.join(base, "Default", "Network", "Cookies"),
+        os.path.join(base, "Default", "Cookies"),
+        os.path.join(base, "Cookies"),
+    ]
+    for cookie_path in cookie_paths:
+        if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 1024:
+            return True
+    return False
+
+
+def _is_logged_in_url(url: str) -> bool:
+    """Check the URL path only (not query string) for login-success indicators.
+
+    Checking the full URL string caused false positives: LinkedIn's login-wall
+    redirect appends '/feed' as a query parameter, so 'feed in url' matched
+    even when the browser was on the login page.
+    """
+    try:
+        path = urlparse(url).path.lower()
+    except Exception:
+        return False
+    logged_out = ["/login", "/uas/login", "/checkpoint", "/authwall", "/signup", "/registration"]
+    logged_in = ["/feed", "/in/", "/mynetwork", "/jobs", "/messaging", "/notifications", "/home"]
+    if any(p in path for p in logged_out):
+        return False
+    return any(path.startswith(p) for p in logged_in)
 
 
 async def start_linkedin_login(user_id: str) -> dict:
@@ -31,7 +59,6 @@ async def start_linkedin_login(user_id: str) -> dict:
     os.makedirs(profile_dir, exist_ok=True)
 
     async with async_playwright() as p:
-        # Use persistent context so session is saved automatically
         context = await p.chromium.launch_persistent_context(
             user_data_dir=profile_dir,
             headless=False,
@@ -49,39 +76,36 @@ async def start_linkedin_login(user_id: str) -> dict:
             viewport={'width': 1280, 'height': 800},
         )
 
-        page = await context.new_page()
-
-        # When LinkedIn opens a popup (Google OAuth),
-        # Playwright captures it here and brings it to focus
-        async def handle_new_page(new_page):
-            print(f"Popup detected: {new_page.url}")
-            # Bring popup to front so user can see and interact
-            await new_page.bring_to_front()
-            # Wait for it to fully load
+        # Close tabs restored from the previous session — they have LinkedIn URLs
+        # that would trigger a false-positive login detection immediately.
+        for restored in list(context.pages):
             try:
-                await new_page.wait_for_load_state(
-                    'domcontentloaded',
-                    timeout=10000
-                )
+                await restored.close()
             except Exception:
                 pass
 
-        # Listen for ANY new page/popup opened by LinkedIn
-        context.on('page', lambda pg: asyncio.ensure_future(
-            handle_new_page(pg)
-        ))
+        page = await context.new_page()
 
-        # Navigate to LinkedIn login
-        await page.goto(
-            'https://www.linkedin.com/login',
-            wait_until='domcontentloaded'
-        )
+        # When LinkedIn opens a popup (Google OAuth),
+        # bring it to front so the user can interact with it.
+        async def handle_new_page(new_page):
+            print(f"Popup detected: {new_page.url}")
+            await new_page.bring_to_front()
+            try:
+                await new_page.wait_for_load_state('domcontentloaded', timeout=10000)
+            except Exception:
+                pass
+
+        context.on('page', lambda pg: asyncio.ensure_future(handle_new_page(pg)))
+
+        await page.goto('https://www.linkedin.com/login', wait_until='domcontentloaded')
         await page.bring_to_front()
 
         print("LinkedIn login page open — waiting for user...")
 
-        # Poll all open pages for successful login
-        # Check every 2 seconds for up to 120 seconds
+        # Poll only the main page — not restored/popup pages — to avoid false
+        # positives from Google OAuth popups whose URLs contain "linkedin.com"
+        # as a query parameter.
         timeout = 120
         elapsed = 0
 
@@ -89,50 +113,17 @@ async def start_linkedin_login(user_id: str) -> dict:
             await asyncio.sleep(2)
             elapsed += 2
 
-            # Check every open page in context (main page + any popups)
-            for open_page in context.pages:
-                try:
-                    current_url = open_page.url
+            try:
+                if _is_logged_in_url(page.url):
+                    print(f"Login detected: {page.url}")
+                    await asyncio.sleep(2)
+                    await context.close()
+                    return {'status': 'success', 'message': 'LinkedIn connected successfully'}
+            except Exception:
+                pass
 
-                    # LinkedIn login success indicators
-                    login_success = (
-                        'linkedin.com/feed' in current_url or
-                        'linkedin.com/in/' in current_url or
-                        'linkedin.com/mynetwork' in current_url or
-                        'linkedin.com/jobs' in current_url or
-                        (
-                            'linkedin.com' in current_url and
-                            '/login' not in current_url and
-                            '/checkpoint' not in current_url and
-                            '/authwall' not in current_url and
-                            'linkedin.com/uas/' not in current_url
-                        )
-                    )
-
-                    if login_success:
-                        print(f"Login detected on: {current_url}")
-
-                        # Give LinkedIn a moment to fully load
-                        await asyncio.sleep(2)
-
-                        # Session is auto-saved in persistent context
-                        # browser_profile/{user_id}/ has everything
-                        await context.close()
-
-                        return {
-                            'status': 'success',
-                            'message': 'LinkedIn connected successfully'
-                        }
-
-                except Exception:
-                    continue
-
-        # Timeout reached
         await context.close()
-        return {
-            'status': 'timeout',
-            'message': 'Login not completed within 2 minutes'
-        }
+        return {'status': 'timeout', 'message': 'Login not completed within 2 minutes'}
 
 
 def _run_login_flow(user_id: str) -> None:
@@ -170,9 +161,63 @@ async def start_login(payload: dict):
 
 @router.get("/linkedin/session-status/{user_id}")
 async def session_status(user_id: str):
+    """Real session validation via headless Playwright.
+
+    Clears the saved cookies when the session has expired so that the profile
+    page stops showing "Connected" after the user's LinkedIn session goes stale.
+    Skips the Playwright check if a login is already in progress to avoid two
+    browsers competing for the same profile directory.
+    """
     in_memory = _login_sessions.get(user_id)
-    connected = _has_saved_session(user_id) or in_memory == "success"
-    return {
-        "connected": connected,
-        "login_status": in_memory,
-    }
+
+    # Login just completed in this process — trust in-memory state.
+    if in_memory == "success":
+        return {"connected": True, "login_status": in_memory}
+
+    # Login is in progress — don't launch a second browser against the same
+    # profile directory.
+    if in_memory == "pending":
+        return {"connected": False, "login_status": in_memory}
+
+    profile_dir = _profile_dir(user_id)
+    if not os.path.isdir(profile_dir):
+        return {"connected": False, "login_status": None}
+
+    try:
+        async with async_playwright() as p:
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox'],
+            )
+            page = await context.new_page()
+            await page.goto(
+                'https://www.linkedin.com/feed',
+                wait_until='domcontentloaded',
+                timeout=15000,
+            )
+            await page.wait_for_timeout(2000)
+            is_valid = _is_logged_in_url(page.url)
+            print(f"[session-status] {user_id}: {'valid' if is_valid else 'expired'} ({page.url})")
+            await context.close()
+
+            if not is_valid:
+                # Delete cookies so the profile page stops showing "Connected"
+                # and the user is prompted to reconnect.
+                for cookie_file in [
+                    os.path.join(profile_dir, "Default", "Network", "Cookies"),
+                    os.path.join(profile_dir, "Default", "Cookies"),
+                ]:
+                    if os.path.exists(cookie_file):
+                        try:
+                            os.remove(cookie_file)
+                            print(f"[session-status] cleared expired cookies: {cookie_file}")
+                        except Exception:
+                            pass
+                return {"connected": False, "login_status": "expired"}
+
+            return {"connected": True, "login_status": in_memory}
+
+    except Exception as e:
+        print(f"[session-status] check failed for {user_id}: {e}")
+        return {"connected": False, "login_status": "check_failed"}
