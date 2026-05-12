@@ -612,10 +612,33 @@ async def _apply_linkedin(
             "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
         }
 
-    easy_apply = page.locator("button:has-text('Easy Apply')").first
-    try:
-        await easy_apply.wait_for(state="visible", timeout=15_000)
-    except Exception:
+    # LinkedIn renders the job detail panel inside an iframe on some page layouts.
+    # page.locator() only searches the main frame, so we poll all frames.
+    _easy_apply_selectors = [
+        "button:has-text('Easy Apply')",
+        "button[aria-label*='Easy Apply']",
+        ".jobs-apply-button",
+        "button[data-control-name*='apply']",
+    ]
+    easy_apply = None
+    for _attempt in range(15):
+        for frame in page.frames:
+            for sel in _easy_apply_selectors:
+                try:
+                    btn = frame.locator(sel).first
+                    if await btn.count() > 0:
+                        easy_apply = btn
+                        print(f"[apply] Found Easy Apply button in frame '{frame.name}' with selector '{sel}'")
+                        break
+                except Exception:
+                    continue
+            if easy_apply:
+                break
+        if easy_apply:
+            break
+        await page.wait_for_timeout(1000)
+
+    if easy_apply is None:
         try:
             await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
         except Exception:
