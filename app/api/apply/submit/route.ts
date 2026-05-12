@@ -69,6 +69,14 @@ export async function POST(req: NextRequest) {
       WHERE id = ${application_id}
     `;
 
+    if (pythonData.status === "session_expired") {
+      return NextResponse.json({
+        status: "session_expired",
+        message: "Your LinkedIn session expired.",
+        reconnectUrl: "/dashboard/profile",
+      });
+    }
+
     return NextResponse.json({
       status: pythonData.status,
       message: pythonData.message,

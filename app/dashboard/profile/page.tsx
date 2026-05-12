@@ -42,6 +42,7 @@ function ProfileContent() {
 
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
+  const [linkedinChecking, setLinkedinChecking] = useState(true);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinModal, setLinkedinModal] = useState(false);
   const [linkedinError, setLinkedinError] = useState("");
@@ -69,11 +70,12 @@ function ProfileContent() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    // Check LinkedIn session status on mount
+    // Check LinkedIn session status on mount — real Playwright validation (5-10 s)
     fetch("/api/linkedin/session-status")
       .then((r) => r.json())
-      .then((d) => { if (d.connected) setLinkedinConnected(true); })
-      .catch(() => {});
+      .then((d) => { setLinkedinConnected(!!d.connected); })
+      .catch(() => {})
+      .finally(() => setLinkedinChecking(false));
 
     // Check Google Calendar connection status on mount
     fetch("/api/auth/google/status")
@@ -456,7 +458,9 @@ function ProfileContent() {
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
             <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
           </div>
-          {linkedinConnected ? (
+          {linkedinChecking ? (
+            <span className="text-xs text-gray-400 italic">Verifying LinkedIn connection…</span>
+          ) : linkedinConnected ? (
             <div className="flex items-center gap-3 shrink-0">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
@@ -486,7 +490,7 @@ function ProfileContent() {
             </div>
           )}
         </div>
-        {!linkedinConnected && (
+        {!linkedinChecking && !linkedinConnected && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
             Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
           </p>

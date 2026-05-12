@@ -13,7 +13,7 @@ export async function GET() {
 
   try {
     const res = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/linkedin/session-status/${user.id}`
+      `${process.env.PYTHON_SERVICE_URL}/linkedin/session-valid/${user.id}`
     );
 
     if (!res.ok) {
@@ -21,7 +21,9 @@ export async function GET() {
     }
 
     const data = await res.json();
-    return NextResponse.json(data);
+    // `valid` is the real Playwright check result; `login_status` is kept for
+    // the login-polling flow in the profile page.
+    return NextResponse.json({ connected: data.valid, login_status: data.login_status });
   } catch {
     // Python service down — treat as not connected, don't throw
     return NextResponse.json({ connected: false, login_status: null });

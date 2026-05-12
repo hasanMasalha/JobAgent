@@ -529,6 +529,15 @@ async def _apply_linkedin(
 ) -> dict:
     await page.wait_for_timeout(2000)
 
+    # Detect auth wall — session expired or cookies not loaded
+    current_url = page.url
+    if any(s in current_url for s in ("/login", "/checkpoint", "authwall", "/signup")):
+        return {
+            "status": "session_expired",
+            "message": "LinkedIn session expired",
+            "action": "reconnect",
+        }
+
     easy_apply = page.locator("button:has-text('Easy Apply')").first
     try:
         await easy_apply.wait_for(state="visible", timeout=5000)

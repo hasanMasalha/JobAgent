@@ -148,6 +148,49 @@ def _run_login_flow(user_id: str) -> None:
             _login_sessions[user_id] = "error"
 
 
+async def check_linkedin_session_valid(user_id: str) -> bool:
+    """Verify the LinkedIn session is still live by loading /feed headlessly.
+
+    Returns True immediately (no browser) when a login just succeeded in-memory,
+    and False immediately when a login is in progress, to avoid launching a
+    second browser that would conflict with the visible login window.
+    """
+    in_memory = _login_sessions.get(user_id)
+    if in_memory == "success":
+        return True
+    if in_memory == "pending":
+        return False
+    if not _has_saved_session(user_id):
+        return False
+
+    profile_dir = _profile_dir(user_id)
+    try:
+        async with async_playwright() as p:
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                headless=True,
+                args=["--no-sandbox"],
+            )
+            page = await context.new_page()
+            await page.goto(
+                "https://www.linkedin.com/feed",
+                wait_until="domcontentloaded",
+                timeout=15000,
+            )
+            await page.wait_for_timeout(2000)
+            current_url = page.url
+            is_valid = (
+                "linkedin.com/feed" in current_url
+                or "linkedin.com/in/" in current_url
+                or "linkedin.com/mynetwork" in current_url
+            )
+            await context.close()
+            return is_valid
+    except Exception as e:
+        print(f"[linkedin_auth] session check error for {user_id}: {e}")
+        return False
+
+
 # ── endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/linkedin/start-login")
@@ -176,3 +219,10 @@ async def session_status(user_id: str):
         "connected": connected,
         "login_status": in_memory,
     }
+
+
+@router.get("/linkedin/session-valid/{user_id}")
+async def check_session_valid(user_id: str):
+    """Real session validation via headless Playwright — takes 5-10 seconds."""
+    is_valid = await check_linkedin_session_valid(user_id)
+    return {"valid": is_valid, "login_status": _login_sessions.get(user_id)}

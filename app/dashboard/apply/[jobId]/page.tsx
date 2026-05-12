@@ -24,7 +24,7 @@ export default function ApplyPage() {
   const [data, setData] = useState<PrepareResult | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitResult, setSubmitResult] = useState<{ status: string; message: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ status: string; message: string; reconnectUrl?: string } | null>(null);
   const [downloadingCv, setDownloadingCv] = useState(false);
 
   useEffect(() => {
@@ -96,6 +96,8 @@ export default function ApplyPage() {
       } else if (json.status === "manual") {
         showToast("Cover letter saved — finish applying via the link below", "error");
         // Don't auto-redirect — let user see the manual apply button
+      } else if (json.status === "session_expired") {
+        // Don't auto-redirect — show amber reconnect banner
       } else {
         showToast("Something went wrong — check applications", "error");
         setTimeout(() => router.push("/dashboard/applications"), 2000);
@@ -138,6 +140,32 @@ export default function ApplyPage() {
 
   /* ── Submitting / Done ── */
   if (stage === "submitting") {
+    // Session expired — show amber reconnect banner
+    if (submitResult?.status === "session_expired") {
+      return (
+        <div className="max-w-2xl mx-auto mt-12">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="font-medium text-amber-800">LinkedIn session expired</p>
+            <p className="text-amber-700 text-sm mt-1">
+              Your LinkedIn connection needs to be refreshed before you can apply.
+            </p>
+            <a
+              href="/dashboard/profile"
+              className="mt-3 inline-block bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              Reconnect LinkedIn →
+            </a>
+          </div>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:underline"
+          >
+            ← Back to dashboard
+          </button>
+        </div>
+      );
+    }
+
     // Manual apply — stay on page and show clear CTA
     if (submitResult?.status === "manual") {
       return (
