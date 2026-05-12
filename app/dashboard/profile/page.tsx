@@ -42,6 +42,7 @@ function ProfileContent() {
 
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
+  const [linkedinChecking, setLinkedinChecking] = useState(true);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinModal, setLinkedinModal] = useState(false);
   const [linkedinError, setLinkedinError] = useState("");
@@ -69,11 +70,12 @@ function ProfileContent() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    // Check LinkedIn session status on mount
+    // Check LinkedIn session status on mount — real Playwright validation (5-10 s)
     fetch("/api/linkedin/session-status")
       .then((r) => r.json())
-      .then((d) => { if (d.connected) setLinkedinConnected(true); })
-      .catch(() => {});
+      .then((d) => { setLinkedinConnected(!!d.connected); })
+      .catch(() => {})
+      .finally(() => setLinkedinChecking(false));
 
     // Check Google Calendar connection status on mount
     fetch("/api/auth/google/status")
@@ -112,12 +114,14 @@ function ProfileContent() {
       return;
     }
 
-    // Poll every 3 s for up to 2 minutes
+    // Poll every 3 s for up to 2 minutes.
+    // Uses /login-poll (fast in-memory check) — NOT /session-status — so the
+    // heavy Playwright validation never runs while the login browser is open.
     let elapsed = 0;
     pollRef.current = setInterval(async () => {
       elapsed += 3;
       try {
-        const res = await fetch("/api/linkedin/session-status");
+        const res = await fetch("/api/linkedin/login-poll");
         const data = await res.json();
         if (data.connected) {
           clearInterval(pollRef.current!);
@@ -263,7 +267,7 @@ function ProfileContent() {
                   A browser window is opening on this machine. Log in to LinkedIn normally —
                   the window will close automatically once you&apos;re signed in.
                 </p>
-                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-5">
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-3">
                   <span className="inline-flex gap-0.5">
                     <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -271,6 +275,19 @@ function ProfileContent() {
                   </span>
                   <span className="text-sm text-blue-700">Waiting for login… (up to 2 minutes)</span>
                 </div>
+                <button
+                  onClick={async () => {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    await fetch("/api/linkedin/force-connected", { method: "POST" });
+                    setLinkedinConnected(true);
+                    setLinkedinConnecting(false);
+                    setLinkedinModal(false);
+                    showToast("LinkedIn connected!", "success");
+                  }}
+                  className="text-sm text-blue-600 hover:underline mb-5 block"
+                >
+                  I&apos;ve logged in — mark as connected
+                </button>
               </>
             ) : null}
             {linkedinError && (
@@ -456,7 +473,9 @@ function ProfileContent() {
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
             <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
           </div>
-          {linkedinConnected ? (
+          {linkedinChecking ? (
+            <span className="text-xs text-gray-400 italic shrink-0">Verifying LinkedIn connection…</span>
+          ) : linkedinConnected ? (
             <div className="flex items-center gap-3 shrink-0">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
@@ -486,7 +505,7 @@ function ProfileContent() {
             </div>
           )}
         </div>
-        {!linkedinConnected && (
+        {!linkedinChecking && !linkedinConnected && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
             Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
           </p>
