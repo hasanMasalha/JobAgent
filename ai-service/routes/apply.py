@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import tempfile
 
 import anthropic
@@ -364,60 +365,65 @@ async def _handle_easy_apply_modal(
     screenshot_path: str,
 ) -> dict:
     max_steps = 10
+    os.makedirs("screenshots", exist_ok=True)
 
     for step in range(max_steps):
-        await page.wait_for_timeout(1000)
+        await page.wait_for_timeout(1500)
+
+        # Per-step screenshot for debugging
+        try:
+            await page.screenshot(
+                path=f"screenshots/easy_apply_step_{step + 1}.png", full_page=False
+            )
+        except Exception:
+            pass
 
         # ── 1. Submit button → final step ────────────────────────────────────
+        # "Review your application" is a NAVIGATION button, NOT submit — keep it out of here
         submit = page.locator(
-            "button[aria-label*='Submit'], "
-            "button:has-text('Submit application'), "
-            "button:has-text('Review your application')"
+            "button[aria-label*='Submit application'], "
+            "button:has-text('Submit application')"
         )
         if await submit.count() > 0:
-            # Take screenshot before submitting
+            print(f"Step {step + 1}: Review — submitting")
             try:
                 await page.screenshot(path=screenshot_path, full_page=False)
             except Exception:
                 pass
             await submit.last.click()
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
             return {"status": "applied", "message": "Application submitted via LinkedIn Easy Apply"}
 
-        # ── 2. CV / Resume upload ─────────────────────────────────────────────
-        try:
+        # ── 2. Resume step (detected by heading) ─────────────────────────────
+        resume_heading = page.locator(
+            "h3:has-text('Resume'), legend:has-text('Resume'), h2:has-text('Resume')"
+        ).first
+        if await resume_heading.count() > 0:
+            print(f"Step {step + 1}: Resume selection")
             file_input = page.locator("input[type='file']").first
-            if await file_input.is_visible(timeout=1000):
-                await file_input.set_input_files(pdf_path)
-            else:
-                upload_btn = page.locator(
-                    "button:has-text('Upload resume'), "
-                    "label:has-text('Upload resume'), "
-                    "button:has-text('Upload')"
-                ).first
-                if await upload_btn.is_visible(timeout=800):
-                    await upload_btn.click()
-                    await page.wait_for_timeout(600)
-                    await page.locator("input[type='file']").first.set_input_files(pdf_path)
-        except Exception:
-            pass
+            uploaded = False
+            if await file_input.count() > 0 and pdf_path:
+                try:
+                    await file_input.set_input_files(pdf_path)
+                    await page.wait_for_timeout(1500)
+                    uploaded = True
+                    print("  Uploaded tailored CV")
+                except Exception:
+                    pass
+            if not uploaded:
+                # Select first saved resume radio if no file upload
+                first_radio = page.locator("input[type='radio']").first
+                if await first_radio.count() > 0:
+                    await first_radio.click()
+                    print("  Selected first saved resume")
+            await page.wait_for_timeout(500)
 
-        # ── 3. Cover letter textarea ──────────────────────────────────────────
-        try:
-            cl = page.locator(
-                "textarea[id*='cover'], textarea[name*='cover'], "
-                "textarea[placeholder*='cover'], textarea[placeholder*='Cover'], "
-                "textarea[placeholder*='Write a cover']"
-            ).first
-            if await cl.is_visible(timeout=800):
-                current = await cl.input_value()
-                if not current:
-                    await cl.fill(cover_letter)
-        except Exception:
-            pass
-
-        # ── 4. Text / tel inputs that are empty ───────────────────────────────
-        try:
+        # ── 3. Additional Questions step (detected by heading) ────────────────
+        questions_heading = page.locator(
+            "h3:has-text('Additional Questions'), h2:has-text('Additional Questions')"
+        ).first
+        if await questions_heading.count() > 0:
+            print(f"Step {step + 1}: Additional Questions")
             inputs: list[ElementHandle] = await page.query_selector_all(
                 "input[type='text'], input[type='tel'], input[type='number'], textarea"
             )
@@ -435,10 +441,45 @@ async def _handle_easy_apply_modal(
                         await asyncio.sleep(0.3)
                 except Exception:
                     pass
+
+        # ── 4. Contact / generic text inputs (all other steps) ───────────────
+        else:
+            try:
+                inputs = await page.query_selector_all(
+                    "input[type='text'], input[type='tel'], input[type='number'], textarea"
+                )
+                for inp in inputs[:10]:
+                    try:
+                        current_val = await inp.input_value()
+                        if current_val:
+                            continue
+                        label = await _get_field_label(page, inp)
+                        if not label:
+                            continue
+                        value = await _get_answer_for_field(label, user)
+                        if value:
+                            await inp.fill(value)
+                            await asyncio.sleep(0.3)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # ── 5. Cover letter textarea ──────────────────────────────────────────
+        try:
+            cl = page.locator(
+                "textarea[id*='cover'], textarea[name*='cover'], "
+                "textarea[placeholder*='cover'], textarea[placeholder*='Cover'], "
+                "textarea[placeholder*='Write a cover']"
+            ).first
+            if await cl.is_visible(timeout=800):
+                current = await cl.input_value()
+                if not current:
+                    await cl.fill(cover_letter)
         except Exception:
             pass
 
-        # ── 5. Dropdowns — pick first non-placeholder option ──────────────────
+        # ── 6. Dropdowns — prefer "Yes", else first non-placeholder option ────
         try:
             selects: list[ElementHandle] = await page.query_selector_all("select")
             for sel in selects[:5]:
@@ -446,14 +487,18 @@ async def _handle_easy_apply_modal(
                     options: list[ElementHandle] = await sel.query_selector_all("option")
                     if len(options) > 1:
                         current = await sel.input_value()
-                        if not current or current == options[0].get_attribute("value"):
-                            await sel.select_option(index=1)
+                        option_texts = [await o.inner_text() for o in options]
+                        if not current or current == await options[0].get_attribute("value"):
+                            if "Yes" in option_texts:
+                                await sel.select_option(label="Yes")
+                            else:
+                                await sel.select_option(index=1)
                 except Exception:
                     pass
         except Exception:
             pass
 
-        # ── 6. Radio buttons — prefer "Yes", else first option ────────────────
+        # ── 7. Radio buttons — prefer "Yes", else first option ────────────────
         try:
             fieldsets = await page.locator("fieldset").all()
             for fieldset in fieldsets[:8]:
@@ -461,13 +506,17 @@ async def _handle_easy_apply_modal(
                     radios = await fieldset.locator("input[type='radio']").all()
                     if not radios:
                         continue
-                    already_checked = any(
-                        await r.is_checked() for r in radios
-                        if not isinstance(await r.is_checked(), Exception)
-                    )
+                    # Can't use await inside a generator passed to any() — iterate explicitly
+                    already_checked = False
+                    for r in radios:
+                        try:
+                            if await r.is_checked():
+                                already_checked = True
+                                break
+                        except Exception:
+                            pass
                     if already_checked:
                         continue
-                    # Try to find a "Yes" option
                     yes_clicked = False
                     for radio in radios:
                         try:
@@ -488,11 +537,9 @@ async def _handle_easy_apply_modal(
         except Exception:
             pass
 
-        # ── 7. Checkboxes (e.g. privacy policy) ──────────────────────────────
+        # ── 8. Checkboxes (e.g. privacy policy) ──────────────────────────────
         try:
-            checkboxes = await page.locator(
-                "input[type='checkbox']:not(:checked)"
-            ).all()
+            checkboxes = await page.locator("input[type='checkbox']:not(:checked)").all()
             for cb in checkboxes[:3]:
                 try:
                     await cb.click()
@@ -501,21 +548,41 @@ async def _handle_easy_apply_modal(
         except Exception:
             pass
 
-        # ── 8. Click Next / Continue / Review ────────────────────────────────
-        next_btn = page.locator(
-            "button[aria-label*='Next'], "
-            "button[aria-label*='Continue'], "
-            "button[aria-label*='Review'], "
-            "button:has-text('Next'), "
-            "button:has-text('Continue')"
-        ).last
-        if await next_btn.count() > 0:
-            await next_btn.click()
-        else:
-            return {
-                "status": "failed",
-                "message": f"Stuck on step {step + 1} — no Next or Submit button found",
-            }
+        # ── 9. Navigate: Review your application → Next → Continue ────────────
+        # "Review your application" advances to the review/submit page — try it first
+        navigated = False
+        for btn_text in ["Review your application", "Review", "Next", "Continue"]:
+            btn = page.locator(f"button:has-text('{btn_text}')").last
+            if await btn.count() > 0:
+                print(f"  Clicking '{btn_text}' button")
+                await btn.scroll_into_view_if_needed()
+                await btn.click()
+                await page.wait_for_timeout(1000)
+                navigated = True
+                break
+
+        if not navigated:
+            # Try aria-label variants as fallback
+            btn = page.locator(
+                "button[aria-label*='Next'], "
+                "button[aria-label*='Continue'], "
+                "button[aria-label*='Review']"
+            ).last
+            if await btn.count() > 0:
+                await btn.click()
+                await page.wait_for_timeout(1000)
+            else:
+                print(f"  No navigation button found on step {step + 1}")
+                try:
+                    await page.screenshot(
+                        path=f"screenshots/stuck_step_{step + 1}.png", full_page=False
+                    )
+                except Exception:
+                    pass
+                return {
+                    "status": "failed",
+                    "message": f"Stuck on step {step + 1} — no Next or Submit button found",
+                }
 
     return {"status": "failed", "message": "Exceeded maximum steps (10)"}
 
@@ -527,13 +594,26 @@ async def _apply_linkedin(
     cover_letter: str,
     screenshot_path: str,
 ) -> dict:
+    await page.wait_for_load_state("domcontentloaded", timeout=15_000)
     await page.wait_for_timeout(2000)
+
+    # Detect LinkedIn auth wall — session expired or cookies not loaded
+    current_url = page.url
+    if any(s in current_url for s in ("/login", "/checkpoint", "authwall", "/signup")):
+        return {
+            "status": "failed",
+            "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
+        }
 
     easy_apply = page.locator("button:has-text('Easy Apply')").first
     try:
         await easy_apply.wait_for(state="visible", timeout=5000)
     except Exception:
-        return {"status": "manual", "message": "No Easy Apply button — apply via the job link"}
+        try:
+            await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
+        except Exception:
+            pass
+        return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
 
     await easy_apply.click()
     await page.wait_for_timeout(1500)
@@ -541,10 +621,98 @@ async def _apply_linkedin(
     return await _handle_easy_apply_modal(page, user, pdf_path, cover_letter, screenshot_path)
 
 
+# ── Playwright runner (thread-isolated to get ProactorEventLoop on Windows) ────
+
+async def _playwright_apply(
+    job_url: str,
+    is_linkedin: bool,
+    is_indeed: bool,
+    user_data: dict,
+    pdf_path: str,
+    cover_letter: str,
+    screenshot_path: str,
+    profile_dir: str,
+) -> dict:
+    if is_linkedin:
+        has_cookies = (
+            os.path.exists(os.path.join(profile_dir, "Default", "Network", "Cookies"))
+            or os.path.exists(os.path.join(profile_dir, "Default", "Cookies"))
+            or os.path.exists(os.path.join(profile_dir, "Cookies"))
+        )
+        if not has_cookies:
+            return {
+                "status": "failed",
+                "message": "LinkedIn session not found. Please connect your LinkedIn account in Settings → LinkedIn before applying.",
+            }
+
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            profile_dir,
+            headless=False,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+        )
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        try:
+            await page.goto(job_url, timeout=30_000)
+            if is_indeed:
+                return await _apply_indeed(
+                    page,
+                    user_data["first_name"],
+                    user_data["last_name"],
+                    user_data["email"],
+                    "",
+                    pdf_path,
+                    cover_letter,
+                    screenshot_path,
+                )
+            else:
+                return await _apply_linkedin(
+                    page, user_data, pdf_path, cover_letter, screenshot_path
+                )
+        except Exception as e:
+            return {"status": "failed", "message": str(e)}
+        finally:
+            await ctx.close()
+
+
+def _run_in_proactor_thread(*args) -> dict:
+    """Run _playwright_apply in a thread with an explicit ProactorEventLoop.
+
+    uvicorn imports the app *inside* asyncio.run(), so setting the policy in
+    main.py is too late — the loop is already a SelectorEventLoop by then.
+    Creating a ProactorEventLoop explicitly in a worker thread is the only
+    reliable way to give Playwright subprocess support on Windows.
+    """
+    if sys.platform == "win32":
+        loop = asyncio.ProactorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_playwright_apply(*args))
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+
 # ── main handler ───────────────────────────────────────────────────────────────
 
 @router.post("/apply")
 async def apply_to_job(req: ApplyRequest):
+    import json as _json
+
     is_linkedin = "linkedin.com" in req.job_url
     is_indeed = "indeed.com" in req.job_url
 
@@ -561,6 +729,10 @@ async def apply_to_job(req: ApplyRequest):
             req.application_id,
             req.user_id,
         )
+        cv = await conn.fetchrow(
+            'SELECT skills_json FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            req.user_id,
+        )
     finally:
         await conn.close()
 
@@ -575,6 +747,13 @@ async def apply_to_job(req: ApplyRequest):
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""
 
+    skills_json: dict = {}
+    if cv and cv["skills_json"]:
+        try:
+            skills_json = _json.loads(cv["skills_json"]) if isinstance(cv["skills_json"], str) else cv["skills_json"]
+        except Exception:
+            pass
+
     user_data = {
         "first_name": first_name,
         "last_name": last_name,
@@ -583,6 +762,8 @@ async def apply_to_job(req: ApplyRequest):
         "city": "",
         "linkedin_url": "",
         "portfolio_url": "",
+        "years_experience": skills_json.get("years_experience", 0),
+        "skills": skills_json.get("skills", []),
     }
 
     tailored_cv = application["tailored_cv"] or ""
@@ -599,43 +780,12 @@ async def apply_to_job(req: ApplyRequest):
     os.makedirs("screenshots", exist_ok=True)
     screenshot_path = os.path.join("screenshots", f"{req.application_id}.png")
 
-    async with async_playwright() as p:
-        ctx = await p.chromium.launch_persistent_context(
-            profile_dir,
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-            ],
-            ignore_default_args=["--enable-automation"],
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        try:
-            await page.goto(req.job_url, timeout=30_000)
-
-            if is_indeed:
-                result = await _apply_indeed(
-                    page, first_name, last_name, email, "",
-                    pdf_path, cover_letter, screenshot_path,
-                )
-            else:
-                result = await _apply_linkedin(
-                    page, user_data, pdf_path, cover_letter, screenshot_path,
-                )
-
-            return result
-
-        except Exception as e:
-            return {"status": "failed", "message": str(e)}
-        finally:
-            await ctx.close()
+    return await asyncio.to_thread(
+        _run_in_proactor_thread,
+        req.job_url, is_linkedin, is_indeed,
+        user_data, pdf_path, cover_letter,
+        screenshot_path, profile_dir,
+    )
 
 
 # ── PDF download ───────────────────────────────────────────────────────────────

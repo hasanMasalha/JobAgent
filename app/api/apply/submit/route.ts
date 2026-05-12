@@ -50,9 +50,16 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ job_url, application_id, user_id: user.id }),
         signal: AbortSignal.timeout(120_000),
       });
-      pythonData = await pythonRes.json();
+      if (pythonRes.ok) {
+        pythonData = await pythonRes.json();
+      } else {
+        const text = await pythonRes.text();
+        console.error("[apply/submit] python error:", pythonRes.status, text);
+        pythonData = { status: "failed", message: `Apply service error (${pythonRes.status})` };
+      }
     } catch (e) {
       console.error("[apply/submit] python call failed:", e);
+      pythonData = { status: "failed", message: e instanceof Error ? e.message : "Could not reach apply service" };
     }
 
     // Update application status
