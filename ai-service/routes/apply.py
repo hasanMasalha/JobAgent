@@ -384,6 +384,9 @@ async def _handle_easy_apply_modal(
             "button[aria-label*='Submit application'], "
             "button:has-text('Submit application')"
         )
+        # get_by_role fallback — handles shadow-DOM-wrapped artdeco buttons
+        if await submit.count() == 0:
+            submit = page.get_by_role("button", name="Submit application")
         if await submit.count() > 0:
             print(f"Step {step + 1}: Review — submitting")
             try:
@@ -553,10 +556,15 @@ async def _handle_easy_apply_modal(
         navigated = False
         for btn_text in ["Review your application", "Review", "Next", "Continue"]:
             btn = page.locator(f"button:has-text('{btn_text}')").last
+            if await btn.count() == 0:
+                btn = page.get_by_role("button", name=btn_text)
             if await btn.count() > 0:
                 print(f"  Clicking '{btn_text}' button")
-                await btn.scroll_into_view_if_needed()
-                await btn.click()
+                try:
+                    await btn.last.scroll_into_view_if_needed()
+                except Exception:
+                    pass
+                await btn.last.click()
                 await page.wait_for_timeout(1000)
                 navigated = True
                 break
@@ -594,7 +602,14 @@ async def _apply_linkedin(
     cover_letter: str,
     screenshot_path: str,
 ) -> dict:
-    await page.wait_for_load_state("domcontentloaded", timeout=15_000)
+    # Wait for the page to be fully interactive, not just HTML-parsed.
+    # LinkedIn's Easy Apply button is rendered by React after domcontentloaded,
+    # so waiting for networkidle gives JS time to inject it.
+    try:
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+    except Exception:
+        # networkidle can time out on heavy pages — domcontentloaded is the fallback
+        await page.wait_for_load_state("domcontentloaded", timeout=15_000)
     await page.wait_for_timeout(2000)
 
     # Detect LinkedIn auth wall — session expired or cookies not loaded
@@ -605,18 +620,110 @@ async def _apply_linkedin(
             "message": "LinkedIn session expired. Please reconnect your LinkedIn account in Settings → LinkedIn.",
         }
 
-    easy_apply = page.locator("button:has-text('Easy Apply')").first
-    try:
-        await easy_apply.wait_for(state="visible", timeout=5000)
-    except Exception:
-        try:
-            await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
-        except Exception:
-            pass
-        return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
+    # LinkedIn wraps the Easy Apply button in a custom web component (<artdeco-button>)
+    # whose inner <button> lives inside a shadow DOM — invisible to querySelectorAll('button')
+    # and standard CSS locators.  get_by_role() uses the browser's Accessibility Object
+    # Model which penetrates shadow roots natively, so it finds the button even when
+    # all other approaches fail.
 
-    await easy_apply.click()
-    await page.wait_for_timeout(1500)
+    # Selector list covers fallbacks: role-based (AOM), CSS class, non-button elements.
+    _easy_apply_selectors = [
+        "button:has-text('Easy Apply')",
+        "[role='button']:has-text('Easy Apply')",
+        "a:has-text('Easy Apply')",
+        "button[aria-label*='Easy Apply']",
+        "[aria-label*='Easy Apply']",
+        ".jobs-apply-button",
+        "[data-control-name*='apply']",
+    ]
+
+    easy_apply = None
+
+    # 1. Role-based locator first — uses AOM, penetrates closed shadow roots
+    for _attempt in range(15):
+        # get_by_role is the most reliable: uses accessibility tree not DOM structure
+        role_btn = page.get_by_role("button", name="Easy Apply")
+        if await role_btn.count() > 0:
+            easy_apply = role_btn.first
+            print("[apply] Found Easy Apply via get_by_role (AOM)")
+            break
+
+        # 2. CSS/text selectors across all frames as secondary approach
+        for frame in page.frames:
+            for sel in _easy_apply_selectors:
+                try:
+                    btn = frame.locator(sel).first
+                    if await btn.count() > 0:
+                        easy_apply = btn
+                        print(f"[apply] Found Easy Apply in frame '{frame.name}' with '{sel}'")
+                        break
+                except Exception:
+                    continue
+            if easy_apply:
+                break
+        if easy_apply:
+            break
+        await page.wait_for_timeout(1000)
+
+    # JS that traverses ALL element types (not just <button>) and recurses into
+    # open shadow roots — catches divs/anchors with button role, custom elements.
+    _js_click = """
+        () => {
+            function deepClick(root) {
+                const candidates = root.querySelectorAll(
+                    'button, a, [role="button"], [type="button"]'
+                );
+                for (const el of candidates) {
+                    const text = el.textContent || '';
+                    const label = el.getAttribute('aria-label') || '';
+                    if (text.includes('Easy Apply') || label.includes('Easy Apply')) {
+                        el.dispatchEvent(new MouseEvent('click',
+                            {bubbles: true, cancelable: true, composed: true}));
+                        return true;
+                    }
+                }
+                // Recurse into open shadow roots (closed roots return null)
+                for (const el of root.querySelectorAll('*')) {
+                    if (el.shadowRoot && deepClick(el.shadowRoot)) return true;
+                }
+                return false;
+            }
+            return deepClick(document);
+        }
+    """
+
+    if easy_apply is None:
+        # 3. JS fallback across all frames — deepClick handles nested shadow DOMs
+        js_clicked = False
+        for frame in page.frames:
+            try:
+                js_clicked = await frame.evaluate(_js_click)
+                if js_clicked:
+                    print(f"[apply] Clicked Easy Apply via JS deepClick in frame '{frame.name}'")
+                    break
+            except Exception:
+                continue
+
+        if not js_clicked:
+            try:
+                await page.screenshot(path=screenshot_path.replace(".png", "_no_easy_apply.png"), full_page=True)
+            except Exception:
+                pass
+            # Save page HTML so we can inspect exactly what LinkedIn served
+            try:
+                html = await page.content()
+                html_path = screenshot_path.replace(".png", "_page_source.html")
+                with open(html_path, "w", encoding="utf-8") as _f:
+                    _f.write(html)
+                print(f"[apply] Saved page source to {html_path}")
+            except Exception:
+                pass
+            return {"status": "manual", "message": "No Easy Apply button found on this job — apply manually via the link."}
+
+        await page.wait_for_timeout(2000)
+    else:
+        await easy_apply.click()
+        await page.wait_for_timeout(1500)
 
     return await _handle_easy_apply_modal(page, user, pdf_path, cover_letter, screenshot_path)
 
@@ -654,6 +761,10 @@ async def _playwright_apply(
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--flag-switches-begin",
+                "--disable-site-isolation-trials",
+                "--flag-switches-end",
             ],
             ignore_default_args=["--enable-automation"],
             user_agent=(
@@ -663,6 +774,13 @@ async def _playwright_apply(
             ),
             viewport={"width": 1280, "height": 800},
         )
+        # Remove automation fingerprint signals that LinkedIn uses to detect bots
+        await ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            window.chrome = { runtime: {} };
+        """)
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
             await page.goto(job_url, timeout=30_000)
