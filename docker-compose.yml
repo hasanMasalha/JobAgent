@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  nextjs:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PYTHON_SERVICE_URL=http://fastapi:8000
+    depends_on:
+      - fastapi
+
+  fastapi:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./ai-service/companies.csv:/app/companies.csv
+      - ./ai-service/browser_profile:/app/browser_profile
+      - ./ai-service/screenshots:/app/screenshots
