@@ -36,6 +36,9 @@ __pycache__/
 # ai-service browser profile
 ai-service/browser_profile
 
+# ai-service runtime artifacts
+ai-service/screenshots/
+
 # vercel
 .vercel
 

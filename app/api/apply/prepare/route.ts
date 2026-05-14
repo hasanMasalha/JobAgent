@@ -31,14 +31,28 @@ export async function POST(req: NextRequest) {
     }
     const { raw_text } = cvRows[0];
 
-    // Fetch Job
-    const jobRows = await db.$queryRaw<{ title: string; company: string; description: string; url: string }[]>`
-      SELECT title, company, description, url FROM "Job" WHERE id = ${job_id} LIMIT 1
+    // Fetch Job + compute cosine similarity against user's CV embedding
+    const jobRows = await db.$queryRaw<{
+      title: string;
+      company: string;
+      description: string;
+      url: string;
+      match_score: number | null;
+    }[]>`
+      SELECT j.title, j.company, j.description, j.url,
+             CASE WHEN c.embedding IS NOT NULL AND j.embedding IS NOT NULL
+                  THEN CAST(1 - (c.embedding <=> j.embedding) AS FLOAT)
+                  ELSE NULL END AS match_score
+      FROM "Job" j
+      LEFT JOIN "CV" c ON c.user_id = ${user.id}
+      WHERE j.id = ${job_id}
+      LIMIT 1
     `;
     if (!jobRows.length) {
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
     }
     const job = jobRows[0];
+    const matchScore: number | null = job.match_score;
 
     // Call Claude Sonnet to tailor CV
     const prompt =
@@ -56,6 +70,14 @@ export async function POST(req: NextRequest) {
       `- Professional summary: 2 sentences maximum\n` +
       `- Do not add new sections that weren't in the original CV\n` +
       `- Do not expand content — reword and emphasize, do not add\n\n` +
+      `CRITICAL RULES FOR TAILORING:\n` +
+      `- Only emphasize skills and experience the candidate ACTUALLY HAS — never fabricate or exaggerate\n` +
+      `- Do not reframe the candidate's identity — if they are a software engineer, keep them as a software engineer\n` +
+      `- Only highlight genuinely relevant experience for this role\n` +
+      `- If the candidate's background does not match the role requirements at all, write an honest cover letter noting transferable skills rather than misrepresenting experience\n` +
+      `- Never change job titles or invent experience that does not exist in the original CV\n` +
+      `- Maximum change allowed: reorder sections, emphasize relevant existing skills, improve bullet point wording\n` +
+      `- The candidate's core identity and actual experience must remain truthful and accurate\n\n` +
       `CV:\n${raw_text}\n\n` +
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;
@@ -118,6 +140,7 @@ export async function POST(req: NextRequest) {
         job_title: job.title,
         company: job.company,
         job_url: job.url,
+        match_score: matchScore,
       });
     }
 
@@ -137,6 +160,7 @@ export async function POST(req: NextRequest) {
       job_title: job.title,
       company: job.company,
       job_url: job.url,
+      match_score: matchScore,
     });
   } catch (err) {
     console.error("[apply/prepare]", err);
