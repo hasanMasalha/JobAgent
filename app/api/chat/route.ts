@@ -179,13 +179,14 @@ async function executeTool(
       const minScore = (input.min_score as number) ?? 0;
       const limit = (input.limit as number) ?? 10;
 
-      return (jobs as {
+      type MatchJob = {
         title: string; company: string; claude_score: number;
         location?: string; reasons?: string[]; gaps?: string[];
-      }[])
-        .filter((j) => j.claude_score >= minScore)
+      };
+      return (jobs as MatchJob[])
+        .filter((j: MatchJob) => j.claude_score >= minScore)
         .slice(0, limit)
-        .map((j) => ({
+        .map((j: MatchJob) => ({
           title: j.title,
           company: j.company,
           score: j.claude_score,
@@ -206,7 +207,7 @@ async function executeTool(
         orderBy: { applied_at: "desc" },
       });
 
-      return apps.map((a) => ({
+      return apps.map((a: (typeof apps)[number]) => ({
         title: a.job.title,
         company: a.job.company,
         location: a.job.location,
@@ -226,7 +227,7 @@ async function executeTool(
       for (const s of stats) {
         result[s.status] = s._count.status;
       }
-      result.total = Object.values(result).reduce((a, b) => a + b, 0);
+      result.total = Object.values(result).reduce((a: number, b: number) => a + b, 0);
       return result;
     }
 

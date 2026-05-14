@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      jobs: jobs.map((j) => ({ ...j, description: j.description?.slice(0, 300) ?? "" })),
+      jobs: jobs.map((j: (typeof jobs)[number]) => ({ ...j, description: j.description?.slice(0, 300) ?? "" })),
       total,
       page,
       total_pages: Math.ceil(total / limit),
