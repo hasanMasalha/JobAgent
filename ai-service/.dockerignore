@@ -1,0 +1,6 @@
+__pycache__
+*.pyc
+.env
+browser_profile
+screenshots
+*.log
