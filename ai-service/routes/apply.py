@@ -805,16 +805,14 @@ async def _playwright_apply(
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             profile_dir,
-            headless=False,
+            headless=True,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-features=IsolateOrigins,site-per-process",
-                "--flag-switches-begin",
-                "--disable-site-isolation-trials",
-                "--flag-switches-end",
+                "--window-size=1280,800",
             ],
             ignore_default_args=["--enable-automation"],
             user_agent=(
@@ -826,9 +824,15 @@ async def _playwright_apply(
         )
         # Remove automation fingerprint signals that LinkedIn uses to detect bots
         await ctx.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en', 'he']
+            });
             window.chrome = { runtime: {} };
         """)
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
