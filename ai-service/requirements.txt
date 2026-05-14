@@ -13,3 +13,5 @@ python-multipart
 httpx
 beautifulsoup4
 reportlab
+pytest
+pytest-asyncio
