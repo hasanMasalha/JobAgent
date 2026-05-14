@@ -17,7 +17,7 @@ function buildPrompt(data: CVFormData): string {
         `  Role: ${e.title} at ${e.company}`,
         `  Period: ${period}`,
         e.location ? `  Location: ${e.location}` : "",
-        e.description ? `  Description:\n${e.description.split("\n").map((l) => `    ${l}`).join("\n")}` : "",
+        e.description ? `  Description:\n${e.description.split("\n").map((l: string) => `    ${l}`).join("\n")}` : "",
       ]
         .filter(Boolean)
         .join("\n");

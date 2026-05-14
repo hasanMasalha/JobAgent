@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const { raw_text, skills_json, hyperlinks_json } = rows[0];
 
     // Derive job title from skills_json or first line of CV
-    const firstLine = raw_text.split("\n").find((l) => l.trim()) ?? "CV";
+    const firstLine = raw_text.split("\n").find((l: string) => l.trim()) ?? "CV";
     const jobTitle = skills_json?.skills?.[0] ?? firstLine;
     const hyperlinks = JSON.parse(hyperlinks_json ?? "[]");
 
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       .replace(/\s+/g, "_")
       .slice(0, 60);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type":

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       const idRows = await db.$queryRaw<{ job_id: string }[]>`
         SELECT job_id FROM "Application" WHERE user_id = ${user.id}
       `;
-      return NextResponse.json({ appliedJobIds: idRows.map((r) => r.job_id) });
+      return NextResponse.json({ appliedJobIds: idRows.map((r: { job_id: string }) => r.job_id) });
     }
 
     const rows = await db.$queryRaw<

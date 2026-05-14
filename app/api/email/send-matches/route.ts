@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     // Use a flat score of 75 for newly scraped jobs (full scoring happens via /match-jobs)
     // If match_cache is available we could use those scores — keeping it simple here
-    const topMatches = matches.slice(0, 5).map((j) => ({
+    const topMatches = matches.slice(0, 5).map((j: (typeof matches)[number]) => ({
       title: j.title,
       company: j.company,
       location: j.location ?? "Israel",

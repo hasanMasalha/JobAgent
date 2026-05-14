@@ -48,7 +48,7 @@ export async function GET(
 
     const buffer = await generateCVDocx(tailored_cv, job_title, hyperlinks);
 
-    const nameFromCv = (tailored_cv.split("\n").find((l) => l.trim()) ?? "")
+    const nameFromCv = (tailored_cv.split("\n").find((l: string) => l.trim()) ?? "")
       .replace(/[^a-zA-Z0-9 ]/g, "")
       .trim();
     const nameFromEmail = (user.email ?? "").split("@")[0];
@@ -57,7 +57,7 @@ export async function GET(
       .slice(0, 60);
     const filename = `${displayName}_CV.docx`;
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
