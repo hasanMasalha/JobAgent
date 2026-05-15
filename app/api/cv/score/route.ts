@@ -3,9 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
-const anthropic = new Anthropic({ maxRetries: 3 });
-
 export async function POST() {
+  const anthropic = new Anthropic({ maxRetries: 3 });
   try {
     const supabase = createServerClient();
     const {

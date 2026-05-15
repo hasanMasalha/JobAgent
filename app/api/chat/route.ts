@@ -4,8 +4,6 @@ import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { createInterviewEvent } from "@/lib/google-calendar";
 
-const anthropic = new Anthropic();
-
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_my_matches",
@@ -69,6 +67,7 @@ const SYSTEM_PROMPT =
   "Be concise — 2-4 sentences unless listing items. Never make up data; use your tools.";
 
 export async function POST(req: NextRequest) {
+  const anthropic = new Anthropic();
   const supabase = createServerClient();
   const {
     data: { user },

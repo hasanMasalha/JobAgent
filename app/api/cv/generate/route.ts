@@ -3,8 +3,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 function buildPrompt(data: CVFormData): string {
   const { personal, experiences, educations, skillsInfo } = data;
 
@@ -126,6 +124,7 @@ interface CVFormData {
 }
 
 export async function POST(req: NextRequest) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   try {
     const supabase = createServerClient();
     const {

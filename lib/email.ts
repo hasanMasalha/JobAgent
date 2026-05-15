@@ -1,7 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 interface JobMatch {
   title: string;
   company: string;
@@ -16,6 +14,7 @@ export async function sendDailyMatchEmail(params: {
   matchCount: number;
   topMatches: JobMatch[];
 }) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const { userEmail, userName, matchCount, topMatches } = params;
   const firstName = userName?.split(" ")[0] || "there";
 
