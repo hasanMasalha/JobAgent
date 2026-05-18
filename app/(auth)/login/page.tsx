@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
@@ -33,10 +34,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900">
         <div className="flex flex-col items-center mb-6">
-          <img
+          <Image
             src="/logo.png"
             alt="JobAgent"
-            className="h-12 w-auto mb-2"
+            width={48}
+            height={48}
+            className="mb-2"
           />
           <h1 className="text-2xl font-bold">JobAgent</h1>
         </div>
