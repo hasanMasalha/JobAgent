@@ -29,9 +29,9 @@ def test_cv_extraction_prompt_contains_required_fields():
         patch("routes.cv._client", mock_client),
         patch("routes.cv.embed", return_value=fake_vector),
     ):
-        from routes.cv import process_cv
-        from routes.cv import ProcessCVRequest
         import asyncio
+
+        from routes.cv import ProcessCVRequest, process_cv
 
         req = ProcessCVRequest(raw_text="John Doe, Python developer, 3 years", user_id="u1")
         asyncio.run(process_cv(req))
