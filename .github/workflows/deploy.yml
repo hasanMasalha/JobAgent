@@ -1,0 +1,200 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_NEXTJS: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobagent-nextjs
+  ECR_FASTAPI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobagent-fastapi
+
+jobs:
+  # ── JOB 1: TESTS ──
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python deps
+        run: |
+          cd ai-service
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff
+
+      - name: Python lint
+        run: |
+          cd ai-service
+          python -m ruff check .
+
+      - name: Python tests
+        run: |
+          cd ai-service
+          python -m pytest tests/ -v --tb=short
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint . --ext .ts,.tsx --max-warnings 0
+
+      - name: Next.js build check
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
+  # ── JOB 2: BUILD AND PUSH (master only) ──
+  build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Next.js image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }} \
+            -t $ECR_NEXTJS:latest \
+            -t $ECR_NEXTJS:${{ github.sha }} \
+            .
+          docker push $ECR_NEXTJS:latest
+          docker push $ECR_NEXTJS:${{ github.sha }}
+
+      - name: Build and push FastAPI image
+        run: |
+          docker build \
+            -t $ECR_FASTAPI:latest \
+            -t $ECR_FASTAPI:${{ github.sha }} \
+            ./ai-service
+          docker push $ECR_FASTAPI:latest
+          docker push $ECR_FASTAPI:${{ github.sha }}
+
+  # ── JOB 3: DEPLOY (master only) ──
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -e
+
+            # Login to ECR
+            aws ecr get-login-password \
+              --region ${{ secrets.AWS_REGION }} | \
+              docker login \
+              --username AWS \
+              --password-stdin \
+              ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+            # Pull latest images
+            docker pull ${{ env.ECR_NEXTJS }}:latest
+            docker pull ${{ env.ECR_FASTAPI }}:latest
+
+            # Write docker-compose
+            cat > /home/ubuntu/jobagent/docker-compose.yml << 'COMPOSE'
+            version: '3.8'
+            services:
+              nextjs:
+                image: ${{ env.ECR_NEXTJS }}:latest
+                ports:
+                  - "3000:3000"
+                env_file: .env
+                restart: unless-stopped
+                depends_on:
+                  - fastapi
+
+              fastapi:
+                image: ${{ env.ECR_FASTAPI }}:latest
+                ports:
+                  - "8000:8000"
+                env_file: .env
+                volumes:
+                  - ./companies.csv:/app/companies.csv
+                  - browser_profiles:/app/browser_profile
+                  - screenshots:/app/screenshots
+                restart: unless-stopped
+
+            volumes:
+              browser_profiles:
+              screenshots:
+            COMPOSE
+
+            # Start containers
+            cd /home/ubuntu/jobagent
+            docker-compose down || true
+            docker-compose up -d
+
+            # Clean up old images
+            docker image prune -f
+
+            echo "Deployment complete"
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sleep 15
+            curl -sf http://localhost:3000 \
+              && echo "Next.js OK" \
+              || echo "Next.js FAILED"
+            curl -sf http://localhost:8000/health \
+              && echo "FastAPI OK" \
+              || echo "FastAPI FAILED"
