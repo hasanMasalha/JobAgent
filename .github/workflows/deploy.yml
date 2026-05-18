@@ -55,6 +55,9 @@ jobs:
       - name: Install Node deps
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: TypeScript check
         run: npx tsc --noEmit
 
