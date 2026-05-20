@@ -1,6 +1,7 @@
 import logging
 import os
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 import asyncpg
 import httpx
