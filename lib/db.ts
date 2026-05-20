@@ -1,3 +1,6 @@
+import { setDefaultResultOrder } from "dns";
+setDefaultResultOrder("ipv4first");
+
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
