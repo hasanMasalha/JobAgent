@@ -1,7 +1,6 @@
 import logging
 import os
-from datetime import timezone
-UTC = timezone.utc
+from datetime import timezone  # noqa: UP017
 
 import asyncpg
 import httpx
@@ -10,6 +9,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from routes.jobs import scrape_and_store
 from routes.matching import MatchRequest, match_jobs
+
+UTC = timezone.utc  # noqa: UP017 - datetime.UTC requires Python 3.11+
 
 logger = logging.getLogger(__name__)
 
