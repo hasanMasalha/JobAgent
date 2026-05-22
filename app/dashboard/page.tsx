@@ -193,21 +193,6 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    matchObserverRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreJobs();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    if (matchBottomRef.current) {
-      matchObserverRef.current.observe(matchBottomRef.current);
-    }
-    return () => matchObserverRef.current?.disconnect();
-  }, [hasMore, loadingMore, loadMoreJobs]);
-
   const fetchJobs = useCallback(async (isRefresh = false) => {
     setLoading(true);
     setError(null);
@@ -258,6 +243,21 @@ export default function DashboardPage() {
       setLoadingMore(false);
     }
   }, [hasMore, loadingMore, matchPage]);
+
+  useEffect(() => {
+    matchObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreJobs();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    if (matchBottomRef.current) {
+      matchObserverRef.current.observe(matchBottomRef.current);
+    }
+    return () => matchObserverRef.current?.disconnect();
+  }, [hasMore, loadingMore, loadMoreJobs]);
 
   useEffect(() => {
     fetch("/api/profile")
