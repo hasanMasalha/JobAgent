@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const force_refresh = new URL(req.url).searchParams.get("refresh") === "true";
+    const url = new URL(req.url);
+    const force_refresh = url.searchParams.get("refresh") === "true";
+    const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)));
 
     const pythonRes = await fetch(
       `${process.env.PYTHON_SERVICE_URL}/match-jobs`,
@@ -32,8 +35,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const jobs = await pythonRes.json();
-    return NextResponse.json({ jobs });
+    const allJobs = await pythonRes.json();
+    const start = (page - 1) * limit;
+    const jobs = allJobs.slice(start, start + limit);
+
+    return NextResponse.json({
+      jobs,
+      total: allJobs.length,
+      page,
+      limit,
+      hasMore: start + limit < allJobs.length,
+    });
   } catch (err) {
     console.error("[match]", err);
     const message = err instanceof Error ? err.message : "Internal server error";
