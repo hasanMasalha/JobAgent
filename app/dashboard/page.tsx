@@ -257,7 +257,7 @@ export default function DashboardPage() {
       matchObserverRef.current.observe(matchBottomRef.current);
     }
     return () => matchObserverRef.current?.disconnect();
-  }, [hasMore, loadingMore, loadMoreJobs]);
+  }, [hasMore, loadingMore, loadMoreJobs, loading]);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -391,7 +391,7 @@ export default function DashboardPage() {
 
             {!loading && !error && (
               <>
-                <div ref={matchBottomRef} className="h-4" />
+                <div ref={matchBottomRef} className="h-10 w-full" />
                 {loadingMore && (
                   <div className="flex justify-center py-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-gray-100" />
