@@ -79,7 +79,7 @@ async def _vector_search(conn, user_id: str) -> tuple[list, dict | None]:
           )
           AND 1 - (j.embedding <=> cv.embedding::vector) > 0.50
         ORDER BY j.embedding <=> cv.embedding::vector
-        LIMIT 50
+        LIMIT 200
         """,
         user_id,
     )

@@ -115,6 +115,11 @@ export default function DashboardPage() {
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [, setTick] = useState(0);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [matchPage, setMatchPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const matchObserverRef = useRef<IntersectionObserver | null>(null);
+  const matchBottomRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
   // --- Browse state ---
@@ -188,18 +193,38 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    matchObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreJobs();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    if (matchBottomRef.current) {
+      matchObserverRef.current.observe(matchBottomRef.current);
+    }
+    return () => matchObserverRef.current?.disconnect();
+  }, [hasMore, loadingMore, loadMoreJobs]);
+
   const fetchJobs = useCallback(async (isRefresh = false) => {
     setLoading(true);
     setError(null);
+    setMatchPage(1);
+    setHasMore(true);
     try {
+      const params = new URLSearchParams({ page: "1", limit: "20" });
+      if (isRefresh) params.set("refresh", "true");
       const [matchRes, savedRes, appliedRes] = await Promise.all([
-        fetch(`/api/match${isRefresh ? "?refresh=true" : ""}`),
+        fetch(`/api/match?${params}`),
         fetch("/api/jobs/saved"),
         fetch("/api/applications?ids_only=true"),
       ]);
       const matchData = await matchRes.json();
       if (!matchRes.ok) throw new Error(matchData.error ?? "Failed to load jobs");
       setJobs(matchData.jobs);
+      setHasMore(matchData.hasMore);
       setLastFetched(new Date());
       if (savedRes.ok) {
         const savedData = await savedRes.json();
@@ -215,6 +240,24 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadMoreJobs = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+    const nextPage = matchPage + 1;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/match?page=${nextPage}&limit=20`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setJobs((prev) => [...prev, ...data.jobs]);
+      setMatchPage(nextPage);
+      setHasMore(data.hasMore);
+    } catch (err) {
+      console.error("[loadMore]", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, matchPage]);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -344,6 +387,17 @@ export default function DashboardPage() {
                   />
                 ))}
               </div>
+            )}
+
+            {!loading && !error && (
+              <>
+                <div ref={matchBottomRef} className="h-4" />
+                {loadingMore && (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-gray-100" />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
