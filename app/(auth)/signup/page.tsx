@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { createBrowserClient } from "@/lib/supabase";
 
 export default function SignupPage() {
@@ -47,7 +48,15 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="mb-6 flex flex-col items-center">
+        <Image
+          src="/logo.png"
+          alt="JobAgent"
+          width={120}
+          height={120}
+        />
+      </div>
       <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-8 rounded-lg shadow">
         <h1 className="text-2xl font-semibold mb-6 dark:text-white">Create account</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -100,4 +109,5 @@ export default function SignupPage() {
       </div>
     </div>
   );
+
 }

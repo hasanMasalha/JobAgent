@@ -31,18 +31,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="mb-6 flex flex-col items-center">
+        <Image
+          src="/logo.png"
+          alt="JobAgent"
+          width={120}
+          height={120}
+        />
+      </div>
       <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900">
-        <div className="flex flex-col items-center mb-6">
-          <Image
-            src="/logo.png"
-            alt="JobAgent"
-            width={48}
-            height={48}
-            className="mb-2"
-          />
-          <h1 className="text-2xl font-bold">JobAgent</h1>
-        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1 dark:text-gray-300">Email</label>
