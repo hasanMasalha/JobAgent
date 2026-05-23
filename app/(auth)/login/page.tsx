@@ -36,8 +36,8 @@ export default function LoginPage() {
         <Image
           src="/logo.png"
           alt="JobAgent"
-          width={120}
-          height={120}
+          width={260}
+          height={260}
         />
       </div>
       <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900">
