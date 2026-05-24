@@ -284,7 +284,7 @@ export default function DashboardPage() {
   const browseTo = browseFrom > 0 ? browseFrom + browseJobs.length - 1 : 0;
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto w-full overflow-hidden">
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 border-b dark:border-gray-700">
         {(["matches", "browse"] as const).map((tab) => (
