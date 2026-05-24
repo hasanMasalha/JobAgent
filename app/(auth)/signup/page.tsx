@@ -48,16 +48,17 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="mb-6 flex flex-col items-center">
         <Image
           src="/logo.png"
           alt="JobAgent"
-          width={260}
-          height={260}
+          width={200}
+          height={200}
+          className="w-[120px] h-[120px] sm:w-[180px] sm:h-[180px]"
         />
       </div>
-      <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-8 rounded-lg shadow">
+      <div className="w-full max-w-sm bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow">
         <h1 className="text-2xl font-semibold mb-6 dark:text-white">Create account</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
