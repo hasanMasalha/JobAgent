@@ -64,7 +64,7 @@ function Chevron() {
   );
 }
 
-const Divider = () => <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 shrink-0 self-end mb-0.5" />;
+const Divider = () => <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700 shrink-0 self-end mb-0.5" />;
 
 export default function JobFilters({ filters, onChange, matchCount, totalCount }: Props) {
   const [open, setOpen] = useState(false);
@@ -73,15 +73,15 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
   const bar = (
     <div>
       {/* Filters row */}
-      <div className="flex items-end gap-2">
+      <div className="flex flex-wrap items-end gap-2">
         {/* Sort */}
-        <div>
+        <div className="w-full sm:w-auto">
           <span className={LABEL}>Sort</span>
           <div className="relative">
             <select
               value={filters.sortBy}
               onChange={(e) => onChange({ ...filters, sortBy: e.target.value as SortBy })}
-              className={`${SELECT} min-w-[110px]`}
+              className={`${SELECT} w-full sm:min-w-[110px]`}
             >
               <option value="score">Best match</option>
               <option value="newest">Newest first</option>
@@ -94,7 +94,7 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
         <Divider />
 
         {/* Work type */}
-        <div>
+        <div className="w-full sm:w-auto">
           <span className={LABEL}>Work type</span>
           <div className="relative">
             <select
@@ -103,7 +103,7 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
                 const v = e.target.value as WorkType | "";
                 onChange({ ...filters, workTypes: v ? [v] : [] });
               }}
-              className={`${SELECT} min-w-[100px]`}
+              className={`${SELECT} w-full sm:min-w-[100px]`}
             >
               <option value="">All types</option>
               <option value="remote">Remote</option>
@@ -117,7 +117,7 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
         <Divider />
 
         {/* Job type */}
-        <div>
+        <div className="w-full sm:w-auto">
           <span className={LABEL}>Job type</span>
           <div className="relative">
             <select
@@ -126,7 +126,7 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
                 const v = e.target.value as JobType | "";
                 onChange({ ...filters, jobTypes: v ? [v] : [] });
               }}
-              className={`${SELECT} min-w-[100px]`}
+              className={`${SELECT} w-full sm:min-w-[100px]`}
             >
               <option value="">All types</option>
               <option value="full-time">Full-time</option>
@@ -140,13 +140,13 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
         <Divider />
 
         {/* Date posted */}
-        <div>
+        <div className="w-full sm:w-auto">
           <span className={LABEL}>Date posted</span>
           <div className="relative">
             <select
               value={filters.daysPosted}
               onChange={(e) => onChange({ ...filters, daysPosted: e.target.value as DaysPosted })}
-              className={`${SELECT} min-w-[100px]`}
+              className={`${SELECT} w-full sm:min-w-[100px]`}
             >
               <option value="any">Any time</option>
               <option value="1">Last 24 hours</option>
@@ -160,19 +160,19 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
         <Divider />
 
         {/* Min salary */}
-        <div>
+        <div className="w-full sm:w-auto">
           <span className={LABEL}>Min salary</span>
           <input
             type="number"
             placeholder="₪ Amount"
             value={filters.minSalary}
             onChange={(e) => onChange({ ...filters, minSalary: e.target.value })}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 w-[100px] hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none transition-colors"
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 w-full sm:w-[100px] hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none transition-colors"
           />
         </div>
 
         {/* Spacer + clear filters */}
-        <div className="flex-1 min-w-0" />
+        <div className="hidden sm:block sm:flex-1 sm:min-w-0" />
         {dirty && (
           <button
             type="button"
@@ -197,7 +197,7 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
   );
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm px-5 py-4 mb-6">
+    <div className="w-full overflow-hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 sm:px-5 py-4 mb-6">
       {/* Mobile toggle */}
       <div className="sm:hidden flex items-center justify-between mb-3">
         <button
