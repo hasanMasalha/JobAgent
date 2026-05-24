@@ -289,7 +289,7 @@ export default function ApplicationsPage() {
 
       {/* Stats bar */}
       {!loading && !error && (
-        <div className="grid grid-cols-4 gap-3 mb-7">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
           <StatPill label="Applied"      count={counts.applied}      color="border-blue-200 bg-blue-50 text-blue-700" />
           <StatPill label="Interviewing" count={counts.interviewing} color="border-purple-200 bg-purple-50 text-purple-700" />
           <StatPill label="Offers"       count={counts.offer}        color="border-green-200 bg-green-50 text-green-700" />
@@ -321,111 +321,193 @@ export default function ApplicationsPage() {
       )}
 
       {!loading && !error && apps.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
-                <th className="text-left px-4 py-3 font-medium">Company</th>
-                <th className="text-left px-4 py-3 font-medium">Role</th>
-                <th className="text-left px-4 py-3 font-medium">Applied</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-left px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {apps.map((app) => (
-                <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-white max-w-[160px] truncate">
-                    {app.company}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-[200px] truncate">
-                    {app.job_title}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {new Date(app.applied_at).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : ""}
-                      disabled={updating === app.id}
-                      onChange={(e) =>
-                        handleStatusChange(app.id, e.target.value as AllowedStatus)
-                      }
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
-                        STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
-                      }`}
+        <>
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-3">
+            {apps.map((app) => (
+              <div
+                key={app.id}
+                className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 shadow-sm"
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">{app.job_title}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{app.company}</p>
+                  </div>
+                  <select
+                    value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : ""}
+                    disabled={updating === app.id}
+                    onChange={(e) => handleStatusChange(app.id, e.target.value as AllowedStatus)}
+                    className={`shrink-0 text-xs font-semibold whitespace-nowrap px-2 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
+                      STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {app.status === "manual" && (
+                      <option value="" disabled className="bg-white text-gray-400 font-normal">Action needed</option>
+                    )}
+                    {app.status === "failed" && (
+                      <option value="" disabled className="bg-white text-gray-400 font-normal">Manual apply needed</option>
+                    )}
+                    {ALLOWED_STATUSES.map((s) => (
+                      <option key={s} value={s} className="bg-white text-gray-800 font-normal">
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  {new Date(app.applied_at).toLocaleDateString("en-GB", {
+                    day: "numeric", month: "short", year: "numeric",
+                  })}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {app.status === "manual" || app.status === "failed" ? (
+                    <a
+                      href={app.job_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors"
                     >
-                      {app.status === "manual" && (
-                        <option value="" disabled className="bg-white text-gray-400 font-normal">
-                          Action needed — update after applying
-                        </option>
-                      )}
-                      {app.status === "failed" && (
-                        <option value="" disabled className="bg-white text-gray-400 font-normal">
-                          Manual apply needed
-                        </option>
-                      )}
-                      {ALLOWED_STATUSES.map((s) => (
-                        <option key={s} value={s} className="bg-white text-gray-800 font-normal">
-                          {s.charAt(0).toUpperCase() + s.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {app.status === "manual" || app.status === "failed" ? (
-                        <a
-                          href={app.job_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
-                        >
-                          Apply now →
-                        </a>
-                      ) : (
-                        <a
-                          href={app.job_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
-                        >
-                          View job ↗
-                        </a>
-                      )}
-                      {app.has_tailored_cv && (
-                        <>
-                          <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
-                          <button
-                            onClick={() => handleDownloadCV(app.id)}
-                            disabled={downloading === app.id}
-                            className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors whitespace-nowrap"
-                            title="Download tailored CV"
-                          >
-                            {downloading === app.id ? "…" : "CV ↓"}
-                          </button>
-                        </>
-                      )}
-                      <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
-                      <button
-                        onClick={() => handleDelete(app.id)}
-                        disabled={deleting === app.id}
-                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 whitespace-nowrap"
-                        title="Delete application"
-                      >
-                        {deleting === app.id ? "…" : "Delete"}
-                      </button>
-                    </div>
-                  </td>
+                      Apply now →
+                    </a>
+                  ) : (
+                    <a
+                      href={app.job_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      View job ↗
+                    </a>
+                  )}
+                  {app.has_tailored_cv && (
+                    <button
+                      onClick={() => handleDownloadCV(app.id)}
+                      disabled={downloading === app.id}
+                      className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      {downloading === app.id ? "…" : "CV ↓"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(app.id)}
+                    disabled={deleting === app.id}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
+                  >
+                    {deleting === app.id ? "…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
+                  <th className="text-left px-4 py-3 font-medium">Company</th>
+                  <th className="text-left px-4 py-3 font-medium">Role</th>
+                  <th className="text-left px-4 py-3 font-medium">Applied</th>
+                  <th className="text-left px-4 py-3 font-medium">Status</th>
+                  <th className="text-left px-4 py-3 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {apps.map((app) => (
+                  <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white max-w-[160px] truncate">
+                      {app.company}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-[200px] truncate">
+                      {app.job_title}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {new Date(app.applied_at).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={ALLOWED_STATUSES.includes(app.status as AllowedStatus) ? app.status : ""}
+                        disabled={updating === app.id}
+                        onChange={(e) =>
+                          handleStatusChange(app.id, e.target.value as AllowedStatus)
+                        }
+                        className={`text-xs font-semibold whitespace-nowrap px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-50 ${
+                          STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {app.status === "manual" && (
+                          <option value="" disabled className="bg-white text-gray-400 font-normal">
+                            Action needed — update after applying
+                          </option>
+                        )}
+                        {app.status === "failed" && (
+                          <option value="" disabled className="bg-white text-gray-400 font-normal">
+                            Manual apply needed
+                          </option>
+                        )}
+                        {ALLOWED_STATUSES.map((s) => (
+                          <option key={s} value={s} className="bg-white text-gray-800 font-normal">
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {app.status === "manual" || app.status === "failed" ? (
+                          <a
+                            href={app.job_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
+                          >
+                            Apply now →
+                          </a>
+                        ) : (
+                          <a
+                            href={app.job_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
+                          >
+                            View job ↗
+                          </a>
+                        )}
+                        {app.has_tailored_cv && (
+                          <>
+                            <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
+                            <button
+                              onClick={() => handleDownloadCV(app.id)}
+                              disabled={downloading === app.id}
+                              className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors whitespace-nowrap"
+                              title="Download tailored CV"
+                            >
+                              {downloading === app.id ? "…" : "CV ↓"}
+                            </button>
+                          </>
+                        )}
+                        <span className="text-gray-200 dark:text-gray-600 select-none">|</span>
+                        <button
+                          onClick={() => handleDelete(app.id)}
+                          disabled={deleting === app.id}
+                          className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 whitespace-nowrap"
+                          title="Delete application"
+                        >
+                          {deleting === app.id ? "…" : "Delete"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

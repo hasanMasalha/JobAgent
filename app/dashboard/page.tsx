@@ -305,14 +305,14 @@ export default function DashboardPage() {
       {/* ── My Matches ── */}
       {activeTab === "matches" && (
         <>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
             <div>
               <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Matched Jobs</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Top matches based on your CV</p>
             </div>
             <div className="flex items-center gap-3">
               {lastFetched && !loading && (
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
                   Last updated: {timeAgo(lastFetched)}
                 </span>
               )}
