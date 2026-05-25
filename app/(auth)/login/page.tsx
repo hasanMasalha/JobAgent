@@ -206,41 +206,16 @@ export default function LoginPage() {
   return (
     <>
       {/* ── Desktop: two-panel layout ── */}
-      <div className="hidden md:flex" style={{ minHeight: "100vh" }}>
+      <div className="hidden md:flex min-h-screen">
         {/* Left brand panel */}
-        <div
-          style={{
-            flex: 1,
-            background: NAVY,
-            padding: "48px 56px",
-            display: "flex",
-            flexDirection: "column",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
+        <div className="hidden md:flex md:w-1/2 bg-[#1a2e5e] flex-col justify-between p-12 relative overflow-hidden">
           {/* Decorative circles */}
-          <div style={{
-            position: "absolute", borderRadius: "50%",
-            width: 420, height: 420,
-            border: "44px solid rgba(255,255,255,0.06)",
-            bottom: -110, left: -110,
-          }} />
-          <div style={{
-            position: "absolute", borderRadius: "50%",
-            width: 300, height: 300,
-            border: "32px solid rgba(255,255,255,0.06)",
-            top: -70, right: -60,
-          }} />
-          <div style={{
-            position: "absolute", borderRadius: "50%",
-            width: 200, height: 200,
-            border: "22px solid rgba(255,255,255,0.06)",
-            top: 72, left: "42%",
-          }} />
+          <div className="absolute rounded-full border-[40px] border-white/10 w-96 h-96 -bottom-20 -left-20" />
+          <div className="absolute rounded-full border-[32px] border-white/10 w-72 h-72 -top-16 -right-12" />
+          <div className="absolute rounded-full border-[22px] border-white/10 w-52 h-52" style={{ top: 72, left: "42%" }} />
 
           {/* Logo on white strip */}
-          <div style={{ marginBottom: 60, position: "relative", zIndex: 1 }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.png"
@@ -250,7 +225,7 @@ export default function LoginPage() {
           </div>
 
           {/* Heading + bullets */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", zIndex: 1 }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
             <h2 style={{ color: "white", fontSize: 22, fontWeight: 500, margin: "0 0 10px" }}>
               Find your next role, faster.
             </h2>
@@ -276,24 +251,16 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, marginTop: 48, position: "relative", zIndex: 1 }}>
+          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, position: "relative", zIndex: 1 }}>
             © 2026 JobAgent. All rights reserved.
           </p>
         </div>
 
         {/* Right form panel */}
-        <div
-          style={{
-            width: 360,
-            background: "white",
-            padding: "48px 40px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            overflowY: "auto",
-          }}
-        >
-          {formPanel}
+        <div className="w-full md:w-1/2 flex items-center justify-center bg-white p-8">
+          <div className="w-full max-w-sm">
+            {formPanel}
+          </div>
         </div>
       </div>
 
