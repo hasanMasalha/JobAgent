@@ -22,9 +22,9 @@ export default function NavBarClient({ userEmail }: { userEmail: string }) {
       <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 sm:gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="JobAgent" className="block dark:hidden" style={{ height: 48 }} />
+          <img src="/logo.png" alt="JobAgent" className="block dark:hidden" style={{ height: 64 }} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/whiteLogo.png" alt="JobAgent" className="hidden dark:block" style={{ height: 48 }} />
+          <img src="/whiteLogo.png" alt="JobAgent" className="hidden dark:block" style={{ height: 64 }} />
           <div className="hidden sm:flex items-center gap-4 text-sm">
             {NAV_LINKS.map((link) => (
               <Link
