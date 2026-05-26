@@ -214,14 +214,10 @@ export default function LoginPage() {
           <div className="absolute rounded-full border-[32px] border-white/10 w-72 h-72 -top-16 -right-12" />
           <div className="absolute rounded-full border-[22px] border-white/10 w-52 h-52" style={{ top: 72, left: "42%" }} />
 
-          {/* Logo on white strip */}
+          {/* Logo */}
           <div style={{ position: "relative", zIndex: 1 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="JobAgent"
-              style={{ maxHeight: 48, display: "block", background: "white", padding: "4px 10px", borderRadius: 6 }}
-            />
+            <img src="/whiteLogo.png" alt="JobAgent" style={{maxWidth: '180px'}} />
           </div>
 
           {/* Heading + bullets */}
@@ -277,11 +273,7 @@ export default function LoginPage() {
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo.png"
-          alt="JobAgent"
-          style={{ maxWidth: 140, marginBottom: 24 }}
-        />
+        <img src="/logo.png" alt="JobAgent" style={{maxWidth: '180px', marginBottom: 24}} />
         <div
           style={{
             width: "100%",
