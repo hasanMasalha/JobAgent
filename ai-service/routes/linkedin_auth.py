@@ -1,8 +1,12 @@
 import asyncio
+import json
 import os
 import threading
+from datetime import datetime
 from urllib.parse import urlparse
 
+import asyncpg
+import httpx
 from fastapi import APIRouter
 from playwright.async_api import async_playwright
 
@@ -18,19 +22,20 @@ def _profile_dir(user_id: str) -> str:
 
 
 def _has_saved_session(user_id: str) -> bool:
-    """Return True only when a non-empty Cookies file exists in the profile."""
+    """Return True when a usable LinkedIn session exists in the profile directory."""
     base = _profile_dir(user_id)
     if not os.path.isdir(base):
         return False
-    # Chromium 120+ writes cookies to Default/Network/Cookies; older builds use
-    # Default/Cookies or Cookies at the root.  Check all three, require >1 KB so
-    # a freshly-created but empty file doesn't produce a false positive.
-    cookie_paths = [
+    # Cookie-based auth (new approach): cookies.json written by save_linkedin_cookie
+    cookie_json = os.path.join(base, "cookies.json")
+    if os.path.exists(cookie_json) and os.path.getsize(cookie_json) > 10:
+        return True
+    # Chromium browser-profile cookies (legacy approach)
+    for cookie_path in [
         os.path.join(base, "Default", "Network", "Cookies"),
         os.path.join(base, "Default", "Cookies"),
         os.path.join(base, "Cookies"),
-    ]
-    for cookie_path in cookie_paths:
+    ]:
         if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 1024:
             return True
     return False
@@ -204,16 +209,58 @@ async def login_poll(user_id: str):
     return {"connected": connected, "login_status": status}
 
 
-def _run_session_check(user_id: str) -> dict:
-    """Run the headless Playwright session check in its own event loop.
+_LINKEDIN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+}
 
-    Playwright uses asyncio.create_subprocess_exec internally which raises
-    NotImplementedError when called directly inside uvicorn's Windows event
-    loop.  Running it in a thread with asyncio.run() gives it a fresh loop
-    that supports subprocesses on all platforms.
+
+def _run_session_check(user_id: str) -> dict:
+    """Validate the LinkedIn session.
+
+    Uses httpx if cookies.json exists (cookie-based auth, new approach).
+    Falls back to headless Playwright for legacy browser-profile sessions.
     """
     async def _check() -> dict:
         profile_dir = _profile_dir(user_id)
+        cookie_json_path = os.path.join(profile_dir, "cookies.json")
+
+        # Fast path — httpx validation for cookie-based sessions
+        if os.path.exists(cookie_json_path):
+            try:
+                with open(cookie_json_path) as _f:
+                    saved_cookies = json.load(_f)
+                li_at = next((c["value"] for c in saved_cookies if c["name"] == "li_at"), None)
+                if li_at:
+                    headers = {**_LINKEDIN_HEADERS, "Cookie": f"li_at={li_at}"}
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            "https://www.linkedin.com/feed/",
+                            headers=headers,
+                            follow_redirects=False,
+                            timeout=10.0,
+                        )
+                    location = str(resp.headers.get("location", ""))
+                    is_valid = not (
+                        ("login" in location or "authwall" in location)
+                        and resp.status_code in (301, 302, 303, 307, 308)
+                    )
+                    print(f"[session-status] {user_id}: {'valid' if is_valid else 'expired'} (httpx)")
+                    if not is_valid:
+                        for _f in [cookie_json_path, os.path.join(profile_dir, "linkedin_cookie.json")]:
+                            try:
+                                os.remove(_f)
+                            except Exception:
+                                pass
+                        return {"connected": False, "login_status": "expired"}
+                    return {"connected": True, "login_status": _login_sessions.get(user_id)}
+            except Exception as exc:
+                print(f"[session-status] httpx check error: {exc}")
+
+        # Fallback — headless Playwright for legacy browser-profile sessions
         async with async_playwright() as p:
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=profile_dir,
@@ -239,7 +286,6 @@ def _run_session_check(user_id: str) -> dict:
                     if os.path.exists(cookie_file):
                         try:
                             os.remove(cookie_file)
-                            print(f"[session-status] cleared expired cookies: {cookie_file}")
                         except Exception:
                             pass
                 return {"connected": False, "login_status": "expired"}
@@ -251,6 +297,75 @@ def _run_session_check(user_id: str) -> dict:
     except Exception as e:
         print(f"[session-status] check failed for {user_id}: {e}")
         return {"connected": False, "login_status": "check_failed"}
+
+
+@router.post("/linkedin/save-cookie")
+async def save_linkedin_cookie(data: dict):
+    """Validate and persist a LinkedIn li_at session cookie for a user."""
+    user_id: str = data.get("user_id", "")
+    cookie_value: str = (data.get("cookie") or "").strip()
+
+    if not user_id or not cookie_value:
+        return {"success": False, "error": "user_id and cookie are required"}
+
+    # Validate cookie — LinkedIn redirects to /login when the session is invalid
+    headers = {**_LINKEDIN_HEADERS, "Cookie": f"li_at={cookie_value}"}
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://www.linkedin.com/feed/",
+                headers=headers,
+                follow_redirects=False,
+                timeout=10.0,
+            )
+        location = str(resp.headers.get("location", ""))
+        if resp.status_code in (301, 302, 303, 307, 308) and (
+            "login" in location or "authwall" in location
+        ):
+            return {"success": False, "error": "Invalid cookie — please try again"}
+    except Exception as exc:
+        return {"success": False, "error": f"Could not validate cookie: {exc}"}
+
+    # Persist cookie files
+    profile_dir = _profile_dir(user_id)
+    os.makedirs(profile_dir, exist_ok=True)
+
+    with open(os.path.join(profile_dir, "linkedin_cookie.json"), "w") as _f:
+        json.dump({"li_at": cookie_value, "saved_at": datetime.now().isoformat()}, _f)
+
+    playwright_cookies = [{
+        "name": "li_at",
+        "value": cookie_value,
+        "domain": ".linkedin.com",
+        "path": "/",
+        "httpOnly": True,
+        "secure": True,
+        "sameSite": "None",
+    }]
+    with open(os.path.join(profile_dir, "cookies.json"), "w") as _f:
+        json.dump(playwright_cookies, _f)
+
+    # Mark session as connected in memory
+    _login_sessions[user_id] = "success"
+
+    # Persist the cookie path in the DB (non-fatal if it fails)
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        try:
+            conn = await asyncpg.connect(database_url)
+            try:
+                await conn.execute(
+                    'UPDATE "User" SET linkedin_session_path = $1 WHERE id = $2',
+                    os.path.join(profile_dir, "cookies.json"),
+                    user_id,
+                )
+            finally:
+                await conn.close()
+        except Exception as exc:
+            print(f"[save-cookie] DB update failed (non-fatal): {exc}")
+
+    print(f"[save-cookie] {user_id}: cookie saved successfully")
+    return {"success": True, "message": "LinkedIn connected successfully"}
 
 
 @router.get("/linkedin/session-status/{user_id}")
