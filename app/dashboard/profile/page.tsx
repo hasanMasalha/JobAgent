@@ -540,7 +540,7 @@ function ProfileContent() {
           )}
         </div>
         {!linkedinChecking && !linkedinConnected && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+          <p className="sm:hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
             Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
           </p>
         )}
@@ -628,7 +628,7 @@ function ProfileContent() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Connected as {googleEmail}</p>
         )}
         {!googleConnected && (
-          <p className="text-xs text-gray-400 mt-3">
+          <p className="sm:hidden text-xs text-gray-400 mt-3">
             Connect to automatically schedule interviews directly from the chat assistant
           </p>
         )}
