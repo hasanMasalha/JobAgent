@@ -92,6 +92,7 @@ export default function SignupPage() {
           borderRadius: 8,
           padding: "10px 16px",
           background: "white",
+          color: "#111",
           fontSize: 14,
           fontWeight: 500,
           cursor: "pointer",

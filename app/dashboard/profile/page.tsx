@@ -4,11 +4,9 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
-type WorkMode = "remote" | "hybrid" | "onsite";
-
 interface Profile {
   cv: { clean_summary: string | null; skills_json: string | null; updated_at: string } | null;
-  preferences: { titles: string[]; locations: string[]; remote_ok: boolean; min_salary: number | null } | null;
+  preferences: { titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null } | null;
 }
 
 function ProfileContent() {
@@ -24,9 +22,15 @@ function ProfileContent() {
   const [titleInput, setTitleInput] = useState("");
   const [titles, setTitles] = useState<string[]>([]);
   const [location, setLocation] = useState("");
-  const [workMode, setWorkMode] = useState<WorkMode>("hybrid");
+  const [workModes, setWorkModes] = useState<string[]>(["Hybrid"]);
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
+
+  function toggleWorkMode(mode: string) {
+    setWorkModes((prev) =>
+      prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]
+    );
+  }
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -60,7 +64,11 @@ function ProfileContent() {
         if (data.preferences) {
           setTitles(data.preferences.titles ?? []);
           setLocation(data.preferences.locations?.[0] ?? "");
-          setWorkMode(data.preferences.remote_ok ? "remote" : "hybrid");
+          if (data.preferences.work_modes?.length) {
+            setWorkModes(data.preferences.work_modes);
+          } else {
+            setWorkModes(data.preferences.remote_ok ? ["Remote"] : ["Hybrid"]);
+          }
           if (data.preferences.min_salary) {
             setMinSalary(String(data.preferences.min_salary));
           } else {
@@ -210,21 +218,29 @@ function ProfileContent() {
     setError("");
     setSaving(true);
 
-    const form = new FormData();
-    // If no new file, send a placeholder so the API knows to skip CV re-processing
-    if (file) form.append("cv", file);
-    else {
-      // Send an empty cv blob so the upload endpoint skips PDF parsing
-      form.append("cv_skip", "true");
+    let res: Response;
+    if (file) {
+      const form = new FormData();
+      form.append("cv", file);
+      form.append("titles", JSON.stringify(titles));
+      form.append("location", location);
+      form.append("remote_ok", String(workModes.includes("Remote")));
+      form.append("work_modes", JSON.stringify(workModes));
+      form.append("min_salary", skipSalary ? "" : minSalary);
+      res = await fetch("/api/cv/upload", { method: "POST", body: form });
+    } else {
+      res = await fetch("/api/profile/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titles,
+          locations: location ? [location] : [],
+          remote_ok: workModes.includes("Remote"),
+          work_modes: workModes,
+          min_salary: skipSalary ? null : (minSalary ? parseInt(minSalary) : null),
+        }),
+      });
     }
-    form.append("titles", JSON.stringify(titles));
-    form.append("location", location);
-    form.append("remote_ok", String(workMode === "remote"));
-    form.append("min_salary", skipSalary ? "" : minSalary);
-
-    // If we have a new CV file, use the full upload endpoint
-    const endpoint = file ? "/api/cv/upload" : "/api/profile/preferences";
-    const res = await fetch(endpoint, { method: "POST", body: form });
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -380,7 +396,7 @@ function ProfileContent() {
         </div>
 
         {/* Job preferences */}
-        <div className="bg-white border rounded-xl p-5 space-y-4">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Job Preferences</h2>
 
           <div>
@@ -394,7 +410,7 @@ function ProfileContent() {
                 placeholder="e.g. Frontend Developer"
                 className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
-              <button type="button" onClick={addTitle} className="px-3 py-2 bg-gray-100 rounded text-sm hover:bg-gray-200">Add</button>
+              <button type="button" onClick={addTitle} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-500 rounded-md text-sm hover:bg-gray-200 dark:hover:bg-gray-600">Add</button>
             </div>
             {titles.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
@@ -421,12 +437,20 @@ function ProfileContent() {
 
           <div>
             <label className="block text-sm font-medium mb-2">Work mode</label>
-            <div className="flex gap-4">
-              {(["remote", "hybrid", "onsite"] as WorkMode[]).map((m) => (
-                <label key={m} className="flex items-center gap-1.5 text-sm">
-                  <input type="radio" name="workMode" value={m} checked={workMode === m} onChange={() => setWorkMode(m)} />
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
-                </label>
+            <div className="flex flex-wrap gap-2">
+              {["Remote", "Hybrid", "On-site"].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => toggleWorkMode(mode)}
+                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+                    workModes.includes(mode)
+                      ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {mode}
+                </button>
               ))}
             </div>
           </div>
@@ -477,15 +501,15 @@ function ProfileContent() {
 
       {/* LinkedIn Connection */}
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
             <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
           </div>
           {linkedinChecking ? (
-            <span className="text-xs text-gray-400 italic shrink-0">Verifying LinkedIn connection…</span>
+            <span className="text-xs text-gray-400 italic self-end sm:self-auto">Verifying LinkedIn connection…</span>
           ) : linkedinConnected ? (
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -499,7 +523,7 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
                 Not connected
@@ -523,13 +547,13 @@ function ProfileContent() {
 
       {/* Google Calendar Connection */}
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Google Calendar</h2>
             <p className="text-xs text-gray-500 mt-0.5">For scheduling interviews from the chat assistant</p>
           </div>
           {googleConnected ? (
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -543,7 +567,7 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 self-end sm:self-auto">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
                 Not connected
               </span>
@@ -571,12 +595,12 @@ function ProfileContent() {
       </div>
 
       {/* Notifications */}
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Notifications</h2>
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 pb-24 sm:pb-5">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Notifications</h2>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-900">Daily match emails</p>
-            <p className="text-xs text-gray-500 mt-0.5">Get an email when new jobs are found</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Daily match emails</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Get an email when new jobs are found</p>
           </div>
           <button
             onClick={() => handleEmailToggle(!emailNotifications)}

@@ -17,16 +17,18 @@ export async function POST(req: NextRequest) {
     const titles: string[] = Array.isArray(body.titles) ? body.titles : [];
     const locations: string[] = Array.isArray(body.locations) ? body.locations : (body.location ? [body.location] : []);
     const remoteOk: boolean = body.remote_ok === true;
+    const workModes: string[] = Array.isArray(body.work_modes) ? body.work_modes : [];
     const minSalary: number | null = body.min_salary ? parseInt(body.min_salary) : null;
 
     await db.$executeRaw`
-      INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, min_salary, updated_at)
+      INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, work_modes, min_salary, updated_at)
       VALUES (gen_random_uuid(), ${user.id}, ${titles}::text[], ${locations}::text[],
-              ${remoteOk}, ${minSalary}, now())
+              ${remoteOk}, ${workModes}::text[], ${minSalary}, now())
       ON CONFLICT (user_id) DO UPDATE
         SET titles     = EXCLUDED.titles,
             locations  = EXCLUDED.locations,
             remote_ok  = EXCLUDED.remote_ok,
+            work_modes = EXCLUDED.work_modes,
             min_salary = EXCLUDED.min_salary,
             updated_at = now()
     `;

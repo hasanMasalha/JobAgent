@@ -67,6 +67,7 @@ model JobPreference {
   titles     String[]
   locations  String[]
   remote_ok  Boolean  @default(false)
+  work_modes String[] @default([])
   min_salary Int?
   updated_at DateTime @updatedAt
 

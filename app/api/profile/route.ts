@@ -18,8 +18,8 @@ export async function GET(_req: NextRequest) {
         SELECT id, clean_summary, skills_json, updated_at, raw_text
         FROM "CV" WHERE user_id = ${user.id} LIMIT 1
       `,
-      db.$queryRaw<{ titles: string[]; locations: string[]; remote_ok: boolean; min_salary: number | null }[]>`
-        SELECT titles, locations, remote_ok, min_salary
+      db.$queryRaw<{ titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null }[]>`
+        SELECT titles, locations, remote_ok, work_modes, min_salary
         FROM "JobPreference" WHERE user_id = ${user.id} LIMIT 1
       `,
       db.user.findUnique({
