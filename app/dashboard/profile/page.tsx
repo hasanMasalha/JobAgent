@@ -568,7 +568,7 @@ function ProfileContent() {
             </div>
           ) : (
             <div className="flex items-center gap-3 self-end sm:self-auto">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
                 Not connected
               </span>
               {googleConfigured ? (
@@ -579,13 +579,19 @@ function ProfileContent() {
                   Connect Google Calendar
                 </a>
               ) : (
-                <span className="text-xs text-gray-400 italic">Not configured</span>
+                <button
+                  disabled
+                  title="Google Calendar integration is not configured on this server"
+                  className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed"
+                >
+                  Connect Google Calendar
+                </button>
               )}
             </div>
           )}
         </div>
         {googleConnected && googleEmail && (
-          <p className="text-xs text-gray-500 mt-3">Connected as {googleEmail}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Connected as {googleEmail}</p>
         )}
         {!googleConnected && (
           <p className="text-xs text-gray-400 mt-3">
