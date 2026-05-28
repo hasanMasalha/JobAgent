@@ -791,8 +791,10 @@ async def _playwright_apply(
     profile_dir: str,
 ) -> dict:
     if is_linkedin:
+        cookies_json_path = os.path.join(profile_dir, "cookies.json")
         has_cookies = (
-            os.path.exists(os.path.join(profile_dir, "Default", "Network", "Cookies"))
+            os.path.exists(cookies_json_path)
+            or os.path.exists(os.path.join(profile_dir, "Default", "Network", "Cookies"))
             or os.path.exists(os.path.join(profile_dir, "Default", "Cookies"))
             or os.path.exists(os.path.join(profile_dir, "Cookies"))
         )
@@ -822,6 +824,17 @@ async def _playwright_apply(
             ),
             viewport={"width": 1280, "height": 800},
         )
+
+        # Load cookie-based LinkedIn session if available
+        _cookies_json = os.path.join(profile_dir, "cookies.json")
+        if os.path.exists(_cookies_json):
+            import json as _json_mod
+            try:
+                with open(_cookies_json) as _f:
+                    _saved = _json_mod.load(_f)
+                await ctx.add_cookies(_saved)
+            except Exception as _exc:
+                print(f"[apply] Failed to load cookies.json: {_exc}")
         # Remove automation fingerprint signals that LinkedIn uses to detect bots
         await ctx.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {

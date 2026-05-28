@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
@@ -50,8 +50,8 @@ function ProfileContent() {
   const [linkedinChecking, setLinkedinChecking] = useState(true);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinModal, setLinkedinModal] = useState(false);
+  const [linkedinCookie, setLinkedinCookie] = useState("");
   const [linkedinError, setLinkedinError] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -104,9 +104,6 @@ function ProfileContent() {
     }
   }, []);
 
-  // Cleanup polling on unmount
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
-
   // Auto-unsubscribe when ?unsubscribe=true
   useEffect(() => {
     if (searchParams.get("unsubscribe") === "true" && !loading) {
@@ -116,56 +113,36 @@ function ProfileContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  async function handleConnectLinkedin() {
+  function handleConnectLinkedin() {
     setLinkedinError("");
-    setLinkedinConnecting(true);
+    setLinkedinCookie("");
     setLinkedinModal(true);
+  }
 
-    try {
-      const res = await fetch("/api/linkedin/start-session", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? "Failed to start session");
-    } catch (err) {
-      setLinkedinError(err instanceof Error ? err.message : "Failed to start");
-      setLinkedinConnecting(false);
+  async function handleSubmitLinkedinCookie() {
+    if (!linkedinCookie.trim()) {
+      setLinkedinError("Please paste your li_at cookie value.");
       return;
     }
-
-    // Poll every 3 s for up to 2 minutes.
-    // Uses /login-poll (fast in-memory check) — NOT /session-status — so the
-    // heavy Playwright validation never runs while the login browser is open.
-    let elapsed = 0;
-    pollRef.current = setInterval(async () => {
-      elapsed += 3;
-      try {
-        const res = await fetch("/api/linkedin/login-poll");
-        const data = await res.json();
-        if (data.connected) {
-          clearInterval(pollRef.current!);
-          setLinkedinConnected(true);
-          setLinkedinConnecting(false);
-          setLinkedinModal(false);
-          showToast("LinkedIn connected!", "success");
-          return;
-        }
-        if (data.login_status === "timeout" || data.login_status === "error") {
-          clearInterval(pollRef.current!);
-          setLinkedinConnecting(false);
-          setLinkedinError(
-            data.login_status === "timeout"
-              ? "Timed out — you have 2 minutes to log in. Try again."
-              : "Something went wrong. Try again."
-          );
-          return;
-        }
-      } catch { /* ignore transient errors */ }
-
-      if (elapsed >= 120) {
-        clearInterval(pollRef.current!);
-        setLinkedinConnecting(false);
-        setLinkedinError("Timed out after 2 minutes. Try again.");
-      }
-    }, 3000);
+    setLinkedinError("");
+    setLinkedinConnecting(true);
+    try {
+      const res = await fetch("/api/linkedin/start-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookie: linkedinCookie.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "Failed to connect");
+      setLinkedinConnected(true);
+      setLinkedinModal(false);
+      setLinkedinCookie("");
+      showToast("LinkedIn connected!", "success");
+    } catch (err) {
+      setLinkedinError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+    } finally {
+      setLinkedinConnecting(false);
+    }
   }
 
   async function handleEmailToggle(value: boolean) {
@@ -197,10 +174,10 @@ function ProfileContent() {
   }
 
   function cancelLinkedinConnect() {
-    if (pollRef.current) clearInterval(pollRef.current);
     setLinkedinConnecting(false);
     setLinkedinModal(false);
     setLinkedinError("");
+    setLinkedinCookie("");
   }
 
   function addTitle() {
@@ -281,49 +258,55 @@ function ProfileContent() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      {/* LinkedIn instruction modal */}
+      {/* LinkedIn cookie modal */}
       {linkedinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Connect LinkedIn</h2>
-            {linkedinConnecting && !linkedinError ? (
-              <>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  A browser window is opening on this machine. Log in to LinkedIn normally —
-                  the window will close automatically once you&apos;re signed in.
-                </p>
-                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-3">
-                  <span className="inline-flex gap-0.5">
-                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:300ms]" />
-                  </span>
-                  <span className="text-sm text-blue-700">Waiting for login… (up to 2 minutes)</span>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (pollRef.current) clearInterval(pollRef.current);
-                    await fetch("/api/linkedin/force-connected", { method: "POST" });
-                    setLinkedinConnected(true);
-                    setLinkedinConnecting(false);
-                    setLinkedinModal(false);
-                    showToast("LinkedIn connected!", "success");
-                  }}
-                  className="text-sm text-blue-600 hover:underline mb-5 block"
-                >
-                  I&apos;ve logged in — mark as connected
-                </button>
-              </>
-            ) : null}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Connect LinkedIn</h2>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                How to get your LinkedIn cookie:
+              </p>
+              <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                <li>Open <strong>LinkedIn.com</strong> and make sure you&apos;re logged in</li>
+                <li>Press <strong>F12</strong> to open Developer Tools</li>
+                <li>Click the <strong>Application</strong> tab (Chrome) or <strong>Storage</strong> tab (Firefox)</li>
+                <li>Expand <strong>Cookies</strong> → click <strong>https://www.linkedin.com</strong></li>
+                <li>Find the cookie named <strong>li_at</strong></li>
+                <li>Copy the entire <strong>Value</strong> column</li>
+                <li>Paste it in the field below</li>
+              </ol>
+            </div>
+
+            <textarea
+              value={linkedinCookie}
+              onChange={(e) => setLinkedinCookie(e.target.value)}
+              placeholder="Paste your li_at cookie value here…"
+              className="w-full h-24 border dark:border-gray-600 rounded-lg p-3 text-sm font-mono resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+              disabled={linkedinConnecting}
+            />
+
             {linkedinError && (
-              <p className="text-sm text-red-600 mb-4">{linkedinError}</p>
+              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{linkedinError}</p>
             )}
-            <button
-              onClick={cancelLinkedinConnect}
-              className="w-full border dark:border-gray-600 rounded-lg py-2 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              {linkedinConnecting ? "Cancel" : "Close"}
-            </button>
+
+            <div className="flex gap-3">
+              <button
+                onClick={cancelLinkedinConnect}
+                disabled={linkedinConnecting}
+                className="flex-1 border dark:border-gray-600 rounded-lg py-2 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitLinkedinCookie}
+                disabled={linkedinConnecting || !linkedinCookie.trim()}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {linkedinConnecting ? "Connecting…" : "Connect LinkedIn"}
+              </button>
+            </div>
           </div>
         </div>
       )}
