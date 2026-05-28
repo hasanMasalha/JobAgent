@@ -501,15 +501,16 @@ function ProfileContent() {
 
       {/* LinkedIn Connection */}
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start justify-between">
           <div>
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
             <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
           </div>
+          {/* Desktop: badge + button inline */}
           {linkedinChecking ? (
-            <span className="text-xs text-gray-400 italic self-end sm:self-auto">Verifying LinkedIn connection…</span>
+            <span className="hidden sm:inline text-xs text-gray-400 italic">Verifying LinkedIn connection…</span>
           ) : linkedinConnected ? (
-            <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="hidden sm:flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -523,7 +524,7 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="hidden sm:flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
                 Not connected
@@ -543,17 +544,50 @@ function ProfileContent() {
             Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
           </p>
         )}
+        {/* Mobile: badge + button last */}
+        {linkedinChecking ? (
+          <span className="flex sm:hidden text-xs text-gray-400 italic mt-3">Verifying LinkedIn connection…</span>
+        ) : linkedinConnected ? (
+          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+              Connected
+            </span>
+            <button
+              onClick={handleConnectLinkedin}
+              disabled={linkedinConnecting}
+              className="text-xs text-gray-500 hover:underline disabled:opacity-50"
+            >
+              Reconnect
+            </button>
+          </div>
+        ) : (
+          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+              Not connected
+            </span>
+            <button
+              onClick={handleConnectLinkedin}
+              disabled={linkedinConnecting}
+              className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+            >
+              {linkedinConnecting ? "Connecting…" : "Connect LinkedIn"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Google Calendar Connection */}
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start justify-between">
           <div>
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Google Calendar</h2>
             <p className="text-xs text-gray-500 mt-0.5">For scheduling interviews from the chat assistant</p>
           </div>
+          {/* Desktop: badge + button inline */}
           {googleConnected ? (
-            <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="hidden sm:flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -567,14 +601,14 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="hidden sm:flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
                 Not connected
               </span>
               {googleConfigured ? (
                 <a
                   href="/api/auth/google"
-                  className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                  className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors whitespace-nowrap"
                 >
                   Connect Google Calendar
                 </a>
@@ -582,7 +616,7 @@ function ProfileContent() {
                 <button
                   disabled
                   title="Google Calendar integration is not configured on this server"
-                  className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed"
+                  className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed whitespace-nowrap"
                 >
                   Connect Google Calendar
                 </button>
@@ -597,6 +631,44 @@ function ProfileContent() {
           <p className="text-xs text-gray-400 mt-3">
             Connect to automatically schedule interviews directly from the chat assistant
           </p>
+        )}
+        {/* Mobile: badge + button last */}
+        {googleConnected ? (
+          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+              Connected
+            </span>
+            <button
+              onClick={handleDisconnectGoogle}
+              disabled={googleDisconnecting}
+              className="text-xs text-gray-500 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {googleDisconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+              Not connected
+            </span>
+            {googleConfigured ? (
+              <a
+                href="/api/auth/google"
+                className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors whitespace-nowrap"
+              >
+                Connect Google Calendar
+              </a>
+            ) : (
+              <button
+                disabled
+                title="Google Calendar integration is not configured on this server"
+                className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed whitespace-nowrap"
+              >
+                Connect Google Calendar
+              </button>
+            )}
+          </div>
         )}
       </div>
 
