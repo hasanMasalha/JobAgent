@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-type WorkMode = "remote" | "hybrid" | "onsite";
-
 interface ExistingCV {
   clean_summary: string;
   skills_json: { skills?: string[]; years_experience?: number } | null;
@@ -18,6 +16,7 @@ interface Profile {
     titles?: string[];
     locations?: string[];
     remote_ok?: boolean;
+    work_modes?: string[];
     min_salary?: number;
   };
   google_connected?: boolean;
@@ -38,9 +37,15 @@ export default function OnboardingPage() {
   const [titleInput, setTitleInput] = useState("");
   const [titles, setTitles] = useState<string[]>([]);
   const [location, setLocation] = useState("");
-  const [workMode, setWorkMode] = useState<WorkMode>("hybrid");
+  const [workModes, setWorkModes] = useState<string[]>(["Hybrid"]);
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
+
+  function toggleWorkMode(mode: string) {
+    setWorkModes((prev) =>
+      prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]
+    );
+  }
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -59,7 +64,11 @@ export default function OnboardingPage() {
           const prefs = d.preferences;
           if (prefs.titles?.length) setTitles(prefs.titles);
           if (prefs.locations?.[0]) setLocation(prefs.locations[0]);
-          if (prefs.remote_ok) setWorkMode("remote");
+          if (prefs.work_modes?.length) {
+            setWorkModes(prefs.work_modes);
+          } else {
+            setWorkModes(prefs.remote_ok ? ["Remote"] : ["Hybrid"]);
+          }
           if (prefs.min_salary) setMinSalary(String(prefs.min_salary));
           else setSkipSalary(true);
         }
@@ -91,7 +100,8 @@ export default function OnboardingPage() {
         form.append("cv", file);
         form.append("titles", JSON.stringify(titles));
         form.append("location", location);
-        form.append("remote_ok", String(workMode === "remote"));
+        form.append("remote_ok", String(workModes.includes("Remote")));
+        form.append("work_modes", JSON.stringify(workModes));
         form.append("min_salary", skipSalary ? "" : minSalary);
 
         const res = await fetch("/api/cv/upload", { method: "POST", body: form });
@@ -105,7 +115,8 @@ export default function OnboardingPage() {
           body: JSON.stringify({
             titles,
             locations: location ? [location] : [],
-            remote_ok: workMode === "remote",
+            remote_ok: workModes.includes("Remote"),
+            work_modes: workModes,
             min_salary: skipSalary ? null : (minSalary ? parseInt(minSalary) : null),
           }),
         });
@@ -113,7 +124,7 @@ export default function OnboardingPage() {
         if (!res.ok) throw new Error(data.error ?? "Update failed");
       }
 
-      router.push(file ? "/dashboard/my-cv" : "/dashboard");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -292,7 +303,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={addTitle}
-                className="px-3 py-2 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                className="bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-500 rounded-md px-3 py-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-500"
               >
                 Add
               </button>
@@ -327,18 +338,20 @@ export default function OnboardingPage() {
           {/* Work mode */}
           <div>
             <label className="block text-sm font-medium mb-2">Work mode</label>
-            <div className="flex gap-4">
-              {(["remote", "hybrid", "onsite"] as WorkMode[]).map((m) => (
-                <label key={m} className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    name="workMode"
-                    value={m}
-                    checked={workMode === m}
-                    onChange={() => setWorkMode(m)}
-                  />
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
-                </label>
+            <div className="flex flex-wrap gap-2">
+              {["Remote", "Hybrid", "On-site"].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => toggleWorkMode(mode)}
+                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+                    workModes.includes(mode)
+                      ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {mode}
+                </button>
               ))}
             </div>
           </div>

@@ -25,21 +25,24 @@ export async function PATCH(req: NextRequest) {
 
     // Update job preferences
     if (body.job_preferences !== undefined) {
-      const { titles, locations, remote_ok, min_salary } = body.job_preferences as {
+      const { titles, locations, remote_ok, work_modes, min_salary } = body.job_preferences as {
         titles: string[];
         locations: string[];
         remote_ok: boolean;
+        work_modes?: string[];
         min_salary: number | null;
       };
+      const workModes: string[] = Array.isArray(work_modes) ? work_modes : [];
 
       await db.$executeRaw`
-        INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, min_salary, updated_at)
+        INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, work_modes, min_salary, updated_at)
         VALUES (gen_random_uuid(), ${user.id}, ${titles}::text[], ${locations}::text[],
-                ${remote_ok}, ${min_salary}, now())
+                ${remote_ok}, ${workModes}::text[], ${min_salary}, now())
         ON CONFLICT (user_id) DO UPDATE
           SET titles     = EXCLUDED.titles,
               locations  = EXCLUDED.locations,
               remote_ok  = EXCLUDED.remote_ok,
+              work_modes = EXCLUDED.work_modes,
               min_salary = EXCLUDED.min_salary,
               updated_at = now()
       `;
