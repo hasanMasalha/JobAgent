@@ -13,20 +13,37 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [cvRows, prefRows, dbUser] = await Promise.all([
+    const [cvRows, dbUser] = await Promise.all([
       db.$queryRaw<{ id: string; clean_summary: string | null; skills_json: string | null; updated_at: Date; raw_text: string }[]>`
         SELECT id, clean_summary, skills_json, updated_at, raw_text
         FROM "CV" WHERE user_id = ${user.id} LIMIT 1
-      `,
-      db.$queryRaw<{ titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null }[]>`
-        SELECT titles, locations, remote_ok, work_modes, min_salary
-        FROM "JobPreference" WHERE user_id = ${user.id} LIMIT 1
       `,
       db.user.findUnique({
         where: { id: user.id },
         select: { google_connected: true, email_notifications: true },
       }),
     ]);
+
+    // Run preferences query separately so a missing column (e.g. pending migration)
+    // never causes the entire route to 500 and hide the CV from the client.
+    let prefRows: { titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null }[] = [];
+    try {
+      prefRows = await db.$queryRaw`
+        SELECT titles, locations, remote_ok, work_modes, min_salary
+        FROM "JobPreference" WHERE user_id = ${user.id} LIMIT 1
+      `;
+    } catch {
+      // Fallback: try without work_modes in case migration hasn't run yet
+      try {
+        const rows = await db.$queryRaw<{ titles: string[]; locations: string[]; remote_ok: boolean; min_salary: number | null }[]>`
+          SELECT titles, locations, remote_ok, min_salary
+          FROM "JobPreference" WHERE user_id = ${user.id} LIMIT 1
+        `;
+        prefRows = rows.map((r) => ({ ...r, work_modes: [] }));
+      } catch {
+        prefRows = [];
+      }
+    }
 
     return NextResponse.json({
       cv: cvRows[0] ?? null,
