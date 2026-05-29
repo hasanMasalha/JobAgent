@@ -24,7 +24,8 @@ async function syncAuth() {
         userId: user.id,
         userEmail: user.email,
         isLoggedIn: true,
-        lastChecked: Date.now()
+        lastChecked: Date.now(),
+        serverUrl: window.location.origin
       })
       console.log('JobAgent: user info saved to extension storage')
     } else {

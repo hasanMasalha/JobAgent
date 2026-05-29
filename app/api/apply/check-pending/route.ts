@@ -8,33 +8,48 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return NextResponse.json({ pending: false });
-
   const { searchParams } = new URL(request.url);
+
+  // Accept userId as query param when cross-site cookies are blocked (extension context)
+  const userId = user?.id ?? searchParams.get("userId");
+  if (!userId) return NextResponse.json({ pending: false });
+
   const jobUrl = searchParams.get("jobUrl");
   if (!jobUrl) return NextResponse.json({ pending: false });
 
-  // Find pending application for this job URL
-  const rows = await db.$queryRaw<
-    {
-      id: string;
-      job_url: string;
-    }[]
-  >`
-    SELECT a.id, j.url AS job_url
-    FROM "Application" a
-    JOIN "Job" j ON j.id = a.job_id
-    WHERE a.user_id = ${user.id}
-      AND a.status = 'pending_extension'
-      AND j.url = ${jobUrl}
-    LIMIT 1
-  `;
+  // Extract LinkedIn job ID for fuzzy matching — the stored URL may differ from
+  // window.location.href due to tracking params or trailing slashes
+  const linkedinJobIdMatch = jobUrl.match(/\/jobs\/view\/(\d+)/);
+  const linkedinJobId = linkedinJobIdMatch?.[1] ?? null;
+
+  let rows: { id: string; job_url: string }[];
+
+  if (linkedinJobId) {
+    rows = await db.$queryRaw<{ id: string; job_url: string }[]>`
+      SELECT a.id, j.url AS job_url
+      FROM "Application" a
+      JOIN "Job" j ON j.id = a.job_id
+      WHERE a.user_id = ${userId}
+        AND a.status = 'pending_extension'
+        AND j.url LIKE ${`%/jobs/view/${linkedinJobId}%`}
+      LIMIT 1
+    `;
+  } else {
+    rows = await db.$queryRaw<{ id: string; job_url: string }[]>`
+      SELECT a.id, j.url AS job_url
+      FROM "Application" a
+      JOIN "Job" j ON j.id = a.job_id
+      WHERE a.user_id = ${userId}
+        AND a.status = 'pending_extension'
+        AND j.url = ${jobUrl}
+      LIMIT 1
+    `;
+  }
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
-  // Get user CV skills for form filling
   const cvRows = await db.$queryRaw<{ skills_json: unknown }[]>`
-    SELECT skills_json FROM "CV" WHERE user_id = ${user.id} LIMIT 1
+    SELECT skills_json FROM "CV" WHERE user_id = ${userId} LIMIT 1
   `;
 
   const skills: string[] = (() => {
@@ -49,7 +64,6 @@ export async function GET(request: NextRequest) {
       id: rows[0].id,
       jobUrl: rows[0].job_url,
       skills,
-      // Fields not yet in schema — extension handles gracefully when null
       phone: null,
       city: null,
       linkedin_url: null,

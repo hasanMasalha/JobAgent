@@ -25,7 +25,16 @@ export async function POST(req: NextRequest) {
       WHERE id = ${application_id} AND user_id = ${user.id}
     `;
 
-    return NextResponse.json({ success: true });
+    const cvRows = await db.$queryRaw<{ skills_json: unknown }[]>`
+      SELECT skills_json FROM "CV" WHERE user_id = ${user.id} LIMIT 1
+    `;
+    const skills: string[] = (() => {
+      const raw = cvRows[0]?.skills_json;
+      if (Array.isArray(raw)) return raw as string[];
+      return [];
+    })();
+
+    return NextResponse.json({ success: true, skills });
   } catch (err) {
     console.error("[apply/mark-pending-extension]", err);
     const message = err instanceof Error ? err.message : "Internal server error";

@@ -115,11 +115,33 @@ export default function ApplyPage() {
         return;
       }
       // Mark as pending_extension, open LinkedIn tab, extension handles the rest
-      await fetch("/api/apply/mark-pending-extension", {
+      const markRes = await fetch("/api/apply/mark-pending-extension", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ application_id: data.application_id }),
       });
+      const markData = markRes.ok ? await markRes.json() : {};
+
+      // Push application data directly into extension storage so content.js
+      // can read it without relying on cross-site cookies (SameSite blocks them)
+      if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+        try {
+          chrome.runtime.sendMessage(EXTENSION_ID, {
+            type: "STORE_PENDING_APPLICATION",
+            application: {
+              id: data.application_id,
+              jobUrl: data.job_url,
+              skills: markData.skills ?? [],
+              phone: null,
+              city: null,
+              linkedin_url: null,
+              expected_salary: null,
+              notice_period: null,
+            },
+          });
+        } catch { /* extension not ready — content.js will fall back gracefully */ }
+      }
+
       window.open(data.job_url, "_blank");
       setStage("extension_launched");
       return;
@@ -168,14 +190,20 @@ export default function ApplyPage() {
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
             To apply automatically on LinkedIn, install the free JobAgent Chrome Extension.
           </p>
-          <a
-            href="https://chromewebstore.google.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-6 py-3 rounded-lg mb-3"
-          >
-            Install Extension (Free)
-          </a>
+          {process.env.NEXT_PUBLIC_EXTENSION_ID ? (
+            <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+              Extension is loaded but not detected. Go to <strong>chrome://extensions</strong>, find <strong>JobAgent DEV</strong> and click the reload icon, then come back.
+            </p>
+          ) : (
+            <a
+              href="https://chromewebstore.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-6 py-3 rounded-lg mb-3"
+            >
+              Install Extension (Free)
+            </a>
+          )}
           <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
             Takes 30 seconds · Works on Chrome &amp; Edge
           </p>

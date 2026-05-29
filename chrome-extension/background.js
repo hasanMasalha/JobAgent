@@ -2,10 +2,19 @@
 // Handles messages from content script and popup
 // Communicates with JobAgent server
 
-const JOBAGENT_URL = 'https://jobagent.uk'
+// Fallback to production; overridden at runtime by serverUrl in storage (set by auth-sync.js)
+async function getServerUrl() {
+  const stored = await chrome.storage.local.get(['serverUrl'])
+  return stored.serverUrl || 'https://jobagent.uk'
+}
 
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ pong: true })
+    return true
+  }
+
   if (message.type === 'GET_AUTH_TOKEN') {
     // Return stored token if present; content scripts use credentials:include as primary
     chrome.storage.local.get(['authToken', 'userId'], (data) => {
@@ -23,18 +32,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (message.type === 'STORE_PENDING_APPLICATION') {
+    chrome.storage.local.set({ pendingApplication: message.application })
+    sendResponse({ success: true })
+    return true
+  }
+
+  if (message.type === 'GET_PENDING_APPLICATION') {
+    chrome.storage.local.get(['pendingApplication'], (data) => {
+      const app = data.pendingApplication || null
+      if (app) chrome.storage.local.remove('pendingApplication')
+      sendResponse({ application: app })
+    })
+    return true
+  }
+
   if (message.type === 'APPLICATION_COMPLETE') {
-    // Use session cookie — background service workers send cookies via credentials:include
-    fetch(`${JOBAGENT_URL}/api/applications/update-status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        applicationId: message.applicationId,
-        status: 'applied',
-        jobUrl: message.jobUrl
-      })
-    }).catch((e) => console.error('Failed to update application status', e))
+    getServerUrl().then(url => {
+      fetch(`${url}/api/applications/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          applicationId: message.applicationId,
+          status: message.status || 'applied',
+          jobUrl: message.jobUrl
+        })
+      }).catch((e) => console.error('Failed to update application status', e))
+    })
     sendResponse({ success: true })
     return true
   }
@@ -49,7 +74,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         try {
           const stored = await chrome.storage.local.get(['userId'])
-          await fetch(`${JOBAGENT_URL}/api/linkedin/save-cookie`, {
+          const jobagentUrl = await getServerUrl()
+          await fetch(`${jobagentUrl}/api/linkedin/save-cookie`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -68,14 +94,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 })
 
-// Messages sent from the jobagent.uk website (postMessage bridge via externally_connectable)
+// Messages sent from the jobagent web app (externally_connectable)
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ pong: true })
+    return true
+  }
+
   if (message.type === 'JOBAGENT_AUTH') {
     chrome.storage.local.set({
       authToken: message.token,
       userId: message.userId
     })
     sendResponse({ success: true })
+    return true
+  }
+
+  // Sent from the apply page when user confirms — stores application data so
+  // content.js can pick it up without needing cross-site cookies
+  if (message.type === 'STORE_PENDING_APPLICATION') {
+    chrome.storage.local.set({ pendingApplication: message.application }, () => {
+      console.log('[JobAgent bg] stored pending application:', message.application?.id)
+      sendResponse({ success: true })
+    })
     return true
   }
 })

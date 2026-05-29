@@ -1,7 +1,7 @@
 // Runs on LinkedIn job pages
 // Handles Easy Apply automation
 
-const JOBAGENT_URL = 'https://jobagent.uk'
+console.log('JobAgent content.js loaded on:', window.location.href)
 
 // Signal to the website that the extension is installed
 const signal = document.createElement('div')
@@ -9,20 +9,18 @@ signal.id = 'jobagent-extension-installed'
 signal.style.display = 'none'
 document.documentElement.appendChild(signal)
 
-// Check if this job has a pending application from JobAgent
+// Check if this job has a pending application from JobAgent.
+// Data is pushed into extension storage by the app at confirm-time to avoid
+// SameSite cookie restrictions that block cross-site API fetches from linkedin.com.
 async function checkPendingApplication() {
-  const url = window.location.href
-
+  console.log('JobAgent: checking pending application for:', window.location.href)
   try {
-    // credentials:include sends the jobagent.uk session cookie automatically
-    const res = await fetch(
-      `${JOBAGENT_URL}/api/apply/check-pending?jobUrl=${encodeURIComponent(url)}`,
-      { credentials: 'include' }
-    )
-    const data = await res.json()
-
-    if (data.pending) {
-      await startEasyApply(data.application)
+    const response = await chrome.runtime.sendMessage({ type: 'GET_PENDING_APPLICATION' })
+    console.log('JobAgent: GET_PENDING_APPLICATION response:', response)
+    if (response?.application) {
+      await startEasyApply(response.application)
+    } else {
+      console.log('JobAgent: no pending application in storage')
     }
   } catch (e) {
     console.error('JobAgent: Error checking pending application', e)
@@ -30,8 +28,9 @@ async function checkPendingApplication() {
 }
 
 async function startEasyApply(application) {
-  // Wait for page to fully load
-  await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 15000)
+  console.log('JobAgent: starting Easy Apply for application:', application.id)
+  // Wait for LinkedIn React to finish rendering the job detail panel
+  await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 20000)
 
   // Find and click Easy Apply button
   const easyApplyBtn = findEasyApplyButton()
@@ -294,5 +293,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// Run on page load
-checkPendingApplication()
+// Wait for LinkedIn's React app to render before checking — the job detail
+// panel (and the Easy Apply button) loads asynchronously after document_idle
+sleep(3000).then(() => checkPendingApplication())
