@@ -1,28 +1,39 @@
 // Content script — runs on jobagent.uk pages
 // Reads the Supabase session from localStorage and caches it in extension storage
-// so popup.js can display the logged-in email without a round-trip API call.
 
-function syncAuth() {
+console.log('JobAgent auth-sync.js loaded')
+
+async function syncAuth() {
   try {
-    // @supabase/ssr browser client stores session under sb-<project-ref>-auth-token
-    const key = Object.keys(localStorage).find(
-      (k) => k.startsWith('sb-') && k.includes('auth-token')
+    const keys = Object.keys(localStorage)
+    console.log('JobAgent: localStorage keys:', keys)
+
+    const authKey = keys.find(k =>
+      k.includes('auth-token') ||
+      k.includes('supabase') ||
+      k.startsWith('sb-')
     )
-    if (!key) return
+    console.log('JobAgent: auth key found:', authKey)
 
-    const raw = localStorage.getItem(key)
-    if (!raw) return
+    if (!authKey) return
 
-    let session
-    try { session = JSON.parse(raw) } catch { return }
+    const raw = localStorage.getItem(authKey)
+    let parsed
+    try { parsed = JSON.parse(raw) } catch (e) {
+      console.error('JobAgent: failed to parse session JSON', e)
+      return
+    }
 
-    const token = session?.access_token
-    const userId = session?.user?.id
-    if (!token || !userId) return
+    const token = parsed?.access_token
+    const userId = parsed?.user?.id
+    console.log('JobAgent: token found:', !!token, '| userId:', userId)
 
-    chrome.runtime.sendMessage({ type: 'SAVE_AUTH', token, userId })
+    if (token) {
+      await chrome.storage.local.set({ authToken: token, userId })
+      console.log('JobAgent: token saved to extension storage')
+    }
   } catch (e) {
-    // localStorage may be inaccessible in some sandboxed contexts
+    console.error('JobAgent auth-sync error:', e)
   }
 }
 
