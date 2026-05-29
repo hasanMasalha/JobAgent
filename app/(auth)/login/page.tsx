@@ -21,12 +21,26 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
+    }
+
+    // Sync auth token to extension if installed
+    const extensionId = process.env.NEXT_PUBLIC_EXTENSION_ID;
+    if (extensionId && data.session && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+      try {
+        chrome.runtime.sendMessage(extensionId, {
+          type: "SAVE_AUTH",
+          token: data.session.access_token,
+          userId: data.session.user.id,
+        });
+      } catch {
+        // Extension not installed — ignore
+      }
     }
 
     router.push("/dashboard");

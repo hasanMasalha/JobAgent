@@ -1,9 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import LogoutButton from "./LogoutButton";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
+
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
+
+function ExtensionBadge() {
+  const [installed, setInstalled] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
+      setInstalled(false)
+      return
+    }
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, () => {
+        setInstalled(!chrome.runtime.lastError)
+      })
+    } catch {
+      setInstalled(false)
+    }
+  }, [])
+
+  if (installed === null) return null
+  if (installed) {
+    return (
+      <span className="hidden sm:inline text-xs text-green-600 dark:text-green-400 font-medium">
+        Extension: Active
+      </span>
+    )
+  }
+  return (
+    <a
+      href="https://chromewebstore.google.com/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 hover:underline"
+    >
+      Get Extension
+    </a>
+  )
+}
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Jobs" },
@@ -38,6 +76,7 @@ export default function NavBarClient({ userEmail }: { userEmail: string }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <ExtensionBadge />
           <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400">
             {username}
           </span>

@@ -4,7 +4,25 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
-type Stage = "loading" | "ready" | "submitting" | "error";
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
+
+function detectExtension(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
+      resolve(false)
+      return
+    }
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, () => {
+        resolve(!chrome.runtime.lastError)
+      })
+    } catch {
+      resolve(false)
+    }
+  })
+}
+
+type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched";
 
 interface PrepareResult {
   application_id: string;
@@ -80,13 +98,41 @@ export default function ApplyPage() {
 
   async function handleConfirm() {
     if (!data) return;
+
+    // Save cover letter edits first
+    await fetch("/api/apply/submit-draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
+    }).catch(() => null);
+
+    // For LinkedIn jobs try extension flow first
+    const isLinkedIn = data.job_url.includes("linkedin.com");
+    if (isLinkedIn) {
+      const hasExtension = await detectExtension();
+      if (!hasExtension) {
+        setStage("no_extension");
+        return;
+      }
+      // Mark as pending_extension, open LinkedIn tab, extension handles the rest
+      await fetch("/api/apply/mark-pending-extension", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: data.application_id }),
+      });
+      window.open(data.job_url, "_blank");
+      setStage("extension_launched");
+      return;
+    }
+
+    // Non-LinkedIn: server-side Playwright flow (keep as fallback)
     setStage("submitting");
     try {
       const res = await fetch("/api/apply/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
-        signal: AbortSignal.timeout(310_000), // slightly above the 5 min backend timeout
+        signal: AbortSignal.timeout(310_000),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Submission failed");
@@ -96,11 +142,9 @@ export default function ApplyPage() {
         setTimeout(() => router.push("/dashboard/applications"), 2000);
       } else if (json.status === "manual") {
         showToast("Cover letter saved — finish applying via the link below", "error");
-        // Don't auto-redirect — let user see the manual apply button
       } else if (json.status === "timeout") {
-        // Don't redirect — amber message shown in render below
+        // amber message shown below
       } else {
-        // "failed" — show the actual reason from Python (e.g. no LinkedIn session)
         setError(json.message ?? "Something went wrong");
         setStage("error");
       }
@@ -110,6 +154,61 @@ export default function ApplyPage() {
       showToast(msg, "error");
       setStage("error");
     }
+  }
+
+  /* ── Extension not installed ── */
+  if (stage === "no_extension") {
+    return (
+      <div className="max-w-2xl mx-auto mt-12">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-8 text-center shadow-sm">
+          <div className="text-4xl mb-4">🔌</div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Install JobAgent Extension
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+            To apply automatically on LinkedIn, install the free JobAgent Chrome Extension.
+          </p>
+          <a
+            href="https://chromewebstore.google.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-6 py-3 rounded-lg mb-3"
+          >
+            Install Extension (Free)
+          </a>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+            Takes 30 seconds · Works on Chrome &amp; Edge
+          </p>
+          <button
+            onClick={() => setStage("submitting")}
+            className="block w-full text-sm text-gray-500 dark:text-gray-400 underline"
+          >
+            Apply manually instead (server-side)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Extension launched ── */
+  if (stage === "extension_launched") {
+    return (
+      <div className="max-w-2xl mx-auto mt-20 text-center">
+        <div className="text-4xl mb-4">⚡</div>
+        <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Extension is applying…
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          The LinkedIn tab opened in your browser. The extension will fill and submit the form automatically.
+        </p>
+        <button
+          onClick={() => router.push("/dashboard/applications")}
+          className="text-sm text-[#1a2e5e] dark:text-blue-400 underline"
+        >
+          View applications
+        </button>
+      </div>
+    );
   }
 
   /* ── Loading ── */
