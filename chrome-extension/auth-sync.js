@@ -1,40 +1,35 @@
-// Content script — runs on jobagent.uk pages
-// Reads the Supabase session from localStorage and caches it in extension storage
+// Content script — runs on jobagent.uk / localhost:3000
+// Supabase SSR stores sessions in httpOnly cookies, not localStorage.
+// A same-origin fetch to /api/auth/me works here because the content script
+// executes in the page's origin context, so the session cookie is sent automatically.
 
 console.log('JobAgent auth-sync.js loaded')
 
-async function syncAuth() {
+;(async () => {
   try {
-    const keys = Object.keys(localStorage)
-    console.log('JobAgent: localStorage keys:', keys)
+    const res = await fetch('/api/auth/me')
+    console.log('JobAgent: /api/auth/me status:', res.status)
 
-    const authKey = keys.find(k =>
-      k.includes('auth-token') ||
-      k.includes('supabase') ||
-      k.startsWith('sb-')
-    )
-    console.log('JobAgent: auth key found:', authKey)
+    if (res.ok) {
+      const user = await res.json()
+      console.log('JobAgent: user found:', user.email)
 
-    if (!authKey) return
+      // Log cookie keys for debugging
+      const cookieKeys = document.cookie.split(';').map(c => c.trim().split('=')[0])
+      console.log('JobAgent: cookie keys:', cookieKeys)
 
-    const raw = localStorage.getItem(authKey)
-    let parsed
-    try { parsed = JSON.parse(raw) } catch (e) {
-      console.error('JobAgent: failed to parse session JSON', e)
-      return
-    }
-
-    const token = parsed?.access_token
-    const userId = parsed?.user?.id
-    console.log('JobAgent: token found:', !!token, '| userId:', userId)
-
-    if (token) {
-      await chrome.storage.local.set({ authToken: token, userId })
-      console.log('JobAgent: token saved to extension storage')
+      await chrome.storage.local.set({
+        userId: user.id,
+        userEmail: user.email,
+        isLoggedIn: true,
+        lastChecked: Date.now()
+      })
+      console.log('JobAgent: user info saved to extension storage')
+    } else {
+      await chrome.storage.local.set({ isLoggedIn: false })
+      console.log('JobAgent: user not logged in')
     }
   } catch (e) {
     console.error('JobAgent auth-sync error:', e)
   }
-}
-
-syncAuth()
+})()

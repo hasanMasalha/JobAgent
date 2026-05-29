@@ -1,13 +1,19 @@
 const JOBAGENT_URL = 'https://jobagent.uk'
 
-// Decode JWT payload without verifying signature (display only)
-function decodeJwt(token) {
-  try {
-    const payload = token.split('.')[1]
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
-  } catch {
-    return null
+async function checkAuth() {
+  const stored = await chrome.storage.local.get([
+    'isLoggedIn', 'userEmail', 'userId', 'lastChecked'
+  ])
+
+  // Accept cached auth for up to 5 minutes
+  const isFresh = stored.lastChecked &&
+    (Date.now() - stored.lastChecked) < 5 * 60 * 1000
+
+  if (stored.isLoggedIn && stored.userEmail && isFresh) {
+    return { email: stored.userEmail, id: stored.userId }
   }
+
+  return null
 }
 
 async function init() {
@@ -21,10 +27,9 @@ async function init() {
     chrome.tabs.create({ url: JOBAGENT_URL })
   })
 
-  // Read token cached by auth-sync.js content script
-  const stored = await chrome.storage.local.get(['authToken', 'userId'])
+  const user = await checkAuth()
 
-  if (!stored.authToken) {
+  if (!user) {
     accountStatus.textContent = 'Not signed in'
     accountStatus.className = 'status-value disconnected'
     signinBtn.style.display = 'block'
@@ -35,23 +40,7 @@ async function init() {
     return
   }
 
-  // Decode JWT to get email and check expiry — no network call needed
-  const payload = decodeJwt(stored.authToken)
-  const expired = payload?.exp && payload.exp * 1000 < Date.now()
-
-  if (!payload || expired) {
-    accountStatus.textContent = expired ? 'Session expired' : 'Invalid token'
-    accountStatus.className = 'status-value disconnected'
-    chrome.storage.local.remove(['authToken', 'userId'])
-    signinBtn.style.display = 'block'
-    signinBtn.addEventListener('click', () => {
-      chrome.tabs.create({ url: `${JOBAGENT_URL}/login` })
-    })
-    linkedinStatus.textContent = 'Sign in first'
-    return
-  }
-
-  accountStatus.textContent = payload.email || 'Connected'
+  accountStatus.textContent = user.email
   accountStatus.className = 'status-value connected'
 
   // Check LinkedIn session cookie
