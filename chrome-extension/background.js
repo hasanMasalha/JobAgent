@@ -47,20 +47,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (message.type === 'APPLICATION_COMPLETE') {
-    getServerUrl().then(url => {
-      fetch(`${url}/api/applications/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          applicationId: message.applicationId,
-          status: message.status || 'applied',
-          jobUrl: message.jobUrl
+  // Content script cannot make cross-origin fetches on LinkedIn (CSP) so it
+  // delegates the status update here. We use userId from storage instead of
+  // credentials:include because SameSite=Lax blocks cookies in SW context.
+  if (message.type === 'REPORT_APPLICATION_COMPLETE') {
+    chrome.storage.local.get(['userId'], async (stored) => {
+      try {
+        const url = await getServerUrl()
+        const res = await fetch(`${url}/api/applications/update-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            applicationId: message.applicationId,
+            status: message.status || 'applied',
+            userId: stored.userId
+          })
         })
-      }).catch((e) => console.error('Failed to update application status', e))
+        console.log('[JobAgent bg] update-status response:', res.status)
+      } catch (e) {
+        console.error('[JobAgent bg] Failed to update application status', e)
+      }
+      sendResponse({ success: true })
     })
-    sendResponse({ success: true })
     return true
   }
 

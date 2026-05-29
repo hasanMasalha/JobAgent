@@ -9,11 +9,15 @@ export async function POST(req: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    const { applicationId, status, userId: bodyUserId } = await req.json();
+
+    // Accept userId from request body when called from background.js service worker
+    // (SameSite=Lax prevents session cookies from being sent in that context)
+    const userId = user?.id ?? bodyUserId;
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { applicationId, status } = await req.json();
     if (!applicationId || !status) {
       return NextResponse.json({ error: "applicationId and status required" }, { status: 400 });
     }
@@ -26,7 +30,7 @@ export async function POST(req: NextRequest) {
     await db.$executeRaw`
       UPDATE "Application"
       SET status = ${status}
-      WHERE id = ${applicationId} AND user_id = ${user.id}
+      WHERE id = ${applicationId} AND user_id = ${userId}
     `;
 
     return NextResponse.json({ success: true });

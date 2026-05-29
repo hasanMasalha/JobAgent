@@ -29,21 +29,28 @@ async function checkPendingApplication() {
 
 async function startEasyApply(application) {
   console.log('JobAgent: starting Easy Apply for application:', application.id)
-  // Wait for LinkedIn React to finish rendering the job detail panel
-  await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 20000)
 
-  // Find and click Easy Apply button
+  console.log('JobAgent: waiting for Easy Apply button...')
+  const btn = await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 20000)
+  console.log('JobAgent: waitForElement result:', !!btn)
+
+  // Try the precise selector first, then fall back to text search
   const easyApplyBtn = findEasyApplyButton()
-  if (!easyApplyBtn) {
-    console.log('JobAgent: No Easy Apply button found')
-    await reportResult(application.id, 'manual')
-    return
+  if (easyApplyBtn) {
+    console.log('JobAgent: clicking Easy Apply button via selector')
+    easyApplyBtn.click()
+  } else {
+    console.log('JobAgent: selector not found — trying JS text search')
+    const clicked = findAndClickEasyApply()
+    console.log('JobAgent: JS click result:', clicked)
+    if (!clicked) {
+      console.log('JobAgent: No Easy Apply button found — reporting manual')
+      await reportResult(application.id, 'manual')
+      return
+    }
   }
 
-  easyApplyBtn.click()
   await sleep(2000)
-
-  // Fill the application form
   await fillApplicationForm(application)
 }
 
@@ -57,15 +64,20 @@ function findEasyApplyButton() {
     const btn = document.querySelector(sel)
     if (btn && btn.offsetParent !== null) return btn
   }
+  return null
+}
 
-  // Search all buttons by text
+// Fallback: walk all buttons and match by visible text
+function findAndClickEasyApply() {
   const buttons = document.querySelectorAll('button')
   for (const btn of buttons) {
-    if (btn.textContent.includes('Easy Apply') && btn.offsetParent !== null) {
-      return btn
+    if (btn.textContent.trim().includes('Easy Apply')) {
+      btn.click()
+      console.log('JobAgent: clicked button via JS text match:', btn.textContent.trim())
+      return true
     }
   }
-  return null
+  return false
 }
 
 async function fillApplicationForm(application) {
@@ -144,7 +156,6 @@ async function fillCurrentStep(modal, application) {
   for (const group of radioGroups) {
     const selected = group.querySelector('[aria-checked="true"]')
     if (!selected) {
-      // Select Yes for most questions
       const yesOption = group.querySelector(
         '[data-test-text-selectable-option__input]'
       )
@@ -235,12 +246,14 @@ function getInputLabel(input) {
 }
 
 function setInputValue(input, value) {
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype, 'value'
-  )?.set
+  // Use the native setter for both <input> and <textarea> so React sees the change
+  const proto = input instanceof HTMLTextAreaElement
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype
+  const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
 
-  if (nativeInputValueSetter) {
-    nativeInputValueSetter.call(input, value)
+  if (nativeSetter) {
+    nativeSetter.call(input, value)
   } else {
     input.value = value
   }
@@ -249,13 +262,19 @@ function setInputValue(input, value) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+// All network calls go through background.js — content scripts cannot make
+// cross-origin fetches on pages with strict CSP (LinkedIn blocks them).
 async function reportResult(applicationId, status) {
-  await chrome.runtime.sendMessage({
-    type: 'APPLICATION_COMPLETE',
-    applicationId,
-    status,
-    jobUrl: window.location.href
-  })
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'REPORT_APPLICATION_COMPLETE',
+      applicationId,
+      status,
+      jobUrl: window.location.href
+    })
+  } catch (e) {
+    console.error('JobAgent: failed to report result', e)
+  }
 }
 
 function showSuccessNotification() {
