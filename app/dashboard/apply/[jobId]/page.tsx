@@ -110,13 +110,14 @@ export default function ApplyPage() {
     // detectExtension() result (service worker can be sleeping and fail the ping)
     const isLinkedIn = data.job_url.includes("linkedin.com");
     if (isLinkedIn) {
-      // Mark as pending_extension, open LinkedIn tab, extension handles the rest
+      // Mark as pending_extension — await the full DB write before opening the tab
       const markRes = await fetch("/api/apply/mark-pending-extension", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ application_id: data.application_id }),
       });
       const markData = markRes.ok ? await markRes.json() : {};
+      console.log("JobAgent: marked as pending:", markRes.status, markData);
 
       // Push application data directly into extension storage so content.js
       // can read it without relying on cross-site cookies (SameSite blocks them)

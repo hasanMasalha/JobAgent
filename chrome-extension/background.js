@@ -44,13 +44,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ;(async () => {
       try {
         const stored = await chrome.storage.local.get(['userId'])
-        const url = await getServerUrl()
-        const param = message.jobId
-          ? `jobId=${message.jobId}`
-          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}`
-        const res = await fetch(`${url}/api/apply/check-pending?${param}&userId=${stored.userId}`)
+        const serverUrl = await getServerUrl()
+        const jobId = message.jobId || message.jobUrl?.match(/\/jobs\/view\/(\d+)/)?.[1]
+        const param = jobId
+          ? `jobId=${jobId}&userId=${stored.userId}`
+          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}&userId=${stored.userId}`
+        const fullUrl = `${serverUrl}/api/apply/check-pending?${param}`
+
+        console.log('[JobAgent bg] GET_PENDING_APPLICATION — userId:', stored.userId)
+        console.log('[JobAgent bg] jobUrl:', message.jobUrl, '→ jobId:', jobId)
+        console.log('[JobAgent bg] calling:', fullUrl)
+
+        const res = await fetch(fullUrl)
         const data = await res.json()
-        console.log('[JobAgent bg] check-pending:', data.pending, data.application?.id)
+        console.log('[JobAgent bg] check-pending response:', data)
         sendResponse(data.pending ? { application: data.application } : { application: null })
       } catch (e) {
         console.error('[JobAgent bg] GET_PENDING_APPLICATION error:', e)

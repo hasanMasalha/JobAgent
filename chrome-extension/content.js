@@ -12,22 +12,35 @@ document.documentElement.appendChild(signal)
 // Check if this job has a pending application from JobAgent.
 // Data is pushed into extension storage by the app at confirm-time to avoid
 // SameSite cookie restrictions that block cross-site API fetches from linkedin.com.
+// Retry up to 5 times — the DB write from mark-pending-extension may still be
+// in flight when the LinkedIn page first loads.
 async function checkPendingApplication() {
-  console.log('JobAgent: checking pending application for:', window.location.href)
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'GET_PENDING_APPLICATION',
-      jobUrl: window.location.href
-    })
-    console.log('JobAgent: GET_PENDING_APPLICATION response:', response)
-    if (response?.application) {
-      await startEasyApply(response.application)
-    } else {
-      console.log('JobAgent: no pending application in storage')
+  const url = window.location.href
+  console.log('JobAgent: checking pending application for:', url)
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await sleep(2000)
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_PENDING_APPLICATION',
+        jobUrl: url
+      })
+      console.log(`JobAgent: attempt ${attempt + 1}, response:`, response)
+
+      if (response?.application) {
+        console.log('JobAgent: found pending application, starting Easy Apply')
+        await startEasyApply(response.application)
+        return
+      }
+
+      console.log(`JobAgent: no pending application yet, retrying...`)
+    } catch (e) {
+      console.error(`JobAgent: attempt ${attempt + 1} error:`, e)
     }
-  } catch (e) {
-    console.error('JobAgent: Error checking pending application', e)
   }
+
+  console.log('JobAgent: no pending application after 5 attempts')
 }
 
 async function startEasyApply(application) {
@@ -362,7 +375,6 @@ async function handleApplyFlowPage() {
 if (window.location.href.includes('/apply/') || window.location.href.includes('openSDUIApplyFlow')) {
   handleApplyFlowPage()
 } else {
-  // Wait for LinkedIn's React app to render before checking — the job detail
-  // panel (and the Easy Apply button) loads asynchronously after document_idle
-  sleep(3000).then(() => checkPendingApplication())
+  // checkPendingApplication has its own 2s-per-attempt retry loop
+  checkPendingApplication()
 }
