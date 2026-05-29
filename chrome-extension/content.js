@@ -30,54 +30,66 @@ async function checkPendingApplication() {
 async function startEasyApply(application) {
   console.log('JobAgent: starting Easy Apply for application:', application.id)
 
-  console.log('JobAgent: waiting for Easy Apply button...')
-  const btn = await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 20000)
-  console.log('JobAgent: waitForElement result:', !!btn)
+  // Wait for the job detail panel to render (LinkedIn uses <a> tags, not buttons)
+  console.log('JobAgent: waiting for Easy Apply element...')
+  await waitForElement(
+    '.jobs-apply-button, button[aria-label*="Easy Apply"], a[href*="/apply/"]',
+    20000
+  )
 
-  // Try the precise selector first, then fall back to text search
-  const easyApplyBtn = findEasyApplyButton()
-  if (easyApplyBtn) {
-    console.log('JobAgent: clicking Easy Apply button via selector')
-    easyApplyBtn.click()
-  } else {
-    console.log('JobAgent: selector not found — trying JS text search')
-    const clicked = findAndClickEasyApply()
-    console.log('JobAgent: JS click result:', clicked)
-    if (!clicked) {
-      console.log('JobAgent: No Easy Apply button found — reporting manual')
-      await reportResult(application.id, 'manual')
-      return
-    }
+  const easyApplyEl = findEasyApplyElement()
+  console.log('JobAgent: Easy Apply element found:', !!easyApplyEl, easyApplyEl?.tagName)
+  if (!easyApplyEl) {
+    console.log('JobAgent: No Easy Apply element found — reporting manual')
+    await reportResult(application.id, 'manual')
+    return
   }
 
-  await sleep(2000)
+  console.log('JobAgent: clicking Easy Apply element:', easyApplyEl.tagName)
+  easyApplyEl.click()
+
+  // Wait for the apply modal — <a> tags open it asynchronously
+  const modal = await waitForElement(
+    '.jobs-easy-apply-modal, [data-test-modal], .artdeco-modal',
+    10000
+  )
+  console.log('JobAgent: modal appeared:', !!modal)
+
   await fillApplicationForm(application)
 }
 
-function findEasyApplyButton() {
-  const selectors = [
-    'button[aria-label*="Easy Apply"]',
-    '.jobs-apply-button'
+// LinkedIn renders Easy Apply as <a href="...apply/..."> not a <button>.
+// Search buttons, links, and ARIA roles; also match Hebrew text.
+function findEasyApplyElement() {
+  const easyApplyTexts = [
+    'Easy Apply',
+    'הגש מועמדות בקלות',
+    'הגש מועמדות',
   ]
 
-  for (const sel of selectors) {
-    const btn = document.querySelector(sel)
-    if (btn && btn.offsetParent !== null) return btn
-  }
-  return null
-}
+  const candidates = document.querySelectorAll(
+    'button, a, [role="link"], [role="button"]'
+  )
 
-// Fallback: walk all buttons and match by visible text
-function findAndClickEasyApply() {
-  const buttons = document.querySelectorAll('button')
-  for (const btn of buttons) {
-    if (btn.textContent.trim().includes('Easy Apply')) {
-      btn.click()
-      console.log('JobAgent: clicked button via JS text match:', btn.textContent.trim())
-      return true
+  for (const el of candidates) {
+    if (el.offsetParent === null) continue  // not visible
+
+    const text = el.textContent.trim()
+    const ariaLabel = el.getAttribute('aria-label') || ''
+    const href = el.getAttribute('href') || ''
+
+    if (easyApplyTexts.some(t => text.includes(t) || ariaLabel.includes(t))) {
+      console.log('JobAgent: found Easy Apply element by text:', el.tagName, text)
+      return el
+    }
+
+    if (href.includes('/apply/') && href.includes('openSDUIApplyFlow')) {
+      console.log('JobAgent: found Easy Apply element by href:', href.substring(0, 80))
+      return el
     }
   }
-  return false
+
+  return null
 }
 
 async function fillApplicationForm(application) {
