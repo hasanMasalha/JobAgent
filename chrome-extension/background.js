@@ -8,6 +8,22 @@ async function getServerUrl() {
   return stored.serverUrl || 'https://jobagent.uk'
 }
 
+// Extract LinkedIn job ID from a URL, handling two formats:
+//   /jobs/view/4417922448/          → standard
+//   /jobs/view/hebrew-text-4417922448?originalSubdomain=il  → Hebrew slug
+function extractJobId(url) {
+  // Standard: numeric ID immediately after /view/
+  const standard = url.match(/\/jobs\/view\/(\d+)/)
+  if (standard) return standard[1]
+
+  // Hebrew/slug format: find the last long numeric sequence in the path
+  const path = url.split('?')[0]
+  const numbers = path.match(/(\d{8,})/g)
+  if (numbers && numbers.length > 0) return numbers[numbers.length - 1]
+
+  return null
+}
+
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
@@ -45,7 +61,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const stored = await chrome.storage.local.get(['userId'])
         const serverUrl = await getServerUrl()
-        const jobId = message.jobId || message.jobUrl?.match(/\/jobs\/view\/(\d+)/)?.[1]
+        const jobId = message.jobId || extractJobId(message.jobUrl || '')
         const param = jobId
           ? `jobId=${jobId}&userId=${stored.userId}`
           : `jobUrl=${encodeURIComponent(message.jobUrl || '')}&userId=${stored.userId}`

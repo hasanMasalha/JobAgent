@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
+// Handles both URL formats:
+//   /jobs/view/4417922448/          → standard
+//   /jobs/view/hebrew-text-4417922448?originalSubdomain=il  → Hebrew slug
+function extractJobId(url: string): string | null {
+  const standard = url.match(/\/jobs\/view\/(\d+)/);
+  if (standard) return standard[1];
+
+  const path = url.split("?")[0];
+  const numbers = path.match(/(\d{8,})/g);
+  if (numbers && numbers.length > 0) return numbers[numbers.length - 1];
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const supabase = createServerClient();
   const {
@@ -14,14 +28,16 @@ export async function GET(request: NextRequest) {
   const userId = user?.id ?? searchParams.get("userId");
   if (!userId) return NextResponse.json({ pending: false });
 
-  const jobId = searchParams.get("jobId");   // LinkedIn numeric job ID (preferred)
-  const jobUrl = searchParams.get("jobUrl"); // Full job URL (fallback)
+  const jobIdParam = searchParams.get("jobId");
+  const jobUrl = searchParams.get("jobUrl");
 
-  if (!jobId && !jobUrl) return NextResponse.json({ pending: false });
+  if (!jobIdParam && !jobUrl) return NextResponse.json({ pending: false });
 
-  // Direct jobId takes priority; otherwise extract from jobUrl for fuzzy matching.
-  // This handles trailing slashes and tracking params in window.location.href.
-  const linkedinJobId = jobId ?? jobUrl?.match(/\/jobs\/view\/(\d+)/)?.[1] ?? null;
+  // Prefer explicit jobId param; fall back to extracting from the jobUrl.
+  // extractJobId handles Hebrew slugs where /view/ is followed by text, not digits.
+  const linkedinJobId = jobIdParam ?? (jobUrl ? extractJobId(jobUrl) : null);
+
+  console.log(`[check-pending] userId=${userId} jobIdParam=${jobIdParam} jobUrl=${jobUrl} → linkedinJobId=${linkedinJobId}`);
 
   let rows: { id: string; job_url: string }[];
 
@@ -46,6 +62,8 @@ export async function GET(request: NextRequest) {
       LIMIT 1
     `;
   }
+
+  console.log(`[check-pending] found application: ${rows[0]?.id ?? "none"}`);
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
