@@ -14,13 +14,14 @@ export async function GET(request: NextRequest) {
   const userId = user?.id ?? searchParams.get("userId");
   if (!userId) return NextResponse.json({ pending: false });
 
-  const jobUrl = searchParams.get("jobUrl");
-  if (!jobUrl) return NextResponse.json({ pending: false });
+  const jobId = searchParams.get("jobId");   // LinkedIn numeric job ID (preferred)
+  const jobUrl = searchParams.get("jobUrl"); // Full job URL (fallback)
 
-  // Extract LinkedIn job ID for fuzzy matching — the stored URL may differ from
-  // window.location.href due to tracking params or trailing slashes
-  const linkedinJobIdMatch = jobUrl.match(/\/jobs\/view\/(\d+)/);
-  const linkedinJobId = linkedinJobIdMatch?.[1] ?? null;
+  if (!jobId && !jobUrl) return NextResponse.json({ pending: false });
+
+  // Direct jobId takes priority; otherwise extract from jobUrl for fuzzy matching.
+  // This handles trailing slashes and tracking params in window.location.href.
+  const linkedinJobId = jobId ?? jobUrl?.match(/\/jobs\/view\/(\d+)/)?.[1] ?? null;
 
   let rows: { id: string; job_url: string }[];
 

@@ -39,11 +39,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'GET_PENDING_APPLICATION') {
-    chrome.storage.local.get(['pendingApplication'], (data) => {
-      const app = data.pendingApplication || null
-      if (app) chrome.storage.local.remove('pendingApplication')
-      sendResponse({ application: app })
-    })
+    // Fetch from the API — background.js is exempt from page CSP and can reach the server.
+    // Passes jobId or jobUrl so check-pending can look up the pending application.
+    ;(async () => {
+      try {
+        const stored = await chrome.storage.local.get(['userId'])
+        const url = await getServerUrl()
+        const param = message.jobId
+          ? `jobId=${message.jobId}`
+          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}`
+        const res = await fetch(`${url}/api/apply/check-pending?${param}&userId=${stored.userId}`)
+        const data = await res.json()
+        console.log('[JobAgent bg] check-pending:', data.pending, data.application?.id)
+        sendResponse(data.pending ? { application: data.application } : { application: null })
+      } catch (e) {
+        console.error('[JobAgent bg] GET_PENDING_APPLICATION error:', e)
+        sendResponse({ application: null })
+      }
+    })()
     return true
   }
 

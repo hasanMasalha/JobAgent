@@ -15,7 +15,10 @@ document.documentElement.appendChild(signal)
 async function checkPendingApplication() {
   console.log('JobAgent: checking pending application for:', window.location.href)
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'GET_PENDING_APPLICATION' })
+    const response = await chrome.runtime.sendMessage({
+      type: 'GET_PENDING_APPLICATION',
+      jobUrl: window.location.href
+    })
     console.log('JobAgent: GET_PENDING_APPLICATION response:', response)
     if (response?.application) {
       await startEasyApply(response.application)
@@ -92,17 +95,16 @@ function findEasyApplyElement() {
   return null
 }
 
-async function fillApplicationForm(application) {
+// pageRoot is document.body for the SDUI full-page flow; null uses modal detection
+async function fillApplicationForm(application, pageRoot = null) {
   let step = 0
   const maxSteps = 10
 
   while (step < maxSteps) {
     await sleep(1500)
 
-    // Check if modal is open
-    const modal = document.querySelector(
-      '.jobs-easy-apply-modal, [data-test-modal]'
-    )
+    // Classic apply: find the modal. SDUI apply: use the full page body.
+    const modal = pageRoot || document.querySelector('.jobs-easy-apply-modal, [data-test-modal]')
     if (!modal) break
 
     // Check if submitted
@@ -324,6 +326,43 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// Wait for LinkedIn's React app to render before checking — the job detail
-// panel (and the Easy Apply button) loads asynchronously after document_idle
-sleep(3000).then(() => checkPendingApplication())
+// Handler for the new SDUI apply flow — LinkedIn opens a full page at
+// /jobs/view/{id}/apply/?openSDUIApplyFlow=true instead of a modal.
+// The form is rendered directly in the page body, no modal wrapper.
+async function handleApplyFlowPage() {
+  const url = window.location.href
+  console.log('JobAgent: on apply flow page:', url)
+
+  const jobIdMatch = url.match(/\/jobs\/view\/(\d+)\//)
+  if (!jobIdMatch) {
+    console.log('JobAgent: could not extract job ID from apply URL')
+    return
+  }
+
+  const jobId = jobIdMatch[1]
+  console.log('JobAgent: job ID:', jobId)
+
+  const response = await chrome.runtime.sendMessage({
+    type: 'GET_PENDING_APPLICATION',
+    jobId
+  })
+  console.log('JobAgent: GET_PENDING_APPLICATION response:', response)
+
+  if (!response?.application) {
+    console.log('JobAgent: no pending application for job', jobId)
+    return
+  }
+
+  console.log('JobAgent: found pending application, filling form...')
+  await sleep(2000) // wait for SDUI form to render
+  await fillApplicationForm(response.application, document.body)
+}
+
+// Route to the right handler based on the current page
+if (window.location.href.includes('/apply/') || window.location.href.includes('openSDUIApplyFlow')) {
+  handleApplyFlowPage()
+} else {
+  // Wait for LinkedIn's React app to render before checking — the job detail
+  // panel (and the Easy Apply button) loads asynchronously after document_idle
+  sleep(3000).then(() => checkPendingApplication())
+}
