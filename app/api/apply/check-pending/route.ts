@@ -3,7 +3,7 @@ import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
 // Handles both URL formats:
-//   /jobs/view/4417922448/          → standard
+//   /jobs/view/4417922448/                              → standard
 //   /jobs/view/hebrew-text-4417922448?originalSubdomain=il  → Hebrew slug
 function extractJobId(url: string): string | null {
   const standard = url.match(/\/jobs\/view\/(\d+)/);
@@ -39,16 +39,29 @@ export async function GET(request: NextRequest) {
 
   console.log(`[check-pending] userId=${userId} jobIdParam=${jobIdParam} jobUrl=${jobUrl} → linkedinJobId=${linkedinJobId}`);
 
+  // --- DEBUG: show all pending_extension apps for this user so we can compare ---
+  const allPending = await db.$queryRaw<{ id: string; job_id: string; status: string; job_url: string }[]>`
+    SELECT a.id, a.job_id, a.status, j.url AS job_url
+    FROM "Application" a
+    JOIN "Job" j ON j.id = a.job_id
+    WHERE a.user_id = ${userId} AND a.status = 'pending_extension'
+  `;
+  console.log(`[check-pending] all pending_extension for user:`, JSON.stringify(allPending));
+  // --- END DEBUG ---
+
   let rows: { id: string; job_url: string }[];
 
   if (linkedinJobId) {
+    // Search for the job ID anywhere in the stored URL — handles both:
+    //   stored: /jobs/view/4417922448/
+    //   stored: /jobs/view/hebrew-text-4417922448/   (Hebrew slug from JobSpy)
     rows = await db.$queryRaw<{ id: string; job_url: string }[]>`
       SELECT a.id, j.url AS job_url
       FROM "Application" a
       JOIN "Job" j ON j.id = a.job_id
       WHERE a.user_id = ${userId}
         AND a.status = 'pending_extension'
-        AND j.url LIKE ${`%/jobs/view/${linkedinJobId}%`}
+        AND j.url LIKE ${`%${linkedinJobId}%`}
       LIMIT 1
     `;
   } else {
@@ -63,7 +76,7 @@ export async function GET(request: NextRequest) {
     `;
   }
 
-  console.log(`[check-pending] found application: ${rows[0]?.id ?? "none"}`);
+  console.log(`[check-pending] matched application: ${rows[0]?.id ?? "none"}`);
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
