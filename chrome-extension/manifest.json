@@ -22,6 +22,11 @@
       "matches": ["https://www.linkedin.com/jobs/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://jobagent.uk/*", "http://localhost:3000/*"],
+      "js": ["auth-sync.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
