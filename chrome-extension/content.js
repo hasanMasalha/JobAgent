@@ -13,28 +13,23 @@ document.documentElement.appendChild(signal)
 async function checkPendingApplication() {
   const url = window.location.href
 
-  const response = await chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' })
-  if (!response.token) return
-
   try {
+    // credentials:include sends the jobagent.uk session cookie automatically
     const res = await fetch(
       `${JOBAGENT_URL}/api/apply/check-pending?jobUrl=${encodeURIComponent(url)}`,
-      {
-        headers: { 'Authorization': `Bearer ${response.token}` }
-      }
+      { credentials: 'include' }
     )
     const data = await res.json()
 
     if (data.pending) {
-      // There's a pending application — start Easy Apply
-      await startEasyApply(data.application, response.token)
+      await startEasyApply(data.application)
     }
   } catch (e) {
     console.error('JobAgent: Error checking pending application', e)
   }
 }
 
-async function startEasyApply(application, token) {
+async function startEasyApply(application) {
   // Wait for page to fully load
   await waitForElement('.jobs-apply-button, button[aria-label*="Easy Apply"]', 15000)
 
@@ -42,7 +37,7 @@ async function startEasyApply(application, token) {
   const easyApplyBtn = findEasyApplyButton()
   if (!easyApplyBtn) {
     console.log('JobAgent: No Easy Apply button found')
-    await reportResult(application.id, 'manual', token)
+    await reportResult(application.id, 'manual')
     return
   }
 
@@ -92,7 +87,7 @@ async function fillApplicationForm(application) {
       '[aria-label*="submitted"], .artdeco-inline-feedback--success'
     )
     if (successMsg) {
-      await reportResult(application.id, 'applied', application.token)
+      await reportResult(application.id, 'applied')
       showSuccessNotification()
       break
     }
@@ -255,7 +250,7 @@ function setInputValue(input, value) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-async function reportResult(applicationId, status, token) {
+async function reportResult(applicationId, status) {
   await chrome.runtime.sendMessage({
     type: 'APPLICATION_COMPLETE',
     applicationId,

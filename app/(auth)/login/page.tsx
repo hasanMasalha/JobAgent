@@ -29,17 +29,16 @@ export default function LoginPage() {
       return;
     }
 
-    // Sync auth token to extension if installed
-    const extensionId = process.env.NEXT_PUBLIC_EXTENSION_ID;
-    if (extensionId && data.session && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+    // Sync token to extension via cookie + postMessage (no extension ID needed)
+    if (data.session) {
       try {
-        chrome.runtime.sendMessage(extensionId, {
-          type: "SAVE_AUTH",
-          token: data.session.access_token,
-          userId: data.session.user.id,
-        });
+        const token = data.session.access_token;
+        const userId = data.session.user.id;
+        document.cookie = `jobagent_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `jobagent_user_id=${userId}; path=/; max-age=86400; SameSite=Lax`;
+        window.postMessage({ type: "JOBAGENT_AUTH", token, userId }, "*");
       } catch {
-        // Extension not installed — ignore
+        // ignore
       }
     }
 

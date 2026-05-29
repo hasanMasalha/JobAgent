@@ -36,5 +36,11 @@
     "16": "icon16.png",
     "48": "icon48.png",
     "128": "icon128.png"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://jobagent.uk/*",
+      "http://localhost:3000/*"
+    ]
   }
 }
