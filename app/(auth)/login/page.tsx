@@ -21,12 +21,25 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
+    }
+
+    // Sync token to extension via cookie + postMessage (no extension ID needed)
+    if (data.session) {
+      try {
+        const token = data.session.access_token;
+        const userId = data.session.user.id;
+        document.cookie = `jobagent_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `jobagent_user_id=${userId}; path=/; max-age=86400; SameSite=Lax`;
+        window.postMessage({ type: "JOBAGENT_AUTH", token, userId }, "*");
+      } catch {
+        // ignore
+      }
     }
 
     router.push("/dashboard");

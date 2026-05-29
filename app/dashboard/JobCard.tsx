@@ -1,8 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
+
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
+
+function useExtensionInstalled() {
+  const [installed, setInstalled] = useState(false)
+  useEffect(() => {
+    if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) return
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, () => {
+        setInstalled(!chrome.runtime.lastError)
+      })
+    } catch {
+      // not installed
+    }
+  }, [])
+  return installed
+}
 
 export interface Job {
   id: string;
@@ -73,6 +90,8 @@ export default function JobCard({
   const [saving, setSaving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const router = useRouter();
+  const extensionInstalled = useExtensionInstalled();
+  const isLinkedIn = job.source?.toLowerCase() === "linkedin";
 
   const score =
     (job.claude_score ?? 0) > 0
@@ -216,9 +235,13 @@ export default function JobCard({
             onApply?.(job.id);
             router.push(`/dashboard/apply/${job.id}`);
           }}
-          className="text-xs font-medium bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors"
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+            isLinkedIn && extensionInstalled
+              ? "bg-[#1a2e5e] text-white hover:opacity-90"
+              : "bg-emerald-600 text-white hover:bg-emerald-700"
+          }`}
         >
-          Apply
+          {isLinkedIn && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
         </button>
         <button
           disabled={saving}

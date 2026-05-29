@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "JobAgent — AI Job Assistant",
+  "version": "1.0.0",
+  "description": "Auto-apply to LinkedIn Easy Apply jobs with your AI-tailored CV. Fills forms, tracks applications, and syncs your LinkedIn session.",
+  "author": "JobAgent",
+  "homepage_url": "https://jobagent.uk",
+  "permissions": [
+    "cookies",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://jobagent.uk/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://jobagent.uk/*"],
+      "js": ["auth-sync.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://jobagent.uk/*"
+    ]
+  }
+}
