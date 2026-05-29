@@ -89,29 +89,9 @@ export default function JobCard({
   const [saved, setSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
-  const [autoApplying, setAutoApplying] = useState(false);
   const router = useRouter();
   const extensionInstalled = useExtensionInstalled();
   const isLinkedIn = job.source?.toLowerCase() === "linkedin";
-
-  async function handleAutoApply() {
-    setAutoApplying(true);
-    try {
-      const res = await fetch("/api/apply/mark-pending-extension", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.id, jobUrl: job.url }),
-      });
-      if (!res.ok) throw new Error("Failed to mark pending");
-      onApply?.(job.id);
-      window.open(job.url, "_blank");
-    } catch (e) {
-      console.error("Auto apply error:", e);
-      showToast("Failed to start auto apply", "error");
-    } finally {
-      setAutoApplying(false);
-    }
-  }
 
   const score =
     (job.claude_score ?? 0) > 0
@@ -252,21 +232,16 @@ export default function JobCard({
         </a>
         <button
           onClick={() => {
-            if (isLinkedIn && extensionInstalled) {
-              handleAutoApply();
-            } else {
-              onApply?.(job.id);
-              router.push(`/dashboard/apply/${job.id}`);
-            }
+            onApply?.(job.id);
+            router.push(`/dashboard/apply/${job.id}`);
           }}
-          disabled={autoApplying}
-          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 ${
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
             isLinkedIn && extensionInstalled
               ? "bg-[#1a2e5e] text-white hover:opacity-90"
               : "bg-emerald-600 text-white hover:bg-emerald-700"
           }`}
         >
-          {autoApplying ? "Starting…" : isLinkedIn && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
+          {isLinkedIn && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
         </button>
         <button
           disabled={saving}

@@ -106,14 +106,10 @@ export default function ApplyPage() {
       body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
     }).catch(() => null);
 
-    // For LinkedIn jobs try extension flow first
+    // For LinkedIn jobs use the extension flow — always proceed regardless of
+    // detectExtension() result (service worker can be sleeping and fail the ping)
     const isLinkedIn = data.job_url.includes("linkedin.com");
     if (isLinkedIn) {
-      const hasExtension = await detectExtension();
-      if (!hasExtension) {
-        setStage("no_extension");
-        return;
-      }
       // Mark as pending_extension, open LinkedIn tab, extension handles the rest
       const markRes = await fetch("/api/apply/mark-pending-extension", {
         method: "POST",
@@ -224,11 +220,17 @@ export default function ApplyPage() {
       <div className="max-w-2xl mx-auto mt-20 text-center">
         <div className="text-4xl mb-4">⚡</div>
         <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-          Extension is applying…
+          Applying via extension…
         </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          The LinkedIn tab opened in your browser. The extension will fill and submit the form automatically.
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          The LinkedIn tab opened. The extension will fill and submit the Easy Apply form automatically.
         </p>
+        {process.env.NEXT_PUBLIC_EXTENSION_ID && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 mb-6">
+            If the form didn&apos;t fill automatically, reload the extension at{" "}
+            <strong>chrome://extensions</strong> and try again.
+          </p>
+        )}
         <button
           onClick={() => router.push("/dashboard/applications")}
           className="text-sm text-[#1a2e5e] dark:text-blue-400 underline"
