@@ -44,34 +44,53 @@ async function checkPendingApplication() {
 }
 
 async function startEasyApply(application) {
-  console.log('JobAgent: starting Easy Apply for application:', application.id)
+  console.log('JobAgent: starting Easy Apply for:', application.id)
 
-  // Wait for the job detail panel to render (LinkedIn uses <a> tags, not buttons)
-  console.log('JobAgent: waiting for Easy Apply element...')
-  await waitForElement(
-    '.jobs-apply-button, button[aria-label*="Easy Apply"], a[href*="/apply/"]',
-    20000
-  )
-
-  const easyApplyEl = findEasyApplyElement()
-  console.log('JobAgent: Easy Apply element found:', !!easyApplyEl, easyApplyEl?.tagName)
-  if (!easyApplyEl) {
-    console.log('JobAgent: No Easy Apply element found — reporting manual')
+  const el = await waitForEasyApplyButton(20000)
+  if (!el) {
+    console.log('JobAgent: Easy Apply element not found')
     await reportResult(application.id, 'manual')
     return
   }
 
-  console.log('JobAgent: clicking Easy Apply element:', easyApplyEl.tagName)
-  easyApplyEl.click()
+  const href = el.getAttribute('href') || ''
+  console.log('JobAgent: Easy Apply href:', href)
 
-  // Wait for the apply modal — <a> tags open it asynchronously
+  if (href.includes('/apply/') || href.includes('openSDUIApplyFlow')) {
+    // Link navigates to a new page — save application data for the apply page to pick up
+    await chrome.storage.local.set({
+      pendingApplyData: {
+        applicationId: application.id,
+        application: application,
+        timestamp: Date.now()
+      }
+    })
+    console.log('JobAgent: saved apply data, navigating to apply page')
+    el.click()
+    return
+  }
+
+  // Old modal flow (fallback)
+  el.click()
+  await sleep(2000)
   const modal = await waitForElement(
     '.jobs-easy-apply-modal, [data-test-modal], .artdeco-modal',
     10000
   )
   console.log('JobAgent: modal appeared:', !!modal)
+  if (modal) {
+    await fillApplicationForm(application)
+  }
+}
 
-  await fillApplicationForm(application)
+async function waitForEasyApplyButton(timeout) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    const el = findEasyApplyElement()
+    if (el) return el
+    await sleep(500)
+  }
+  return null
 }
 
 // LinkedIn renders Easy Apply as <a href="...apply/..."> not a <button>.
@@ -110,6 +129,16 @@ function findEasyApplyElement() {
 
 // pageRoot is document.body for the SDUI full-page flow; null uses modal detection
 async function fillApplicationForm(application, pageRoot = null) {
+  console.log('JobAgent: fillApplicationForm called')
+  console.log('JobAgent: page URL:', window.location.href)
+
+  const inputs = document.querySelectorAll('input, textarea, select')
+  console.log('JobAgent: found inputs:', inputs.length)
+  inputs.forEach((input, i) => {
+    console.log(`Input ${i}:`, input.type, input.name,
+      input.getAttribute('aria-label'), input.value?.substring(0, 20))
+  })
+
   let step = 0
   const maxSteps = 10
 
@@ -344,31 +373,27 @@ function sleep(ms) {
 // The form is rendered directly in the page body, no modal wrapper.
 async function handleApplyFlowPage() {
   const url = window.location.href
-  console.log('JobAgent: on apply flow page:', url)
+  if (!url.includes('/apply/') && !url.includes('openSDUIApplyFlow')) return
 
-  const jobIdMatch = url.match(/\/jobs\/view\/(\d+)\//)
-  if (!jobIdMatch) {
-    console.log('JobAgent: could not extract job ID from apply URL')
+  console.log('JobAgent: on apply flow page')
+  await sleep(2000) // wait for page to render
+
+  const stored = await chrome.storage.local.get(['pendingApplyData'])
+  const pendingData = stored.pendingApplyData
+
+  if (!pendingData) {
+    console.log('JobAgent: no pending apply data in storage')
     return
   }
 
-  const jobId = jobIdMatch[1]
-  console.log('JobAgent: job ID:', jobId)
-
-  const response = await chrome.runtime.sendMessage({
-    type: 'GET_PENDING_APPLICATION',
-    jobId
-  })
-  console.log('JobAgent: GET_PENDING_APPLICATION response:', response)
-
-  if (!response?.application) {
-    console.log('JobAgent: no pending application for job', jobId)
+  if (Date.now() - pendingData.timestamp > 5 * 60 * 1000) {
+    console.log('JobAgent: pending apply data is stale')
+    await chrome.storage.local.remove(['pendingApplyData'])
     return
   }
 
-  console.log('JobAgent: found pending application, filling form...')
-  await sleep(2000) // wait for SDUI form to render
-  await fillApplicationForm(response.application, document.body)
+  console.log('JobAgent: found pending apply data:', pendingData.applicationId)
+  await fillApplicationForm(pendingData.application)
 }
 
 // Route to the right handler based on the current page
