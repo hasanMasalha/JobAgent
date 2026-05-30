@@ -24,6 +24,38 @@ function extractJobId(url) {
   return null
 }
 
+// Open the LinkedIn job URL in a minimized, off-screen window so the user
+// never sees it. Falls back to active:false tab if windows.create fails.
+function openApplyWindow(jobUrl, applicationId) {
+  chrome.windows.create({
+    url: jobUrl,
+    state: 'minimized',
+    focused: false,
+    left: -2000,
+    top: -2000,
+    width: 1280,
+    height: 800,
+  })
+  .then(win => {
+    const tabId = win.tabs[0].id
+    console.log('[JobAgent bg] opened minimized window:', win.id, 'tab:', tabId)
+    return chrome.storage.local.set({
+      activeApplyTab: tabId,
+      activeApplyWindow: win.id,
+      activeApplicationId: applicationId,
+    })
+  })
+  .catch(e => {
+    console.error('[JobAgent bg] windows.create failed, falling back to tab:', e)
+    chrome.tabs.create({ url: jobUrl, active: false })
+      .then(tab => chrome.storage.local.set({
+        activeApplyTab: tab.id,
+        activeApplicationId: applicationId,
+      }))
+      .catch(e2 => console.error('[JobAgent bg] tab fallback also failed:', e2))
+  })
+}
+
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
@@ -85,15 +117,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'OPEN_APPLY_TAB') {
     sendResponse({ success: true })
-    chrome.tabs.create({ url: message.jobUrl, active: false })
-      .then(tab => {
-        console.log('[JobAgent bg] opened background tab:', tab.id)
-        return chrome.storage.local.set({
-          activeApplyTab: tab.id,
-          activeApplicationId: message.applicationId,
-        })
-      })
-      .catch(e => console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e))
+    openApplyWindow(message.jobUrl, message.applicationId)
     return false
   }
 
@@ -135,7 +159,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'REPORT_APPLICATION_COMPLETE') {
     ;(async () => {
       try {
-        const stored = await chrome.storage.local.get(['userId', 'activeApplyTab'])
+        const stored = await chrome.storage.local.get([
+          'userId', 'activeApplyTab', 'activeApplyWindow'
+        ])
         const url = await getServerUrl()
         const status = message.status || 'applied'
         console.log('[JobAgent bg] updating status:', message.applicationId, '→', status)
@@ -151,8 +177,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const resText = await res.text()
         console.log('[JobAgent bg] update-status response:', res.status, resText)
 
-        // Close the background tab
-        if (stored.activeApplyTab) {
+        // Close the minimized window (preferred) or fall back to closing the tab
+        if (stored.activeApplyWindow) {
+          try {
+            await chrome.windows.remove(stored.activeApplyWindow)
+            console.log('[JobAgent bg] closed apply window')
+          } catch {
+            if (stored.activeApplyTab) {
+              try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
+            }
+          }
+          await chrome.storage.local.remove([
+            'activeApplyTab', 'activeApplyWindow', 'activeApplicationId'
+          ])
+        } else if (stored.activeApplyTab) {
           try {
             await chrome.tabs.remove(stored.activeApplyTab)
             await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
@@ -163,7 +201,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         // Notify the user
-        const applied = (message.status || 'applied') === 'applied'
+        const applied = status === 'applied'
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icon48.png',
@@ -228,21 +266,12 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return true
   }
 
-  // Open LinkedIn tab in background so the user stays on the dashboard.
-  // Respond immediately (synchronously) so the MV3 service worker doesn't
-  // get killed before sendResponse fires — then do async work after.
+  // Open LinkedIn in a minimized off-screen window so the user stays on
+  // the dashboard. Respond immediately (sync) to avoid MV3 SW timing issues.
   if (message.type === 'OPEN_APPLY_TAB') {
     sendResponse({ success: true })
-    chrome.tabs.create({ url: message.jobUrl, active: false })
-      .then(tab => {
-        console.log('[JobAgent bg] opened background tab:', tab.id)
-        return chrome.storage.local.set({
-          activeApplyTab: tab.id,
-          activeApplicationId: message.applicationId,
-        })
-      })
-      .catch(e => console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e))
-    return false // channel can close — response already sent
+    openApplyWindow(message.jobUrl, message.applicationId)
+    return false
   }
 
   // Sent from the apply page when user confirms — stores application data so

@@ -9,6 +9,7 @@
     "scripting",
     "storage",
     "tabs",
+    "windows",
     "notifications"
   ],
   "host_permissions": [
