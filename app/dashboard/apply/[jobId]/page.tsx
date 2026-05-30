@@ -232,7 +232,7 @@ export default function ApplyPage() {
             </p>
           ) : (
             <a
-              href="https://chromewebstore.google.com/"
+              href="https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-6 py-3 rounded-lg mb-3"

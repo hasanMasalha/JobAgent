@@ -33,7 +33,7 @@ function ExtensionBadge() {
   }
   return (
     <a
-      href="https://chromewebstore.google.com/"
+      href="https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda"
       target="_blank"
       rel="noopener noreferrer"
       className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 hover:underline"
