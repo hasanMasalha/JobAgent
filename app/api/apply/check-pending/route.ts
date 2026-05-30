@@ -76,8 +76,8 @@ export async function GET(request: NextRequest) {
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
-  // Fetch profile defaults and CV skills in parallel
-  const [profile, cvRows] = await Promise.all([
+  // Fetch profile defaults, saved answers, and CV skills in parallel
+  const [profile, savedAnswers, cvRows] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
       select: {
@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
         willing_to_relocate: true,
       },
     }),
+    db.easyApplyAnswer.findMany({ where: { user_id: userId } }),
     db.$queryRaw<{ skills_json: unknown }[]>`
       SELECT skills_json FROM "CV" WHERE user_id = ${userId} LIMIT 1
     `,
@@ -107,6 +108,10 @@ export async function GET(request: NextRequest) {
     if (Array.isArray(raw)) return raw as string[];
     return [];
   })();
+
+  const answersMap = Object.fromEntries(
+    savedAnswers.map((a) => [a.question, a.answer])
+  );
 
   return NextResponse.json({
     pending: true,
@@ -133,6 +138,8 @@ export async function GET(request: NextRequest) {
       willing_to_relocate: profile?.willing_to_relocate ?? false,
       // CV skills
       skills,
+      // Learned answers from previous applications
+      savedAnswers: answersMap,
     },
   });
 }

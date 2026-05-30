@@ -235,13 +235,22 @@ async function fillCurrentStep(scope, application) {
       .map(f => f.querySelector('legend')?.textContent?.trim())
   )
 
-  // Text / URL / textarea inputs
-  const textInputs = scope.querySelectorAll('input[type="text"], input[type="url"], textarea')
+  // Text / URL / email / textarea inputs
+  const textInputs = scope.querySelectorAll(
+    'input[type="text"], input[type="url"], input[type="email"], textarea'
+  )
   for (const input of textInputs) {
-    if (input.value) continue
+    if (input.value?.trim()) continue
     const label = getInputLabel(input)
-    if (!label) continue
-    const answer = getAnswerForLabel(label, application)
+
+    let answer = getAnswerForLabel(label, application)
+
+    // Only ask user for fields we don't recognise (null).
+    // Empty string means we recognised the field but have no data — skip silently.
+    if (answer === null && label) {
+      answer = await getAnswerForUnknown(label, application)
+    }
+
     if (answer) {
       console.log('JobAgent: filling input:', label, '→', answer.substring(0, 30))
       setInputValue(input, answer)
@@ -251,34 +260,41 @@ async function fillCurrentStep(scope, application) {
   // Number inputs (years of experience)
   const numberInputs = scope.querySelectorAll('input[type="number"]')
   for (const input of numberInputs) {
-    if (input.value) continue
+    if (input.value?.trim()) continue
     const label = getInputLabel(input)
-    const answer = getAnswerForLabel(label, application) || getYearsAnswer(label, application.skills || [])
+    const answer = getAnswerForLabel(label, application)
+      || getYearsAnswer(label, application.skills || [])
+      || application.years_of_experience
+      || '2'
     setInputValue(input, answer)
   }
 
   // Fieldsets with real radio inputs (work auth, sponsorship, yes/no questions)
   const fieldsets = scope.querySelectorAll('fieldset')
   for (const fieldset of fieldsets) {
-    const legend = fieldset.querySelector('legend')
+    const legend = fieldset.querySelector('legend, [data-test-form-element-label]')
     const legendText = legend?.textContent?.trim() || ''
     console.log('JobAgent: fieldset legend:', legendText.substring(0, 50))
 
     const radios = fieldset.querySelectorAll('input[type="radio"]')
-    const alreadySelected = Array.from(radios).find(r => r.checked)
+    const alreadySelected = Array.from(radios).some(r => r.checked)
     if (alreadySelected || radios.length === 0) continue
 
-    // Decide yes/no based on user's profile defaults
     const wantYes = getBooleanAnswer(legendText, application)
     const target = Array.from(radios).find(r => {
-      const val = (r.value || r.parentElement?.textContent || '').toLowerCase()
-      return wantYes ? val.includes('yes') : val.includes('no')
+      const lbl = r.closest('label') || fieldset.querySelector(`label[for="${r.id}"]`)
+      const text = (lbl?.textContent || r.value || '').toLowerCase()
+      return wantYes
+        ? text.includes('yes') || text.includes('כן')
+        : text.includes('no') || text.includes('לא')
     }) || (wantYes ? radios[0] : radios[radios.length - 1])
 
-    console.log('JobAgent: clicking radio:', target?.value,
-      target?.parentElement?.textContent?.trim().substring(0, 30))
-    target.click()
-    target.dispatchEvent(new Event('change', { bubbles: true }))
+    if (target) {
+      console.log('JobAgent: clicking radio:', target.value,
+        'for question:', legendText.substring(0, 50))
+      target.click()
+      target.dispatchEvent(new Event('change', { bubbles: true }))
+    }
   }
 
   // ARIA radiogroups (older LinkedIn UI)
@@ -298,15 +314,20 @@ async function fillCurrentStep(scope, application) {
     const label = getInputLabel(select)
     console.log('JobAgent: select field:', label)
 
-    const answer = getAnswerForField(label, application)
+    const answer = getAnswerForLabel(label, application)
     if (answer) {
-      select.value = answer
-      select.dispatchEvent(new Event('change', { bubbles: true }))
+      const match = Array.from(select.options).find(o =>
+        o.text.toLowerCase().includes(answer.toLowerCase()) ||
+        o.value.toLowerCase().includes(answer.toLowerCase())
+      )
+      if (match) {
+        select.value = match.value
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      }
     } else {
-      // Fall back to first non-empty option
-      const firstOption = Array.from(select.options).find(o => o.value && o.value !== '')
-      if (firstOption) {
-        select.value = firstOption.value
+      const first = Array.from(select.options).find(o => o.value && o.value !== '')
+      if (first) {
+        select.value = first.value
         select.dispatchEvent(new Event('change', { bubbles: true }))
       }
     }
@@ -346,31 +367,77 @@ function getYearsAnswer(label, skills) {
   return hasSkill ? '2' : '0'
 }
 
-// Returns the right string answer for a text/number field given its label
+// Returns the right string answer for a text/number/url/email field given its label
 function getAnswerForLabel(label, application) {
   if (!label) return null
-  const l = label.toLowerCase()
+  const l = label.toLowerCase().trim()
 
-  // URLs
-  if (l.includes('linkedin') || l.includes('profile url')) return application.linkedin_url || ''
+  // ── Personal ──────────────────────────────────
+  if (l.includes('first name') || l === 'name') return application.first_name || ''
+  if (l.includes('last name') || l.includes('family name') || l.includes('surname'))
+    return application.last_name || ''
+  if (l.includes('full name'))
+    return `${application.first_name || ''} ${application.last_name || ''}`.trim()
+  if (l.includes('phone') || l.includes('mobile') || l.includes('telephone'))
+    return application.phone || ''
+  if (l.includes('email')) return application.email || ''
+  if (l.includes('city') || l.includes('location') || l.includes('address'))
+    return application.city || 'Tel Aviv'
+  if (l.includes('country')) return 'Israel'
+  if (l.includes('zip') || l.includes('postal')) return ''
+
+  // ── URLs ──────────────────────────────────────
+  if (l.includes('linkedin')) return application.linkedin_url || ''
   if (l.includes('github')) return application.github_url || ''
-  if (l.includes('portfolio') || l.includes('website')) return application.portfolio_url || ''
+  if (l.includes('portfolio') || l.includes('website') || l.includes('personal site'))
+    return application.portfolio_url || ''
 
-  // Personal
-  if (l.includes('first name')) return application.first_name || ''
-  if (l.includes('last name') || l.includes('family name')) return application.last_name || ''
-  if (l.includes('phone') || l.includes('mobile')) return application.phone || ''
-  if (l.includes('city') || l.includes('location')) return application.city || 'Tel Aviv'
-
-  // Work details
-  if (l.includes('salary') || l.includes('compensation') || l.includes('wage'))
+  // ── Salary ────────────────────────────────────
+  if (
+    l.includes('salary') || l.includes('compensation') || l.includes('wage') ||
+    l.includes('pay') || l.includes('ctc') || l.includes('package') ||
+    l.includes('expected') || l.includes('desired') ||
+    l.includes('שכר') || l.includes('פיצוי') || l.includes('שכר מצופה')
+  )
     return application.expected_salary || ''
-  if (l.includes('notice') || l.includes('availability') || l.includes('start date'))
+
+  // ── Work Timeline ─────────────────────────────
+  if (
+    l.includes('notice') || l.includes('start date') || l.includes('availability') ||
+    l.includes('when can you start') || l.includes('joining') ||
+    l.includes('available from') || l.includes('זמינות') || l.includes('התחלה')
+  )
     return application.notice_period || '30'
-  if (l.includes('years') && l.includes('experience'))
+
+  // ── Experience ────────────────────────────────
+  if (
+    (l.includes('year') && l.includes('experience')) ||
+    (l.includes('how many year') && l.includes('work')) ||
+    l.includes('total experience') || l.includes('years of work') ||
+    l.includes('שנות ניסיון')
+  )
     return application.years_of_experience || '2'
-  if (l.includes('education') || l.includes('degree') || l.includes('qualification'))
+
+  // ── Education ─────────────────────────────────
+  if (
+    l.includes('education') || l.includes('degree') || l.includes('qualification') ||
+    l.includes('highest level') || l.includes('academic') || l.includes('השכלה')
+  )
     return application.highest_education || "Bachelor's Degree"
+
+  // ── Cover Letter / Summary ────────────────────
+  if (
+    l.includes('cover letter') || l.includes('why do you want') ||
+    l.includes('tell us about yourself') || l.includes('introduce yourself') ||
+    l.includes('מכתב מוטיבציה')
+  )
+    return application.cover_letter || ''
+
+  // ── Languages ─────────────────────────────────
+  if (l.includes('english') && (l.includes('level') || l.includes('proficiency')))
+    return 'Full Professional Proficiency'
+  if (l.includes('hebrew') && (l.includes('level') || l.includes('proficiency')))
+    return 'Native or Bilingual'
 
   return null
 }
@@ -380,19 +447,128 @@ function getBooleanAnswer(label, application) {
   if (!label) return true
   const l = label.toLowerCase()
 
-  if (l.includes('authorized') || l.includes('eligible') || l.includes('right to work'))
+  if (
+    l.includes('authorized') || l.includes('authorization') ||
+    l.includes('eligible to work') || l.includes('right to work') ||
+    l.includes('legally') || l.includes('work permit') ||
+    l.includes('מורשה') || l.includes('רשאי')
+  )
     return application.work_authorized ?? true
-  if (l.includes('sponsorship') || l.includes('visa'))
-    return !(application.requires_sponsorship ?? false) // "require sponsorship?" → No means false
-  if (l.includes('relocat'))
+
+  // "Do you require sponsorship?" — Yes means they need it
+  if (
+    l.includes('sponsor') || l.includes('visa') || l.includes('work visa') ||
+    l.includes('ויזה') || l.includes('חסות')
+  )
+    return application.requires_sponsorship ?? false
+
+  if (
+    l.includes('relocat') || l.includes('willing to move') ||
+    l.includes('open to relocation') || l.includes('מעבר דירה')
+  )
     return application.willing_to_relocate ?? false
 
-  return true // default Yes for unknown yes/no questions
+  if (l.includes('remote') && l.includes('work')) return true
+  if (l.includes('hybrid')) return true
+
+  return true
 }
 
-// Keep old name as alias — used by select dropdowns
+// Keep old name as alias
 function getAnswerForField(label, application) {
   return getAnswerForLabel(label, application)
+}
+
+// ── Learn-as-you-go popup ─────────────────────────────────────────────────────
+
+function showQuestionOverlay(question, onAnswer) {
+  document.getElementById('jobagent-question-overlay')?.remove()
+
+  const overlay = document.createElement('div')
+  overlay.id = 'jobagent-question-overlay'
+  overlay.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:999999;background:white;border:2px solid #1a2e5e;
+    border-radius:12px;padding:24px;min-width:400px;max-width:500px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  `
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <div style="background:#1a2e5e;color:white;padding:4px 12px;
+                  border-radius:20px;font-size:12px;font-weight:600">JobAgent</div>
+      <span style="font-size:13px;color:#666">needs your help</span>
+    </div>
+    <p style="font-size:15px;font-weight:500;color:#111;margin-bottom:16px;line-height:1.5">
+      ${question}
+    </p>
+    <input id="jobagent-answer-input" type="text" placeholder="Type your answer…"
+      style="width:100%;padding:10px 12px;border:2px solid #1a2e5e;border-radius:8px;
+             font-size:14px;box-sizing:border-box;margin-bottom:10px;outline:none;" />
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;
+                  color:#666;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" id="jobagent-save-answer" checked
+             style="width:16px;height:16px;cursor:pointer" />
+      Remember this answer for future applications
+    </label>
+    <div style="display:flex;gap:8px">
+      <button id="jobagent-submit-answer" style="flex:1;background:#1a2e5e;color:white;
+        border:none;padding:11px;border-radius:8px;font-size:14px;
+        font-weight:500;cursor:pointer;">Continue →</button>
+      <button id="jobagent-skip-answer" style="padding:11px 16px;background:#f5f6f8;
+        border:1px solid #e0e0e0;border-radius:8px;font-size:14px;
+        cursor:pointer;color:#666;">Skip</button>
+    </div>
+  `
+
+  document.body.appendChild(overlay)
+  const input = document.getElementById('jobagent-answer-input')
+  input.focus()
+
+  const submit = () => {
+    const answer = input.value.trim()
+    const save = document.getElementById('jobagent-save-answer').checked
+    overlay.remove()
+    onAnswer(answer || null, save)
+  }
+
+  document.getElementById('jobagent-submit-answer').onclick = submit
+  document.getElementById('jobagent-skip-answer').onclick = () => {
+    overlay.remove()
+    onAnswer(null, false)
+  }
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit() })
+}
+
+async function getAnswerForUnknown(question, application) {
+  if (!question) return null
+  const normalized = question.toLowerCase().trim()
+
+  // Check saved answers from previous applications
+  if (application.savedAnswers?.[normalized]) {
+    console.log('JobAgent: using saved answer for:', normalized)
+    return application.savedAnswers[normalized]
+  }
+
+  // Ask user via popup
+  return new Promise((resolve) => {
+    showQuestionOverlay(question, async (answer, save) => {
+      if (answer && save) {
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'SAVE_ANSWER',
+            question: normalized,
+            answer,
+          })
+          if (!application.savedAnswers) application.savedAnswers = {}
+          application.savedAnswers[normalized] = answer
+        } catch (e) {
+          console.error('JobAgent: failed to send SAVE_ANSWER', e)
+        }
+      }
+      resolve(answer)
+    })
+  })
 }
 
 function getInputLabel(input) {

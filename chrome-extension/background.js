@@ -83,6 +83,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (message.type === 'SAVE_ANSWER') {
+    ;(async () => {
+      try {
+        const stored = await chrome.storage.local.get(['userId'])
+        const serverUrl = await getServerUrl()
+        await fetch(`${serverUrl}/api/apply/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: stored.userId,
+            question: message.question,
+            answer: message.answer,
+          }),
+        })
+        console.log('[JobAgent bg] saved answer for:', message.question)
+      } catch (e) {
+        console.error('[JobAgent bg] Failed to save answer:', e)
+      }
+      sendResponse({ success: true })
+    })()
+    return true
+  }
+
   // Content script cannot make cross-origin fetches on LinkedIn (CSP) so it
   // delegates the status update here. We use userId from storage instead of
   // credentials:include because SameSite=Lax blocks cookies in SW context.
