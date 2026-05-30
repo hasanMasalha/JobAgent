@@ -3,8 +3,6 @@ import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function generateEmailHtml(params: {
   userName: string;
   jobTitle: string;
@@ -25,6 +23,7 @@ function generateEmailHtml(params: {
 
 export async function POST(req: NextRequest) {
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const supabase = createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
