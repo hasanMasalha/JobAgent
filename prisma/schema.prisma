@@ -87,6 +87,7 @@ model Job {
   scraped_at      DateTime                    @default(now())
   apply_type      String?                     @default("external")
   recruiter_email String?
+  is_active       Boolean                     @default(true)
 
   applications Application[]
   interactions UserJobInteraction[]

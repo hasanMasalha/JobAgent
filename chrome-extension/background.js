@@ -57,17 +57,26 @@ function openApplyWindow(jobUrl, applicationId) {
 }
 
 async function processNextInQueue() {
-  const stored = await chrome.storage.local.get(['applyQueue', 'applyQueueIndex'])
+  const stored = await chrome.storage.local.get([
+    'applyQueue', 'applyQueueIndex', 'activeApplyTab', 'activeApplyWindow'
+  ])
   const queue = stored.applyQueue || []
   const index = stored.applyQueueIndex || 0
 
   if (index >= queue.length) {
+    // Close the LinkedIn tab/window when the whole queue is done
+    if (stored.activeApplyWindow) {
+      try { await chrome.windows.remove(stored.activeApplyWindow) } catch {}
+    } else if (stored.activeApplyTab) {
+      try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
+    }
     await chrome.storage.local.set({ isProcessingQueue: false })
+    await chrome.storage.local.remove(['activeApplyTab', 'activeApplyWindow', 'activeApplicationId'])
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon48.png',
       title: 'JobAgent ✅',
-      message: `Applied to all ${queue.length} jobs in the queue!`,
+      message: `Applied to all ${queue.length} jobs!`,
     })
     console.log('[JobAgent bg] queue complete')
     return
@@ -75,7 +84,25 @@ async function processNextInQueue() {
 
   const job = queue[index]
   console.log(`[JobAgent bg] queue ${index + 1}/${queue.length}:`, job.url)
-  openApplyWindow(job.url, job.id)
+
+  if (stored.activeApplyTab && index > 0) {
+    // Navigate the existing tab to the next job — no flicker, no new window
+    try {
+      await chrome.tabs.update(stored.activeApplyTab, { url: job.url, active: true })
+      console.log('[JobAgent bg] navigated existing tab to:', job.url)
+    } catch {
+      // Tab was closed — open a fresh minimized window
+      console.log('[JobAgent bg] tab gone, opening new window')
+      openApplyWindow(job.url, job.id)
+      return
+    }
+  } else {
+    // First job — open a new minimized window
+    openApplyWindow(job.url, job.id)
+    return
+  }
+
+  await chrome.storage.local.set({ activeApplicationId: job.id })
 }
 
 // Messages from within the extension (content script, popup)
