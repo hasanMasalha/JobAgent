@@ -26,6 +26,13 @@ interface EasyApplyDefaults {
   willing_to_relocate: boolean;
 }
 
+interface SavedAnswer {
+  id: string;
+  question: string;
+  answer: string;
+  updated_at: string;
+}
+
 function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,6 +68,10 @@ function ProfileContent() {
     work_authorized: true, requires_sponsorship: false, willing_to_relocate: false,
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
+
+  // Saved answers (learned from previous Easy Apply sessions)
+  const [savedAnswers, setSavedAnswers] = useState<SavedAnswer[]>([]);
+  const [editingAnswer, setEditingAnswer] = useState<{ id: string; value: string } | null>(null);
 
   // Notifications
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -121,6 +132,12 @@ function ProfileContent() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Load saved Easy Apply answers
+    fetch("/api/apply/answers")
+      .then((r) => r.json())
+      .then((d) => { if (d.answers) setSavedAnswers(d.answers); })
+      .catch(() => {});
 
     // Check LinkedIn session status on mount — real Playwright validation (5-10 s)
     fetch("/api/linkedin/session-status")
@@ -185,6 +202,37 @@ function ProfileContent() {
       setLinkedinError(err instanceof Error ? err.message : "Something went wrong. Try again.");
     } finally {
       setLinkedinConnecting(false);
+    }
+  }
+
+  async function handleDeleteAnswer(question: string) {
+    try {
+      await fetch("/api/apply/answers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      setSavedAnswers((prev) => prev.filter((a) => a.question !== question));
+      showToast("Answer deleted", "success");
+    } catch {
+      showToast("Failed to delete answer", "error");
+    }
+  }
+
+  async function handleSaveEditedAnswer(question: string, answer: string) {
+    try {
+      await fetch("/api/apply/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, answer }),
+      });
+      setSavedAnswers((prev) =>
+        prev.map((a) => a.question === question ? { ...a, answer } : a)
+      );
+      setEditingAnswer(null);
+      showToast("Answer saved", "success");
+    } catch {
+      showToast("Failed to save answer", "error");
     }
   }
 
@@ -857,6 +905,67 @@ function ProfileContent() {
         >
           {savingDefaults ? "Saving…" : "Save defaults"}
         </button>
+      </div>
+
+      {/* Saved Answers */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Saved Answers</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Answers learned during previous Easy Apply sessions — reused automatically
+          </p>
+        </div>
+
+        {savedAnswers.length === 0 ? (
+          <p className="text-sm text-gray-400 dark:text-gray-500 italic">
+            No saved answers yet. They appear here after Easy Apply fills a form and you answer an unknown question.
+          </p>
+        ) : (
+          <div className="divide-y dark:divide-gray-700">
+            {savedAnswers.map((a) => (
+              <div key={a.id} className="py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-0.5 truncate">{a.question}</p>
+                  {editingAnswer?.id === a.id ? (
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="text"
+                        value={editingAnswer.value}
+                        onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveEditedAnswer(a.question, editingAnswer.value);
+                          if (e.key === "Escape") setEditingAnswer(null);
+                        }}
+                        className="flex-1 border dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#1a2e5e]"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveEditedAnswer(a.question, editingAnswer.value)}
+                        className="text-xs text-white bg-[#1a2e5e] px-2 py-1 rounded"
+                      >Save</button>
+                      <button
+                        onClick={() => setEditingAnswer(null)}
+                        className="text-xs text-gray-500 px-2 py-1"
+                      >Cancel</button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-900 dark:text-gray-100">{a.answer}</p>
+                  )}
+                </div>
+                <div className="flex gap-2 shrink-0 mt-0.5">
+                  <button
+                    onClick={() => setEditingAnswer({ id: a.id, value: a.answer })}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >Edit</button>
+                  <button
+                    onClick={() => handleDeleteAnswer(a.question)}
+                    className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                  >Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Notifications */}

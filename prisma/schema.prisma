@@ -36,11 +36,26 @@ model User {
   portfolio_url        String?
   github_url           String?
   willing_to_relocate  Boolean? @default(false)
+  cover_letter_default String?
 
-  cvs             CV[]
-  job_preferences JobPreference[]
-  applications    Application[]
-  interactions    UserJobInteraction[]
+  cvs              CV[]
+  job_preferences  JobPreference[]
+  applications     Application[]
+  interactions     UserJobInteraction[]
+  easy_apply_answers EasyApplyAnswer[]
+}
+
+model EasyApplyAnswer {
+  id         String   @id @default(uuid())
+  user_id    String
+  question   String
+  answer     String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, question])
 }
 
 model CV {
