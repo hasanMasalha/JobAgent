@@ -372,13 +372,14 @@ function sleep(ms) {
 // /jobs/view/{id}/apply/?openSDUIApplyFlow=true instead of a modal.
 // The form is rendered directly in the page body, no modal wrapper.
 async function handleApplyFlowPage() {
+  console.log('JobAgent: handleApplyFlowPage called')
   const url = window.location.href
-  if (!url.includes('/apply/') && !url.includes('openSDUIApplyFlow')) return
+  console.log('JobAgent: apply page URL:', url)
 
-  console.log('JobAgent: on apply flow page')
-  await sleep(2000) // wait for page to render
+  await sleep(3000) // wait for SDUI page to render
 
   const stored = await chrome.storage.local.get(['pendingApplyData'])
+  console.log('JobAgent: stored data:', stored.pendingApplyData)
   const pendingData = stored.pendingApplyData
 
   if (!pendingData) {
@@ -397,9 +398,11 @@ async function handleApplyFlowPage() {
 }
 
 // Route to the right handler based on the current page
-if (window.location.href.includes('/apply/') || window.location.href.includes('openSDUIApplyFlow')) {
+const url = window.location.href
+if (url.includes('/apply/') || url.includes('openSDUIApplyFlow')) {
+  console.log('JobAgent: detected apply flow page')
   handleApplyFlowPage()
 } else {
-  // checkPendingApplication has its own 2s-per-attempt retry loop
+  console.log('JobAgent: detected job listing page')
   checkPendingApplication()
 }
