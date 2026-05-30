@@ -83,8 +83,11 @@ model Job {
   source      String
   salary_min  Int?
   salary_max  Int?
-  embedding   Unsupported("vector(384)")?
-  scraped_at  DateTime                    @default(now())
+  embedding       Unsupported("vector(384)")?
+  scraped_at      DateTime                    @default(now())
+  apply_type      String?                     @default("external")
+  recruiter_email String?
+  is_active       Boolean                     @default(true)
 
   applications Application[]
   interactions UserJobInteraction[]

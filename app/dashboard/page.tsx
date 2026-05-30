@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import JobCard, { Job } from "./JobCard";
 import JobFilters, { DEFAULT_FILTERS, Filters } from "@/app/components/JobFilters";
+import { showToast } from "@/app/components/Toast";
 
 function timeAgo(date: Date): string {
   const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
@@ -122,6 +123,11 @@ export default function DashboardPage() {
   const matchBottomRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
+  // --- Selection + batch apply ---
+  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
+  const [applyTypeFilter, setApplyTypeFilter] = useState<"all" | "extension" | "auto" | "external">("all");
+  const [batchApplying, setBatchApplying] = useState(false);
+
   // --- Browse state ---
   const [browseSearch, setBrowseSearch] = useState("");
   const [browseLocation, setBrowseLocation] = useState("");
@@ -192,6 +198,89 @@ export default function DashboardPage() {
     const id = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  const toggleJobSelection = (jobId: string) =>
+    setSelectedJobs((prev) =>
+      prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
+    );
+
+  const getSelectedCounts = () => {
+    const sel = jobs.filter((j) => selectedJobs.includes(j.id));
+    return {
+      extension: sel.filter((j) => j.apply_type === "extension").length,
+      auto: sel.filter((j) => j.apply_type === "auto").length,
+    };
+  };
+
+  const handleBatchApply = async () => {
+    if (batchApplying) return;
+    const sel = jobs.filter((j) => selectedJobs.includes(j.id));
+    const extensionJobs = sel.filter((j) => j.apply_type === "extension");
+    const autoJobs = sel.filter((j) => j.apply_type === "auto");
+
+    console.log("JobAgent: batch apply clicked");
+    console.log("JobAgent: extension jobs:", extensionJobs.map((j) => j.url));
+    console.log("JobAgent: auto jobs:", autoJobs.map((j) => j.url));
+
+    setBatchApplying(true);
+    try {
+      if (autoJobs.length > 0) {
+        const res = await fetch("/api/apply/batch-auto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobIds: autoJobs.map((j) => j.id) }),
+        });
+        const data = await res.json();
+        if (res.ok) showToast(`Sent ${data.count} auto application${data.count !== 1 ? "s" : ""}!`, "success");
+      }
+
+      if (extensionJobs.length > 0) {
+        const res = await fetch("/api/apply/batch-mark-pending", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobIds: extensionJobs.map((j) => j.id) }),
+        });
+        const data = await res.json();
+        console.log("JobAgent: batch-mark-pending response:", data);
+
+        if (res.ok && data.results) {
+          const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
+            id: r.applicationId,
+            url: r.jobUrl,
+          }));
+          console.log("JobAgent: queue jobs to send:", queueJobs);
+
+          const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
+          console.log("JobAgent: sending START_APPLY_QUEUE to extension:", EXTENSION_ID);
+
+          if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+            chrome.runtime.sendMessage(
+              EXTENSION_ID,
+              { type: "START_APPLY_QUEUE", jobs: queueJobs },
+              (response) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const err = (chrome.runtime as any).lastError;
+                if (err) {
+                  console.error("JobAgent: START_APPLY_QUEUE failed:", err.message);
+                } else {
+                  console.log("JobAgent: START_APPLY_QUEUE response:", response);
+                }
+              }
+            );
+          } else {
+            console.warn("JobAgent: extension not available — EXTENSION_ID:", EXTENSION_ID, "chrome:", typeof chrome);
+          }
+          showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+        }
+      }
+    } catch (e) {
+      console.error("JobAgent: batch apply error:", e);
+      showToast("Batch apply failed", "error");
+    } finally {
+      setBatchApplying(false);
+      setSelectedJobs([]);
+    }
+  };
 
   const fetchJobs = useCallback(async (isRefresh = false) => {
     setLoading(true);
@@ -272,16 +361,26 @@ export default function DashboardPage() {
   const filteredJobs = useMemo(() => {
     const filtered = jobs
       .filter((job) => !appliedJobIds.has(job.id))
+      .filter((job) => applyTypeFilter === "all" || (job.apply_type ?? "external") === applyTypeFilter)
       .filter((job) => workTypeMatch(job, filters.workTypes))
       .filter((job) => jobTypeMatch(job, filters.jobTypes))
       .filter((job) => dateMatch(job, filters.daysPosted))
       .filter((job) => salaryMatch(job, filters.minSalary));
     return applySort(filtered, filters.sortBy);
-  }, [jobs, appliedJobIds, filters]);
+  }, [jobs, appliedJobIds, filters, applyTypeFilter]);
+
+  const selectAllVisible = () =>
+    setSelectedJobs(
+      filteredJobs
+        .filter((j) => j.apply_type && j.apply_type !== "external")
+        .map((j) => j.id)
+    );
 
   const hasBrowseFilter = browseSearch || browseLocation || browseCompany || browseSource;
   const browseFrom = browseTotal === 0 ? 0 : (browsePage - 1) * 20 + 1;
   const browseTo = browseFrom > 0 ? browseFrom + browseJobs.length - 1 : 0;
+
+  const counts = getSelectedCounts();
 
   return (
     <div className="max-w-3xl mx-auto w-full overflow-hidden">
@@ -333,6 +432,41 @@ export default function DashboardPage() {
             totalCount={!loading && !error && jobs.length > 0 ? jobs.length : undefined}
           />
 
+          {/* Apply-type filter + select-all */}
+          {!loading && !error && jobs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {(["all", "extension", "auto", "external"] as const).map((t) => {
+                const labels: Record<string, string> = {
+                  all: "All",
+                  extension: "⚡ Extension",
+                  auto: "🤖 Auto",
+                  external: "🔗 External",
+                };
+                return (
+                  <button
+                    key={t}
+                    onClick={() => { setApplyTypeFilter(t); setSelectedJobs([]); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      applyTypeFilter === t
+                        ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-[#1a2e5e]"
+                    }`}
+                  >
+                    {labels[t]}
+                  </button>
+                );
+              })}
+              {applyTypeFilter !== "external" && applyTypeFilter !== "all" && filteredJobs.length > 0 && (
+                <button
+                  onClick={selectAllVisible}
+                  className="px-3 py-1 rounded-full text-xs font-medium border border-dashed border-gray-400 text-gray-500 dark:text-gray-400 hover:border-[#1a2e5e] hover:text-[#1a2e5e] transition-colors"
+                >
+                  Select all {filteredJobs.length}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="mt-4">
             {loading && (
               <div className="space-y-4">
@@ -382,6 +516,8 @@ export default function DashboardPage() {
                     key={job.id}
                     job={job}
                     initialSaved={savedIds.has(job.id)}
+                    selected={selectedJobs.includes(job.id)}
+                    onSelect={toggleJobSelection}
                     onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
                     onApply={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
                   />
@@ -570,6 +706,38 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sticky batch apply bar */}
+      {selectedJobs.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg px-4 py-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="font-semibold text-[#1a2e5e] dark:text-blue-400">
+              {selectedJobs.length} selected
+            </span>
+            {counts.extension > 0 && (
+              <span className="ml-2 text-xs text-gray-400">⚡ {counts.extension} extension</span>
+            )}
+            {counts.auto > 0 && (
+              <span className="ml-1 text-xs text-gray-400">🤖 {counts.auto} auto</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedJobs([])}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBatchApply}
+              disabled={batchApplying}
+              className="bg-[#1a2e5e] text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {batchApplying ? "Applying…" : `Apply to ${selectedJobs.length} Jobs →`}
+            </button>
+          </div>
         </div>
       )}
     </div>

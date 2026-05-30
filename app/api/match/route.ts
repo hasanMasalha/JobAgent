@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
 
 export async function GET(req: NextRequest) {
   const supabase = createServerClient();
@@ -35,16 +36,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const allJobs = await pythonRes.json();
+    const rawJobs = await pythonRes.json();
+    const enriched = rawJobs.map((j: Record<string, unknown>) => ({
+      ...j,
+      apply_type: (j.apply_type as string) ?? detectApplyType({
+        url: j.url as string,
+        source: j.source as string,
+        description: j.description as string,
+      }),
+      recruiter_email: (j.recruiter_email as string) ?? extractRecruiterEmail(j.description as string ?? ""),
+    }));
     const start = (page - 1) * limit;
-    const jobs = allJobs.slice(start, start + limit);
+    const jobs = enriched.slice(start, start + limit);
 
     return NextResponse.json({
       jobs,
-      total: allJobs.length,
+      total: enriched.length,
       page,
       limit,
-      hasMore: start + limit < allJobs.length,
+      hasMore: start + limit < enriched.length,
     });
   } catch (err) {
     console.error("[match]", err);

@@ -56,6 +56,55 @@ function openApplyWindow(jobUrl, applicationId) {
   })
 }
 
+async function processNextInQueue() {
+  const stored = await chrome.storage.local.get([
+    'applyQueue', 'applyQueueIndex', 'activeApplyTab', 'activeApplyWindow'
+  ])
+  const queue = stored.applyQueue || []
+  const index = stored.applyQueueIndex || 0
+
+  if (index >= queue.length) {
+    // Close the LinkedIn tab/window when the whole queue is done
+    if (stored.activeApplyWindow) {
+      try { await chrome.windows.remove(stored.activeApplyWindow) } catch {}
+    } else if (stored.activeApplyTab) {
+      try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
+    }
+    await chrome.storage.local.set({ isProcessingQueue: false })
+    await chrome.storage.local.remove(['activeApplyTab', 'activeApplyWindow', 'activeApplicationId'])
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon48.png',
+      title: 'JobAgent ✅',
+      message: `Applied to all ${queue.length} jobs!`,
+    })
+    console.log('[JobAgent bg] queue complete')
+    return
+  }
+
+  const job = queue[index]
+  console.log(`[JobAgent bg] queue ${index + 1}/${queue.length}:`, job.url)
+
+  if (stored.activeApplyTab && index > 0) {
+    // Navigate the existing tab to the next job — no flicker, no new window
+    try {
+      await chrome.tabs.update(stored.activeApplyTab, { url: job.url, active: true })
+      console.log('[JobAgent bg] navigated existing tab to:', job.url)
+    } catch {
+      // Tab was closed — open a fresh minimized window
+      console.log('[JobAgent bg] tab gone, opening new window')
+      openApplyWindow(job.url, job.id)
+      return
+    }
+  } else {
+    // First job — open a new minimized window
+    openApplyWindow(job.url, job.id)
+    return
+  }
+
+  await chrome.storage.local.set({ activeApplicationId: job.id })
+}
+
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
@@ -119,6 +168,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true })
     openApplyWindow(message.jobUrl, message.applicationId)
     return false
+  }
+
+  if (message.type === 'START_APPLY_QUEUE') {
+    ;(async () => {
+      await chrome.storage.local.set({
+        applyQueue: message.jobs,
+        applyQueueIndex: 0,
+        isProcessingQueue: true,
+      })
+      console.log('[JobAgent bg] queue started, jobs:', message.jobs.length)
+      await processNextInQueue()
+      sendResponse({ success: true })
+    })()
+    return true
   }
 
   if (message.type === 'FOCUS_TAB') {
@@ -200,16 +263,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        // Notify the user
-        const applied = status === 'applied'
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon48.png',
-          title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
-          message: applied
-            ? 'Your application was submitted successfully!'
-            : 'This job requires manual application. Your cover letter is saved.',
-        })
+        // Notify the user (only for single applications, not mid-queue)
+        const queueState = await chrome.storage.local.get([
+          'isProcessingQueue', 'applyQueue', 'applyQueueIndex'
+        ])
+        if (!queueState.isProcessingQueue) {
+          const applied = status === 'applied'
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icon48.png',
+            title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
+            message: applied
+              ? 'Your application was submitted successfully!'
+              : 'This job requires manual application. Your cover letter is saved.',
+          })
+        } else {
+          // Advance the queue
+          const nextIndex = (queueState.applyQueueIndex || 0) + 1
+          await chrome.storage.local.set({ applyQueueIndex: nextIndex })
+          console.log('[JobAgent bg] queue advancing to index', nextIndex)
+          setTimeout(processNextInQueue, 3000)
+        }
       } catch (e) {
         console.error('[JobAgent bg] Failed to update application status', e)
       }
@@ -271,6 +345,22 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   if (message.type === 'OPEN_APPLY_TAB') {
     sendResponse({ success: true })
     openApplyWindow(message.jobUrl, message.applicationId)
+    return false
+  }
+
+  // Queue multiple LinkedIn jobs for batch apply.
+  // Respond immediately (sync) to avoid MV3 SW timing issues.
+  if (message.type === 'START_APPLY_QUEUE') {
+    console.log('[JobAgent bg] START_APPLY_QUEUE received, jobs:', message.jobs?.length)
+    sendResponse({ success: true })
+    chrome.storage.local.set({
+      applyQueue: message.jobs,
+      applyQueueIndex: 0,
+      isProcessingQueue: true,
+    }).then(() => {
+      console.log('[JobAgent bg] queue stored, starting first job')
+      processNextInQueue()
+    })
     return false
   }
 

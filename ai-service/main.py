@@ -1,6 +1,10 @@
 from contextlib import asynccontextmanager
 
+# load_dotenv MUST run before any route imports so module-level SDK clients
+# (e.g. anthropic.Anthropic()) can read ANTHROPIC_API_KEY from the environment.
 from dotenv import load_dotenv
+load_dotenv("../.env")
+
 from fastapi import FastAPI
 
 from routes.apply import router as apply_router
@@ -9,8 +13,6 @@ from routes.jobs import router as jobs_router
 from routes.linkedin_auth import router as linkedin_auth_router
 from routes.matching import router as matching_router
 from scheduler import start_scheduler, stop_scheduler
-
-load_dotenv("../.env")
 
 
 @asynccontextmanager

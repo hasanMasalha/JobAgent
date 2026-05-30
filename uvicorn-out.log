@@ -1,18 +1,117 @@
-INFO:     127.0.0.1:57588 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65383 - "POST /linkedin/start-login HTTP/1.1" 200 OK
-[linkedin_auth] login flow error for 61ddd06f-b30d-4b3e-952b-bbe12ba563fc: BrowserContext.new_page: Protocol error (Target.createTarget): Failed to open a new tab
-INFO:     127.0.0.1:65383 - "GET /linkedin/session-status/61ddd06f-b30d-4b3e-952b-bbe12ba563fc HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56071 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56071 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50274 - "POST /apply HTTP/1.1" 200 OK
- INFO:     127.0.0.1:61715 - "GET /linkedin/session-status/61ddd06f-b30d-4b3e-952b-bbe12ba563fc HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61715 - "GET /linkedin/session-status/61ddd06f-b30d-4b3e-952b-bbe12ba563fc HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61715 - "POST /linkedin/start-login HTTP/1.1" 200 OK
-[linkedin_auth] login flow error for 61ddd06f-b30d-4b3e-952b-bbe12ba563fc: BrowserContext.new_page: Protocol error (Target.createTarget): Failed to open a new tab
-INFO:     127.0.0.1:61715 - "GET /linkedin/session-status/61ddd06f-b30d-4b3e-952b-bbe12ba563fc HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52598 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52598 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59572 - "POST /apply HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59491 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59491 - "POST /match-jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59287 - "POST /apply HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55123 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55129 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55131 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50228 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50228 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51799 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50228 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52389 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52389 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59742 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59742 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56213 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56213 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51229 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51229 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50063 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50063 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64725 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64725 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53329 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53329 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56172 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56172 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49189 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49189 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59283 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59283 - "POST /match-jobs HTTP/1.1" 200 OK
+[session-status] 61ddd06f-b30d-4b3e-952b-bbe12ba563fc: expired (https://www.linkedin.com/login/?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed)
+INFO:     127.0.0.1:62103 - "GET /linkedin/session-status/61ddd06f-b30d-4b3e-952b-bbe12ba563fc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61034 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:56047 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:56051 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:62350 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:62353 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:55598 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:55601 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64466 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64471 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57145 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57145 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61055 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61055 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61928 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61928 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65360 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65360 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63876 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63876 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49681 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52927 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52622 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52622 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49405 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49405 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49211 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49211 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49211 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49211 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52124 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52124 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60374 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60374 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59750 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51983 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53141 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53141 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55367 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55367 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51360 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51360 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60642 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60642 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55826 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55826 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61868 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49954 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49954 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60549 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60549 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56899 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56899 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54656 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54656 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62518 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62518 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54070 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54070 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62364 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53591 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61656 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61656 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55515 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61870 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61870 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61875 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60196 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60931 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60931 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:58311 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60537 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:61284 - "POST /match-jobs HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:56913 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56913 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52953 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50771 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55459 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51505 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51505 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62019 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51696 - "POST /match-jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51696 - "POST /match-jobs HTTP/1.1" 200 OK

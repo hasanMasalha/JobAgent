@@ -29,6 +29,8 @@ export interface Job {
   location: string | null;
   url: string;
   source?: string;
+  apply_type?: string;
+  recruiter_email?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
@@ -41,10 +43,32 @@ export interface Job {
 interface Props {
   job: Job;
   initialSaved?: boolean;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
   onDismiss?: (id: string) => void;
   onApply?: (id: string) => void;
   showScore?: boolean;
   showSource?: boolean;
+}
+
+function ApplyTypeBadge({ type }: { type: string }) {
+  if (type === "extension")
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+        ⚡ Extension
+      </span>
+    );
+  if (type === "auto")
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+        🤖 Auto Apply
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+      🔗 External
+    </span>
+  );
 }
 
 function daysAgo(dateStr: string): string {
@@ -80,6 +104,8 @@ function SourcePill({ source }: { source: string }) {
 export default function JobCard({
   job,
   initialSaved = false,
+  selected = false,
+  onSelect,
   onDismiss,
   onApply,
   showScore = true,
@@ -136,20 +162,31 @@ export default function JobCard({
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {job.company}
-            {job.location ? ` · ${job.location}` : ""}
-          </p>
-          {showSource && job.source && (
-            <div className="mt-1">
-              <SourcePill source={job.source} />
+        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+          {job.apply_type && job.apply_type !== "external" && onSelect && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onSelect(job.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5 w-4 h-4 shrink-0 rounded border-gray-300 text-[#1a2e5e] cursor-pointer accent-[#1a2e5e]"
+              aria-label={`Select ${job.title}`}
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              {job.company}
+              {job.location ? ` · ${job.location}` : ""}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {job.apply_type && <ApplyTypeBadge type={job.apply_type} />}
+              {showSource && job.source && <SourcePill source={job.source} />}
             </div>
-          )}
-          {salary && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{salary}</p>
-          )}
+            {salary && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{salary}</p>
+            )}
+          </div>
         </div>
         {showScore ? (
           <span className={`shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full ${scoreColor}`}>
