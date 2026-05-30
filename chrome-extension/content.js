@@ -218,54 +218,106 @@ async function fillApplicationForm(application, panel) {
 }
 
 async function fillCurrentStep(scope, application) {
-  // Fill phone number
-  const phoneInput = scope.querySelector(
-    'input[name*="phone"], input[id*="phone"]'
+  console.log('JobAgent: === fillCurrentStep ===')
+  console.log('JobAgent: all inputs:',
+    Array.from(scope.querySelectorAll('input, select, textarea'))
+      .map(el => ({
+        type: el.type,
+        id: el.id,
+        name: el.name,
+        value: el.value,
+        ariaLabel: el.getAttribute('aria-label'),
+        label: getInputLabel(el)
+      }))
   )
-  if (phoneInput && !phoneInput.value) {
-    setInputValue(phoneInput, application.phone || '')
-  }
+  console.log('JobAgent: all fieldsets:',
+    Array.from(scope.querySelectorAll('fieldset'))
+      .map(f => f.querySelector('legend')?.textContent?.trim())
+  )
 
-  // Fill text inputs that are empty
-  const textInputs = scope.querySelectorAll('input[type="text"], textarea')
+  // Text / URL / textarea inputs
+  const textInputs = scope.querySelectorAll('input[type="text"], input[type="url"], textarea')
   for (const input of textInputs) {
+    if (input.value) continue
     const label = getInputLabel(input)
-    if (!input.value && label) {
-      const answer = getAnswerForField(label, application)
-      if (answer) setInputValue(input, answer)
+    if (!label) continue
+
+    const l = label.toLowerCase()
+    console.log('JobAgent: filling input:', l)
+
+    if (l.includes('linkedin') || l.includes('profile')) {
+      setInputValue(input, application.linkedin_url ||
+        `https://www.linkedin.com/in/${application.user_name || 'profile'}`)
+    } else if (l.includes('phone') || l.includes('mobile')) {
+      setInputValue(input, application.phone || '')
+    } else if (l.includes('website') || l.includes('portfolio')) {
+      setInputValue(input, application.portfolio || '')
+    } else if (l.includes('city') || l.includes('location')) {
+      setInputValue(input, application.city || 'Tel Aviv')
+    } else if (l.includes('salary') || l.includes('compensation')) {
+      setInputValue(input, application.expected_salary || '')
+    } else if (l.includes('notice') || l.includes('start date')) {
+      setInputValue(input, application.notice_period || '30 days')
     }
   }
 
-  // Handle number inputs (years of experience)
+  // Number inputs (years of experience)
   const numberInputs = scope.querySelectorAll('input[type="number"]')
   for (const input of numberInputs) {
-    if (!input.value) {
-      const label = getInputLabel(input)
-      const answer = getYearsAnswer(label, application.skills || [])
-      setInputValue(input, answer)
-    }
+    if (input.value) continue
+    const label = getInputLabel(input)
+    setInputValue(input, getYearsAnswer(label, application.skills || []))
   }
 
-  // Handle radio buttons / yes-no questions
+  // Fieldsets with real radio inputs (work auth, sponsorship, yes/no questions)
+  const fieldsets = scope.querySelectorAll('fieldset')
+  for (const fieldset of fieldsets) {
+    const legend = fieldset.querySelector('legend, span')
+    console.log('JobAgent: fieldset legend:', legend?.textContent?.substring(0, 50))
+
+    const radios = fieldset.querySelectorAll('input[type="radio"]')
+    const alreadySelected = Array.from(radios).find(r => r.checked)
+    if (alreadySelected || radios.length === 0) continue
+
+    // Prefer "Yes" for auth/sponsorship questions; fall back to first option
+    const yesRadio = Array.from(radios).find(r =>
+      r.value?.toLowerCase() === 'yes' ||
+      r.nextSibling?.textContent?.toLowerCase().includes('yes') ||
+      r.parentElement?.textContent?.toLowerCase().includes('yes')
+    )
+    const toClick = yesRadio || radios[0]
+    console.log('JobAgent: clicking radio:', toClick?.value,
+      toClick?.parentElement?.textContent?.trim().substring(0, 30))
+    toClick.click()
+    toClick.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  // ARIA radiogroups (older LinkedIn UI)
   const radioGroups = scope.querySelectorAll('[role="radiogroup"]')
   for (const group of radioGroups) {
     const selected = group.querySelector('[aria-checked="true"]')
     if (!selected) {
-      const yesOption = group.querySelector(
-        '[data-test-text-selectable-option__input]'
-      )
+      const yesOption = group.querySelector('[data-test-text-selectable-option__input]')
       if (yesOption) yesOption.click()
     }
   }
 
-  // Handle select dropdowns
+  // Select dropdowns
   const selects = scope.querySelectorAll('select')
   for (const select of selects) {
-    if (!select.value || select.value === '') {
-      const label = getInputLabel(select)
-      const answer = getAnswerForField(label, application)
-      if (answer) {
-        select.value = answer
+    if (select.value) continue
+    const label = getInputLabel(select)
+    console.log('JobAgent: select field:', label)
+
+    const answer = getAnswerForField(label, application)
+    if (answer) {
+      select.value = answer
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    } else {
+      // Fall back to first non-empty option
+      const firstOption = Array.from(select.options).find(o => o.value && o.value !== '')
+      if (firstOption) {
+        select.value = firstOption.value
         select.dispatchEvent(new Event('change', { bubbles: true }))
       }
     }
@@ -324,8 +376,8 @@ function getInputLabel(input) {
 
   const id = input.id
   if (id) {
-    // getRootNode() returns the shadow root when the input is inside shadow DOM,
-    // so label[for=...] is found even when it lives in the same shadow tree.
+    // getRootNode() returns the shadow root when inside shadow DOM so
+    // label[for=...] is found even when it lives in the same shadow tree.
     const root = input.getRootNode()
     const label = root.querySelector(`label[for="${id}"]`)
     if (label) return label.textContent.trim()
@@ -334,10 +386,20 @@ function getInputLabel(input) {
   const parentLabel = input.closest('label')
   if (parentLabel) return parentLabel.textContent.trim()
 
-  const container = input.closest('.fb-dash-form-element, .jobs-easy-apply-form-element')
+  const container = input.closest(
+    '.fb-dash-form-element, .jobs-easy-apply-form-element, ' +
+    '.fb-form-element, [data-test-form-element]'
+  )
   if (container) {
-    const label = container.querySelector('label, .fb-form-element-label')
+    const label = container.querySelector('label, legend, span[data-test-form-element-label]')
     if (label) return label.textContent.trim()
+  }
+
+  // Fieldset legend — covers radio groups and other grouped inputs
+  const fieldset = input.closest('fieldset')
+  if (fieldset) {
+    const legend = fieldset.querySelector('legend')
+    if (legend) return legend.textContent.trim()
   }
 
   return null
