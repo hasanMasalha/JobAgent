@@ -5,7 +5,9 @@ AI job assistant for the Israeli market. Scrapes jobs from Indeed Israel
 and LinkedIn, matches them to user CVs using vector embeddings (no LLM
 for matching), and lets users apply to LinkedIn Easy Apply jobs via
 Playwright automation — but ONLY when the user explicitly clicks Apply
-then confirms. Nothing is ever submitted automatically.
+then confirms. Nothing is ever submi
+
+tted automatically.
 
 ## Tech stack — do not deviate from this
 - Frontend + API routes: Next.js 14 (App Router), TypeScript, Tailwind CSS

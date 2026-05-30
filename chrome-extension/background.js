@@ -56,6 +56,28 @@ function openApplyWindow(jobUrl, applicationId) {
   })
 }
 
+async function processNextInQueue() {
+  const stored = await chrome.storage.local.get(['applyQueue', 'applyQueueIndex'])
+  const queue = stored.applyQueue || []
+  const index = stored.applyQueueIndex || 0
+
+  if (index >= queue.length) {
+    await chrome.storage.local.set({ isProcessingQueue: false })
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon48.png',
+      title: 'JobAgent ✅',
+      message: `Applied to all ${queue.length} jobs in the queue!`,
+    })
+    console.log('[JobAgent bg] queue complete')
+    return
+  }
+
+  const job = queue[index]
+  console.log(`[JobAgent bg] queue ${index + 1}/${queue.length}:`, job.url)
+  openApplyWindow(job.url, job.id)
+}
+
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
@@ -119,6 +141,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true })
     openApplyWindow(message.jobUrl, message.applicationId)
     return false
+  }
+
+  if (message.type === 'START_APPLY_QUEUE') {
+    ;(async () => {
+      await chrome.storage.local.set({
+        applyQueue: message.jobs,
+        applyQueueIndex: 0,
+        isProcessingQueue: true,
+      })
+      console.log('[JobAgent bg] queue started, jobs:', message.jobs.length)
+      await processNextInQueue()
+      sendResponse({ success: true })
+    })()
+    return true
   }
 
   if (message.type === 'FOCUS_TAB') {
@@ -200,16 +236,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        // Notify the user
-        const applied = status === 'applied'
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon48.png',
-          title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
-          message: applied
-            ? 'Your application was submitted successfully!'
-            : 'This job requires manual application. Your cover letter is saved.',
-        })
+        // Notify the user (only for single applications, not mid-queue)
+        const queueState = await chrome.storage.local.get([
+          'isProcessingQueue', 'applyQueue', 'applyQueueIndex'
+        ])
+        if (!queueState.isProcessingQueue) {
+          const applied = status === 'applied'
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icon48.png',
+            title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
+            message: applied
+              ? 'Your application was submitted successfully!'
+              : 'This job requires manual application. Your cover letter is saved.',
+          })
+        } else {
+          // Advance the queue
+          const nextIndex = (queueState.applyQueueIndex || 0) + 1
+          await chrome.storage.local.set({ applyQueueIndex: nextIndex })
+          console.log('[JobAgent bg] queue advancing to index', nextIndex)
+          setTimeout(processNextInQueue, 3000)
+        }
       } catch (e) {
         console.error('[JobAgent bg] Failed to update application status', e)
       }

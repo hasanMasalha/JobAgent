@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
 
 const LIMIT_DEFAULT = 20;
 const LIMIT_MAX = 50;
@@ -47,6 +48,8 @@ export async function GET(req: NextRequest) {
           salary_max: true,
           scraped_at: true,
           description: true,
+          apply_type: true,
+          recruiter_email: true,
         },
         orderBy: { scraped_at: "desc" },
         take: limit,
@@ -56,7 +59,12 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      jobs: jobs.map((j: (typeof jobs)[number]) => ({ ...j, description: j.description?.slice(0, 300) ?? "" })),
+      jobs: jobs.map((j: (typeof jobs)[number]) => ({
+        ...j,
+        description: j.description?.slice(0, 300) ?? "",
+        apply_type: j.apply_type ?? detectApplyType({ url: j.url, source: j.source, description: j.description ?? "" }),
+        recruiter_email: j.recruiter_email ?? extractRecruiterEmail(j.description ?? ""),
+      })),
       total,
       page,
       total_pages: Math.ceil(total / limit),
