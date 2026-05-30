@@ -321,6 +321,22 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return false
   }
 
+  // Queue multiple LinkedIn jobs for batch apply.
+  // Respond immediately (sync) to avoid MV3 SW timing issues.
+  if (message.type === 'START_APPLY_QUEUE') {
+    console.log('[JobAgent bg] START_APPLY_QUEUE received, jobs:', message.jobs?.length)
+    sendResponse({ success: true })
+    chrome.storage.local.set({
+      applyQueue: message.jobs,
+      applyQueueIndex: 0,
+      isProcessingQueue: true,
+    }).then(() => {
+      console.log('[JobAgent bg] queue stored, starting first job')
+      processNextInQueue()
+    })
+    return false
+  }
+
   // Sent from the apply page when user confirms — stores application data so
   // content.js can pick it up without needing cross-site cookies
   if (message.type === 'STORE_PENDING_APPLICATION') {

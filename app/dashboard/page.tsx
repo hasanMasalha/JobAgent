@@ -218,6 +218,10 @@ export default function DashboardPage() {
     const extensionJobs = sel.filter((j) => j.apply_type === "extension");
     const autoJobs = sel.filter((j) => j.apply_type === "auto");
 
+    console.log("JobAgent: batch apply clicked");
+    console.log("JobAgent: extension jobs:", extensionJobs.map((j) => j.url));
+    console.log("JobAgent: auto jobs:", autoJobs.map((j) => j.url));
+
     setBatchApplying(true);
     try {
       if (autoJobs.length > 0) {
@@ -237,21 +241,40 @@ export default function DashboardPage() {
           body: JSON.stringify({ jobIds: extensionJobs.map((j) => j.id) }),
         });
         const data = await res.json();
+        console.log("JobAgent: batch-mark-pending response:", data);
+
         if (res.ok && data.results) {
+          const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
+            id: r.applicationId,
+            url: r.jobUrl,
+          }));
+          console.log("JobAgent: queue jobs to send:", queueJobs);
+
           const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
+          console.log("JobAgent: sending START_APPLY_QUEUE to extension:", EXTENSION_ID);
+
           if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
-            chrome.runtime.sendMessage(EXTENSION_ID, {
-              type: "START_APPLY_QUEUE",
-              jobs: data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
-                id: r.applicationId,
-                url: r.jobUrl,
-              })),
-            });
+            chrome.runtime.sendMessage(
+              EXTENSION_ID,
+              { type: "START_APPLY_QUEUE", jobs: queueJobs },
+              (response) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const err = (chrome.runtime as any).lastError;
+                if (err) {
+                  console.error("JobAgent: START_APPLY_QUEUE failed:", err.message);
+                } else {
+                  console.log("JobAgent: START_APPLY_QUEUE response:", response);
+                }
+              }
+            );
+          } else {
+            console.warn("JobAgent: extension not available — EXTENSION_ID:", EXTENSION_ID, "chrome:", typeof chrome);
           }
           showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
         }
       }
-    } catch {
+    } catch (e) {
+      console.error("JobAgent: batch apply error:", e);
       showToast("Batch apply failed", "error");
     } finally {
       setBatchApplying(false);
