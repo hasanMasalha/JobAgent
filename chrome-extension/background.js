@@ -83,6 +83,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (message.type === 'OPEN_APPLY_TAB') {
+    ;(async () => {
+      try {
+        const tab = await chrome.tabs.create({
+          url: message.jobUrl,
+          active: false, // stays in background — user keeps their current tab
+        })
+        console.log('[JobAgent bg] opened background tab:', tab.id)
+        await chrome.storage.local.set({
+          activeApplyTab: tab.id,
+          activeApplicationId: message.applicationId,
+        })
+        sendResponse({ success: true, tabId: tab.id })
+      } catch (e) {
+        console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e)
+        sendResponse({ success: false })
+      }
+    })()
+    return true
+  }
+
+  if (message.type === 'FOCUS_TAB') {
+    // Content script on the hidden tab asks to become visible (unknown question popup)
+    if (sender.tab?.id) {
+      chrome.tabs.update(sender.tab.id, { active: true })
+    }
+    sendResponse({ success: true })
+    return true
+  }
+
   if (message.type === 'SAVE_ANSWER') {
     ;(async () => {
       try {
@@ -110,8 +140,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // delegates the status update here. We use userId from storage instead of
   // credentials:include because SameSite=Lax blocks cookies in SW context.
   if (message.type === 'REPORT_APPLICATION_COMPLETE') {
-    chrome.storage.local.get(['userId'], async (stored) => {
+    ;(async () => {
       try {
+        const stored = await chrome.storage.local.get(['userId', 'activeApplyTab'])
         const url = await getServerUrl()
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
@@ -119,15 +150,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           body: JSON.stringify({
             applicationId: message.applicationId,
             status: message.status || 'applied',
-            userId: stored.userId
-          })
+            userId: stored.userId,
+          }),
         })
         console.log('[JobAgent bg] update-status response:', res.status)
+
+        // Close the background tab
+        if (stored.activeApplyTab) {
+          try {
+            await chrome.tabs.remove(stored.activeApplyTab)
+            await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
+            console.log('[JobAgent bg] closed apply tab')
+          } catch {
+            console.log('[JobAgent bg] tab already closed')
+          }
+        }
+
+        // Notify the user
+        const applied = (message.status || 'applied') === 'applied'
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon48.png',
+          title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
+          message: applied
+            ? 'Your application was submitted successfully!'
+            : 'This job requires manual application. Your cover letter is saved.',
+        })
       } catch (e) {
         console.error('[JobAgent bg] Failed to update application status', e)
       }
       sendResponse({ success: true })
-    })
+    })()
     return true
   }
 

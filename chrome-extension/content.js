@@ -481,7 +481,13 @@ function getAnswerForField(label, application) {
 
 // ── Learn-as-you-go popup ─────────────────────────────────────────────────────
 
-function showQuestionOverlay(question, onAnswer) {
+async function showQuestionOverlay(question, onAnswer) {
+  // If this tab is running in the background, bring it to the front so the
+  // user can see the overlay and answer the question.
+  try {
+    await chrome.runtime.sendMessage({ type: 'FOCUS_TAB' })
+  } catch { /* ignore — tab may already be active */ }
+
   document.getElementById('jobagent-question-overlay')?.remove()
 
   const overlay = document.createElement('div')

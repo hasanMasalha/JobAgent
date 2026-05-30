@@ -22,7 +22,7 @@ function detectExtension(): Promise<boolean> {
   })
 }
 
-type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched";
+type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched" | "applying_background";
 
 interface PrepareResult {
   application_id: string;
@@ -45,6 +45,7 @@ export default function ApplyPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<{ status: string; message: string } | null>(null);
   const [downloadingCv, setDownloadingCv] = useState(false);
+  const [bgStatus, setBgStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/apply/prepare", {
@@ -119,28 +120,47 @@ export default function ApplyPage() {
       const markData = markRes.ok ? await markRes.json() : {};
       console.log("JobAgent: marked as pending:", markRes.status, markData);
 
-      // Push application data directly into extension storage so content.js
-      // can read it without relying on cross-site cookies (SameSite blocks them)
+      // Open LinkedIn tab silently in the background via the extension.
+      // Falls back to a visible tab if the extension is unavailable.
+      let openedInBackground = false
       if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
         try {
-          chrome.runtime.sendMessage(EXTENSION_ID, {
-            type: "STORE_PENDING_APPLICATION",
-            application: {
-              id: data.application_id,
-              jobUrl: data.job_url,
-              skills: markData.skills ?? [],
-              phone: null,
-              city: null,
-              linkedin_url: null,
-              expected_salary: null,
-              notice_period: null,
-            },
-          });
-        } catch { /* extension not ready — content.js will fall back gracefully */ }
+          await new Promise<void>((resolve) => {
+            chrome.runtime.sendMessage(
+              EXTENSION_ID,
+              { type: "OPEN_APPLY_TAB", jobUrl: data.job_url, applicationId: data.application_id },
+              () => { resolve() }
+            )
+          })
+          openedInBackground = true
+        } catch { /* extension sleeping — fall back */ }
       }
 
-      window.open(data.job_url, "_blank");
-      setStage("extension_launched");
+      if (!openedInBackground) {
+        window.open(data.job_url, "_blank")
+        setStage("extension_launched")
+        return
+      }
+
+      // Poll application status every 3 s until the extension finishes
+      setStage("applying_background")
+      setBgStatus("pending_extension")
+      const applicationId = data.application_id
+      const poll = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/applications/${applicationId}/status`)
+          if (!res.ok) return
+          const { status } = await res.json()
+          setBgStatus(status)
+          if (status === "applied") {
+            clearInterval(poll)
+            showToast("Application submitted!", "success")
+            setTimeout(() => router.push("/dashboard/applications"), 2500)
+          } else if (status === "manual") {
+            clearInterval(poll)
+          }
+        } catch { /* network blip — keep polling */ }
+      }, 3000)
       return;
     }
 
@@ -213,6 +233,58 @@ export default function ApplyPage() {
         </div>
       </div>
     );
+  }
+
+  /* ── Applying silently in background ── */
+  if (stage === "applying_background") {
+    const done = bgStatus === "applied"
+    const manual = bgStatus === "manual"
+    return (
+      <div className="max-w-2xl mx-auto mt-20 text-center">
+        {done ? (
+          <>
+            <div className="text-4xl mb-4">✅</div>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Application submitted!</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Redirecting to your applications…</p>
+          </>
+        ) : manual ? (
+          <>
+            <div className="text-4xl mb-4">🔗</div>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Manual apply needed</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              This job doesn&apos;t support automated apply. Your tailored cover letter is saved.
+            </p>
+            <a
+              href={data?.job_url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-5 py-2.5 rounded-lg"
+            >
+              Open job &amp; apply →
+            </a>
+          </>
+        ) : (
+          <>
+            <div className="inline-block w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              ⚡ Applying in background…
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              The extension is filling the Easy Apply form silently.
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              You&apos;ll get a Chrome notification when done. This page polls automatically.
+            </p>
+          </>
+        )}
+        <button
+          onClick={() => router.push("/dashboard/applications")}
+          className="mt-6 text-sm text-[#1a2e5e] dark:text-blue-400 underline"
+        >
+          View applications
+        </button>
+      </div>
+    )
   }
 
   /* ── Extension launched ── */
