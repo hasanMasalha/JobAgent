@@ -1,26 +1,31 @@
 import json
 import os
-
-# Load .env using absolute path so it works regardless of working directory.
-# Must run before anthropic.Anthropic() reads ANTHROPIC_API_KEY.
-from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+from pathlib import Path
 
 import anthropic
 import asyncpg
+from dotenv import dotenv_values
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
 
-# Lazy client — created on first use so load_dotenv() has already run
-# before ANTHROPIC_API_KEY is read from the environment.
+# Read the API key directly from the .env file using an absolute path so it
+# works regardless of working directory or import order.  Fall back to
+# whatever is already in the environment (e.g. set by the shell / CI).
+_env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+_ANTHROPIC_KEY: str = (
+    dotenv_values(_env_file).get("ANTHROPIC_API_KEY")
+    or os.getenv("ANTHROPIC_API_KEY")
+    or ""
+)
+
 _client: anthropic.Anthropic | None = None
 
 def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic()
+        _client = anthropic.Anthropic(api_key=_ANTHROPIC_KEY)
     return _client
 
 CACHE_TTL_HOURS = 6
