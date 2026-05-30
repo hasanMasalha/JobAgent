@@ -399,7 +399,7 @@ function getAnswerForLabel(label, application) {
     l.includes('expected') || l.includes('desired') ||
     l.includes('שכר') || l.includes('פיצוי') || l.includes('שכר מצופה')
   )
-    return application.expected_salary || ''
+    return application.expected_salary || '1'
 
   // ── Work Timeline ─────────────────────────────
   if (
