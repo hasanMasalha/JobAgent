@@ -1,6 +1,11 @@
 import json
 import os
 
+# Load .env using absolute path so it works regardless of working directory.
+# Must run before anthropic.Anthropic() reads ANTHROPIC_API_KEY.
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
 import anthropic
 import asyncpg
 from fastapi import APIRouter, HTTPException
