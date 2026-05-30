@@ -84,24 +84,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'OPEN_APPLY_TAB') {
-    ;(async () => {
-      try {
-        const tab = await chrome.tabs.create({
-          url: message.jobUrl,
-          active: false, // stays in background — user keeps their current tab
-        })
+    sendResponse({ success: true })
+    chrome.tabs.create({ url: message.jobUrl, active: false })
+      .then(tab => {
         console.log('[JobAgent bg] opened background tab:', tab.id)
-        await chrome.storage.local.set({
+        return chrome.storage.local.set({
           activeApplyTab: tab.id,
           activeApplicationId: message.applicationId,
         })
-        sendResponse({ success: true, tabId: tab.id })
-      } catch (e) {
-        console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e)
-        sendResponse({ success: false })
-      }
-    })()
-    return true
+      })
+      .catch(e => console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e))
+    return false
   }
 
   if (message.type === 'FOCUS_TAB') {
@@ -235,26 +228,21 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return true
   }
 
-  // Open LinkedIn tab in background so the user stays on the dashboard
+  // Open LinkedIn tab in background so the user stays on the dashboard.
+  // Respond immediately (synchronously) so the MV3 service worker doesn't
+  // get killed before sendResponse fires — then do async work after.
   if (message.type === 'OPEN_APPLY_TAB') {
-    ;(async () => {
-      try {
-        const tab = await chrome.tabs.create({
-          url: message.jobUrl,
-          active: false, // stays in background — user keeps their current tab
-        })
+    sendResponse({ success: true })
+    chrome.tabs.create({ url: message.jobUrl, active: false })
+      .then(tab => {
         console.log('[JobAgent bg] opened background tab:', tab.id)
-        await chrome.storage.local.set({
+        return chrome.storage.local.set({
           activeApplyTab: tab.id,
           activeApplicationId: message.applicationId,
         })
-        sendResponse({ success: true, tabId: tab.id })
-      } catch (e) {
-        console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e)
-        sendResponse({ success: false })
-      }
-    })()
-    return true
+      })
+      .catch(e => console.error('[JobAgent bg] OPEN_APPLY_TAB error:', e))
+    return false // channel can close — response already sent
   }
 
   // Sent from the apply page when user confirms — stores application data so
