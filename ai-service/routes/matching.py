@@ -1,32 +1,13 @@
 import json
 import os
-from pathlib import Path
 
 import anthropic
 import asyncpg
-from dotenv import dotenv_values
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
-
-# Read the API key directly from the .env file using an absolute path so it
-# works regardless of working directory or import order.  Fall back to
-# whatever is already in the environment (e.g. set by the shell / CI).
-_env_file = Path(__file__).resolve().parent.parent.parent / ".env"
-_ANTHROPIC_KEY: str = (
-    dotenv_values(_env_file).get("ANTHROPIC_API_KEY")
-    or os.getenv("ANTHROPIC_API_KEY")
-    or ""
-)
-
-_client: anthropic.Anthropic | None = None
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=_ANTHROPIC_KEY)
-    return _client
+_client = anthropic.Anthropic()
 
 CACHE_TTL_HOURS = 6
 
@@ -171,7 +152,7 @@ Return ONLY valid JSON array, no explanation:
 CANDIDATE: {cv_data['years_experience']} years experience
 JOBS TO SCORE:
 {jobs_text}"""
-    message = _get_client().messages.create(
+    message = _client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
