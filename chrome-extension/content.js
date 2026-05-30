@@ -56,47 +56,19 @@ async function startEasyApply(application) {
   console.log('JobAgent: clicking Easy Apply:', el.tagName, el.textContent.trim())
   el.click()
 
-  // Wait for the side panel to appear on the same page
-  console.log('JobAgent: waiting for apply panel...')
-  await sleep(2000)
-
-  // Try multiple selectors for the apply panel
-  const panelSelectors = [
-    '.jobs-easy-apply-modal',
-    '[data-test-modal]',
-    '.artdeco-modal',
-    '.jobs-apply-modal',
-    '[role="dialog"]',
-    '.scaffold-layout__detail',
-    '.jobs-apply-button--top-card',
-    '.ember-application',
-    'aside',
-  ]
-
-  let panel = null
-  for (const sel of panelSelectors) {
-    const found = document.querySelector(sel)
-    if (found && found.offsetParent !== null) {
-      console.log('JobAgent: found panel with selector:', sel)
-      panel = found
-      break
-    }
-  }
-
-  // Log ALL dialogs/modals on page for diagnostics
-  const dialogs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]')
-  console.log('JobAgent: dialogs found:', dialogs.length)
-  dialogs.forEach((d, i) => {
-    console.log(`Dialog ${i}:`, d.className.substring(0, 80))
-  })
+  // Wait for the dialog panel to appear
+  console.log('JobAgent: waiting for dialog panel...')
+  const panel = await waitForElement('[role="dialog"]', 10000)
+  console.log('JobAgent: panel appeared:', !!panel)
 
   if (!panel) {
-    console.log('JobAgent: no panel found, trying to fill whole page')
-    await fillApplicationForm(application)
+    console.log('JobAgent: no panel found')
+    await reportResult(application.id, 'manual')
     return
   }
 
   console.log('JobAgent: panel found, filling form')
+  await sleep(1000) // let form fully render
   await fillApplicationForm(application)
 }
 
@@ -144,17 +116,10 @@ function findEasyApplyElement() {
   return null
 }
 
-// pageRoot is document.body for the SDUI full-page flow; null uses modal detection
-async function fillApplicationForm(application, pageRoot = null) {
+async function fillApplicationForm(application) {
   console.log('JobAgent: fillApplicationForm called')
-  console.log('JobAgent: page URL:', window.location.href)
 
-  const inputs = document.querySelectorAll('input, textarea, select')
-  console.log('JobAgent: found inputs:', inputs.length)
-  inputs.forEach((input, i) => {
-    console.log(`Input ${i}:`, input.type, input.name,
-      input.getAttribute('aria-label'), input.value?.substring(0, 20))
-  })
+  const panel = document.querySelector('[role="dialog"]') || document
 
   let step = 0
   const maxSteps = 10
@@ -162,42 +127,66 @@ async function fillApplicationForm(application, pageRoot = null) {
   while (step < maxSteps) {
     await sleep(1500)
 
-    // Classic apply: find the modal. SDUI apply: use the full page body.
-    const modal = pageRoot || document.querySelector('.jobs-easy-apply-modal, [data-test-modal]')
-    if (!modal) break
-
     // Check if submitted
-    const successMsg = modal.querySelector(
-      '[aria-label*="submitted"], .artdeco-inline-feedback--success'
+    const successMsg = panel.querySelector(
+      '[aria-label*="submitted"], .artdeco-inline-feedback--success, [data-test-success]'
     )
     if (successMsg) {
+      console.log('JobAgent: application submitted!')
       await reportResult(application.id, 'applied')
       showSuccessNotification()
-      break
+      return
     }
 
-    // Fill current step fields
-    await fillCurrentStep(modal, application)
+    // Log current step inputs for debugging
+    const inputs = panel.querySelectorAll('input, textarea, select')
+    console.log(`JobAgent: step ${step}, inputs found:`, inputs.length)
+    inputs.forEach((input, i) => {
+      const label = getInputLabel(input)
+      console.log(`  Input ${i}: type=${input.type} label="${label}" value="${input.value?.substring(0, 20)}"`)
+    })
 
-    // Click Next or Submit
-    const nextBtn = modal.querySelector(
+    // Fill current step
+    await fillCurrentStep(panel, application)
+
+    // Find next/submit button (English + Hebrew labels)
+    const nextBtn = panel.querySelector(
       'button[aria-label="Continue to next step"], ' +
       'button[aria-label="Review your application"], ' +
-      'button[aria-label="Submit application"]'
+      'button[aria-label="Submit application"], ' +
+      'button[aria-label="המשך לשלב הבא"], ' +
+      'button[aria-label="שלח מועמדות"], ' +
+      'button[aria-label="בדוק את מועמדותך"]'
     )
+
+    console.log('JobAgent: next button found:', !!nextBtn, nextBtn?.getAttribute('aria-label'))
 
     if (nextBtn) {
       nextBtn.click()
       step++
     } else {
-      break
+      // Fallback: any button whose aria-label contains a progress keyword
+      const buttons = panel.querySelectorAll('button')
+      const primaryBtn = Array.from(buttons).find(b => {
+        const lbl = (b.getAttribute('aria-label') || '').toLowerCase()
+        return lbl.includes('next') || lbl.includes('submit') ||
+               lbl.includes('continue') || lbl.includes('המשך') || lbl.includes('שלח')
+      })
+      console.log('JobAgent: fallback button:', primaryBtn?.getAttribute('aria-label'))
+      if (primaryBtn) {
+        primaryBtn.click()
+        step++
+      } else {
+        console.log('JobAgent: no next button found, stopping')
+        break
+      }
     }
   }
 }
 
-async function fillCurrentStep(modal, application) {
+async function fillCurrentStep(scope, application) {
   // Fill phone number
-  const phoneInput = modal.querySelector(
+  const phoneInput = scope.querySelector(
     'input[name*="phone"], input[id*="phone"]'
   )
   if (phoneInput && !phoneInput.value) {
@@ -205,7 +194,7 @@ async function fillCurrentStep(modal, application) {
   }
 
   // Fill text inputs that are empty
-  const textInputs = modal.querySelectorAll('input[type="text"], textarea')
+  const textInputs = scope.querySelectorAll('input[type="text"], textarea')
   for (const input of textInputs) {
     const label = getInputLabel(input)
     if (!input.value && label) {
@@ -215,7 +204,7 @@ async function fillCurrentStep(modal, application) {
   }
 
   // Handle number inputs (years of experience)
-  const numberInputs = modal.querySelectorAll('input[type="number"]')
+  const numberInputs = scope.querySelectorAll('input[type="number"]')
   for (const input of numberInputs) {
     if (!input.value) {
       const label = getInputLabel(input)
@@ -225,7 +214,7 @@ async function fillCurrentStep(modal, application) {
   }
 
   // Handle radio buttons / yes-no questions
-  const radioGroups = modal.querySelectorAll('[role="radiogroup"]')
+  const radioGroups = scope.querySelectorAll('[role="radiogroup"]')
   for (const group of radioGroups) {
     const selected = group.querySelector('[aria-checked="true"]')
     if (!selected) {
@@ -237,7 +226,7 @@ async function fillCurrentStep(modal, application) {
   }
 
   // Handle select dropdowns
-  const selects = modal.querySelectorAll('select')
+  const selects = scope.querySelectorAll('select')
   for (const select of selects) {
     if (!select.value || select.value === '') {
       const label = getInputLabel(select)
