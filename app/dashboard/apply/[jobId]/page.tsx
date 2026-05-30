@@ -6,7 +6,7 @@ import { showToast } from "@/app/components/Toast";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
 
-function detectExtension(): Promise<boolean> {
+function _detectExtension(): Promise<boolean> {
   return new Promise((resolve) => {
     if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
       resolve(false)
