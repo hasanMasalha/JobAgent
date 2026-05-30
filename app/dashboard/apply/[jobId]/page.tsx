@@ -122,19 +122,36 @@ export default function ApplyPage() {
 
       // Open LinkedIn tab silently in the background via the extension.
       // Falls back to a visible tab if the extension is unavailable.
-      let openedInBackground = false
-      if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
+      console.log("JobAgent: extension ID:", EXTENSION_ID)
+      console.log("JobAgent: chrome.runtime available:", !!(window as Window & typeof globalThis & { chrome?: { runtime?: unknown } }).chrome?.runtime)
+      console.log("JobAgent: job URL:", data.job_url)
+
+      const openedInBackground = await new Promise<boolean>((resolve) => {
+        if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) {
+          resolve(false)
+          return
+        }
         try {
-          await new Promise<void>((resolve) => {
-            chrome.runtime.sendMessage(
-              EXTENSION_ID,
-              { type: "OPEN_APPLY_TAB", jobUrl: data.job_url, applicationId: data.application_id },
-              () => { resolve() }
-            )
-          })
-          openedInBackground = true
-        } catch { /* extension sleeping — fall back */ }
-      }
+          chrome.runtime.sendMessage(
+            EXTENSION_ID,
+            { type: "OPEN_APPLY_TAB", jobUrl: data.job_url, applicationId: data.application_id },
+            (response) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const err = (chrome.runtime as any).lastError
+              if (err) {
+                console.error("JobAgent: OPEN_APPLY_TAB failed:", err.message)
+                resolve(false)
+              } else {
+                console.log("JobAgent: background tab opened:", response)
+                resolve(response?.success === true)
+              }
+            }
+          )
+        } catch (e) {
+          console.error("JobAgent: sendMessage threw:", e)
+          resolve(false)
+        }
+      })
 
       if (!openedInBackground) {
         window.open(data.job_url, "_blank")

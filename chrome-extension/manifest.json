@@ -47,6 +47,7 @@
   },
   "externally_connectable": {
     "matches": [
+      "https://jobagent.uk/*",
       "http://localhost:3000/*"
     ]
   }
