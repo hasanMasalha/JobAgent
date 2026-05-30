@@ -245,7 +245,9 @@ async function fillCurrentStep(scope, application) {
 
     let answer = getAnswerForLabel(label, application)
 
-    if (!answer && label) {
+    // Only ask user for fields we don't recognise (null).
+    // Empty string means we recognised the field but have no data — skip silently.
+    if (answer === null && label) {
       answer = await getAnswerForUnknown(label, application)
     }
 
