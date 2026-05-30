@@ -53,23 +53,22 @@ async function startEasyApply(application) {
     return
   }
 
-  console.log('JobAgent: clicking Easy Apply:', el.tagName, el.textContent.trim())
+  console.log('JobAgent: clicking Easy Apply:', el.tagName)
   el.click()
 
-  // Wait for the dialog panel to appear
-  console.log('JobAgent: waiting for dialog panel...')
-  const panel = await waitForElement('[role="dialog"]', 10000)
-  console.log('JobAgent: panel appeared:', !!panel)
+  console.log('JobAgent: waiting for Easy Apply panel in shadow DOM...')
+  const panel = await waitForEasyApplyPanel(15000)
+  console.log('JobAgent: panel found:', !!panel)
 
   if (!panel) {
-    console.log('JobAgent: no panel found')
+    console.log('JobAgent: panel not found')
     await reportResult(application.id, 'manual')
     return
   }
 
-  console.log('JobAgent: panel found, filling form')
-  await sleep(1000) // let form fully render
-  await fillApplicationForm(application)
+  await sleep(1000)
+  console.log('JobAgent: filling form')
+  await fillApplicationForm(application, panel)
 }
 
 async function waitForEasyApplyButton(timeout) {
@@ -80,6 +79,41 @@ async function waitForEasyApplyButton(timeout) {
     await sleep(500)
   }
   return null
+}
+
+// The Easy Apply modal lives inside the shadow DOM of #interop-outlet.
+// Regular document.querySelector() cannot pierce shadow boundaries.
+function getEasyApplyPanel() {
+  const interopOutlet = document.getElementById('interop-outlet')
+  if (!interopOutlet?.shadowRoot) {
+    console.log('JobAgent: no shadow root found')
+    return null
+  }
+  const panel = interopOutlet.shadowRoot.querySelector(
+    '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
+  )
+  console.log('JobAgent: shadow panel found:', !!panel)
+  return panel
+}
+
+async function waitForEasyApplyPanel(timeout = 15000) {
+  return new Promise((resolve) => {
+    const panel = getEasyApplyPanel()
+    if (panel) return resolve(panel)
+
+    const interval = setInterval(() => {
+      const panel = getEasyApplyPanel()
+      if (panel) {
+        clearInterval(interval)
+        resolve(panel)
+      }
+    }, 500)
+
+    setTimeout(() => {
+      clearInterval(interval)
+      resolve(null)
+    }, timeout)
+  })
 }
 
 // LinkedIn renders Easy Apply as <a href="...apply/..."> not a <button>.
@@ -116,10 +150,11 @@ function findEasyApplyElement() {
   return null
 }
 
-async function fillApplicationForm(application) {
+async function fillApplicationForm(application, panel) {
   console.log('JobAgent: fillApplicationForm called')
 
-  const panel = document.querySelector('[role="dialog"]') || document
+  // Use passed panel; re-fetch from shadow DOM each step in case LinkedIn re-renders it
+  const scope = panel || getEasyApplyPanel() || document
 
   let step = 0
   const maxSteps = 10
@@ -127,9 +162,11 @@ async function fillApplicationForm(application) {
   while (step < maxSteps) {
     await sleep(1500)
 
+    const currentPanel = getEasyApplyPanel() || scope
+
     // Check if submitted
-    const successMsg = panel.querySelector(
-      '[aria-label*="submitted"], .artdeco-inline-feedback--success, [data-test-success]'
+    const successMsg = currentPanel.querySelector(
+      '[aria-label*="submitted"], .artdeco-inline-feedback--success'
     )
     if (successMsg) {
       console.log('JobAgent: application submitted!')
@@ -138,19 +175,18 @@ async function fillApplicationForm(application) {
       return
     }
 
-    // Log current step inputs for debugging
-    const inputs = panel.querySelectorAll('input, textarea, select')
-    console.log(`JobAgent: step ${step}, inputs found:`, inputs.length)
+    // Log current step inputs
+    const inputs = currentPanel.querySelectorAll('input, textarea, select')
+    console.log(`JobAgent: step ${step}, inputs:`, inputs.length)
     inputs.forEach((input, i) => {
       const label = getInputLabel(input)
-      console.log(`  Input ${i}: type=${input.type} label="${label}" value="${input.value?.substring(0, 20)}"`)
+      console.log(`  Input ${i}: type=${input.type} label="${label}"`)
     })
 
-    // Fill current step
-    await fillCurrentStep(panel, application)
+    await fillCurrentStep(currentPanel, application)
 
-    // Find next/submit button (English + Hebrew labels)
-    const nextBtn = panel.querySelector(
+    // Named next/submit buttons (English + Hebrew)
+    const nextBtn = currentPanel.querySelector(
       'button[aria-label="Continue to next step"], ' +
       'button[aria-label="Review your application"], ' +
       'button[aria-label="Submit application"], ' +
@@ -159,25 +195,22 @@ async function fillApplicationForm(application) {
       'button[aria-label="בדוק את מועמדותך"]'
     )
 
-    console.log('JobAgent: next button found:', !!nextBtn, nextBtn?.getAttribute('aria-label'))
+    console.log('JobAgent: next button:', nextBtn?.getAttribute('aria-label'))
 
     if (nextBtn) {
       nextBtn.click()
       step++
     } else {
-      // Fallback: any button whose aria-label contains a progress keyword
-      const buttons = panel.querySelectorAll('button')
-      const primaryBtn = Array.from(buttons).find(b => {
-        const lbl = (b.getAttribute('aria-label') || '').toLowerCase()
-        return lbl.includes('next') || lbl.includes('submit') ||
-               lbl.includes('continue') || lbl.includes('המשך') || lbl.includes('שלח')
-      })
-      console.log('JobAgent: fallback button:', primaryBtn?.getAttribute('aria-label'))
-      if (primaryBtn) {
-        primaryBtn.click()
+      // Fallback: primary-styled button in the panel
+      const allBtns = Array.from(currentPanel.querySelectorAll('button'))
+      console.log('JobAgent: all buttons:', allBtns.map(b => b.getAttribute('aria-label')))
+      const primary = allBtns.find(b => b.classList.contains('artdeco-button--primary'))
+      if (primary) {
+        console.log('JobAgent: clicking primary btn:', primary.textContent.trim())
+        primary.click()
         step++
       } else {
-        console.log('JobAgent: no next button found, stopping')
+        console.log('JobAgent: no button found, stopping')
         break
       }
     }
@@ -291,7 +324,10 @@ function getInputLabel(input) {
 
   const id = input.id
   if (id) {
-    const label = document.querySelector(`label[for="${id}"]`)
+    // getRootNode() returns the shadow root when the input is inside shadow DOM,
+    // so label[for=...] is found even when it lives in the same shadow tree.
+    const root = input.getRootNode()
+    const label = root.querySelector(`label[for="${id}"]`)
     if (label) return label.textContent.trim()
   }
 
