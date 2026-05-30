@@ -34,12 +34,11 @@ export async function GET(request: NextRequest) {
   if (!jobIdParam && !jobUrl) return NextResponse.json({ pending: false });
 
   // Prefer explicit jobId param; fall back to extracting from the jobUrl.
-  // extractJobId handles Hebrew slugs where /view/ is followed by text, not digits.
   const linkedinJobId = jobIdParam ?? (jobUrl ? extractJobId(jobUrl) : null);
 
   console.log(`[check-pending] userId=${userId} jobIdParam=${jobIdParam} jobUrl=${jobUrl} → linkedinJobId=${linkedinJobId}`);
 
-  // --- DEBUG: show all pending_extension apps for this user so we can compare ---
+  // --- DEBUG: show all pending_extension apps for this user ---
   const allPending = await db.$queryRaw<{ id: string; job_id: string; status: string; job_url: string }[]>`
     SELECT a.id, a.job_id, a.status, j.url AS job_url
     FROM "Application" a
@@ -52,9 +51,6 @@ export async function GET(request: NextRequest) {
   let rows: { id: string; job_url: string }[];
 
   if (linkedinJobId) {
-    // Search for the job ID anywhere in the stored URL — handles both:
-    //   stored: /jobs/view/4417922448/
-    //   stored: /jobs/view/hebrew-text-4417922448/   (Hebrew slug from JobSpy)
     rows = await db.$queryRaw<{ id: string; job_url: string }[]>`
       SELECT a.id, j.url AS job_url
       FROM "Application" a
@@ -80,9 +76,31 @@ export async function GET(request: NextRequest) {
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
-  const cvRows = await db.$queryRaw<{ skills_json: unknown }[]>`
-    SELECT skills_json FROM "CV" WHERE user_id = ${userId} LIMIT 1
-  `;
+  // Fetch profile defaults and CV skills in parallel
+  const [profile, cvRows] = await Promise.all([
+    db.user.findUnique({
+      where: { id: userId },
+      select: {
+        first_name: true,
+        last_name: true,
+        phone: true,
+        city: true,
+        linkedin_url: true,
+        github_url: true,
+        portfolio_url: true,
+        expected_salary: true,
+        notice_period: true,
+        years_of_experience: true,
+        highest_education: true,
+        work_authorized: true,
+        requires_sponsorship: true,
+        willing_to_relocate: true,
+      },
+    }),
+    db.$queryRaw<{ skills_json: unknown }[]>`
+      SELECT skills_json FROM "CV" WHERE user_id = ${userId} LIMIT 1
+    `,
+  ]);
 
   const skills: string[] = (() => {
     const raw = cvRows[0]?.skills_json;
@@ -95,12 +113,26 @@ export async function GET(request: NextRequest) {
     application: {
       id: rows[0].id,
       jobUrl: rows[0].job_url,
+      // Personal
+      first_name: profile?.first_name ?? null,
+      last_name: profile?.last_name ?? null,
+      phone: profile?.phone ?? null,
+      city: profile?.city ?? null,
+      // URLs
+      linkedin_url: profile?.linkedin_url ?? null,
+      github_url: profile?.github_url ?? null,
+      portfolio_url: profile?.portfolio_url ?? null,
+      // Work details
+      expected_salary: profile?.expected_salary ?? null,
+      notice_period: profile?.notice_period ?? "30",
+      years_of_experience: profile?.years_of_experience ?? "2",
+      highest_education: profile?.highest_education ?? "Bachelor's Degree",
+      // Boolean defaults
+      work_authorized: profile?.work_authorized ?? true,
+      requires_sponsorship: profile?.requires_sponsorship ?? false,
+      willing_to_relocate: profile?.willing_to_relocate ?? false,
+      // CV skills
       skills,
-      phone: null,
-      city: null,
-      linkedin_url: null,
-      expected_salary: null,
-      notice_period: null,
     },
   });
 }

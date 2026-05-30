@@ -241,23 +241,10 @@ async function fillCurrentStep(scope, application) {
     if (input.value) continue
     const label = getInputLabel(input)
     if (!label) continue
-
-    const l = label.toLowerCase()
-    console.log('JobAgent: filling input:', l)
-
-    if (l.includes('linkedin') || l.includes('profile')) {
-      setInputValue(input, application.linkedin_url ||
-        `https://www.linkedin.com/in/${application.user_name || 'profile'}`)
-    } else if (l.includes('phone') || l.includes('mobile')) {
-      setInputValue(input, application.phone || '')
-    } else if (l.includes('website') || l.includes('portfolio')) {
-      setInputValue(input, application.portfolio || '')
-    } else if (l.includes('city') || l.includes('location')) {
-      setInputValue(input, application.city || 'Tel Aviv')
-    } else if (l.includes('salary') || l.includes('compensation')) {
-      setInputValue(input, application.expected_salary || '')
-    } else if (l.includes('notice') || l.includes('start date')) {
-      setInputValue(input, application.notice_period || '30 days')
+    const answer = getAnswerForLabel(label, application)
+    if (answer) {
+      console.log('JobAgent: filling input:', label, '→', answer.substring(0, 30))
+      setInputValue(input, answer)
     }
   }
 
@@ -266,30 +253,32 @@ async function fillCurrentStep(scope, application) {
   for (const input of numberInputs) {
     if (input.value) continue
     const label = getInputLabel(input)
-    setInputValue(input, getYearsAnswer(label, application.skills || []))
+    const answer = getAnswerForLabel(label, application) || getYearsAnswer(label, application.skills || [])
+    setInputValue(input, answer)
   }
 
   // Fieldsets with real radio inputs (work auth, sponsorship, yes/no questions)
   const fieldsets = scope.querySelectorAll('fieldset')
   for (const fieldset of fieldsets) {
-    const legend = fieldset.querySelector('legend, span')
-    console.log('JobAgent: fieldset legend:', legend?.textContent?.substring(0, 50))
+    const legend = fieldset.querySelector('legend')
+    const legendText = legend?.textContent?.trim() || ''
+    console.log('JobAgent: fieldset legend:', legendText.substring(0, 50))
 
     const radios = fieldset.querySelectorAll('input[type="radio"]')
     const alreadySelected = Array.from(radios).find(r => r.checked)
     if (alreadySelected || radios.length === 0) continue
 
-    // Prefer "Yes" for auth/sponsorship questions; fall back to first option
-    const yesRadio = Array.from(radios).find(r =>
-      r.value?.toLowerCase() === 'yes' ||
-      r.nextSibling?.textContent?.toLowerCase().includes('yes') ||
-      r.parentElement?.textContent?.toLowerCase().includes('yes')
-    )
-    const toClick = yesRadio || radios[0]
-    console.log('JobAgent: clicking radio:', toClick?.value,
-      toClick?.parentElement?.textContent?.trim().substring(0, 30))
-    toClick.click()
-    toClick.dispatchEvent(new Event('change', { bubbles: true }))
+    // Decide yes/no based on user's profile defaults
+    const wantYes = getBooleanAnswer(legendText, application)
+    const target = Array.from(radios).find(r => {
+      const val = (r.value || r.parentElement?.textContent || '').toLowerCase()
+      return wantYes ? val.includes('yes') : val.includes('no')
+    }) || (wantYes ? radios[0] : radios[radios.length - 1])
+
+    console.log('JobAgent: clicking radio:', target?.value,
+      target?.parentElement?.textContent?.trim().substring(0, 30))
+    target.click()
+    target.dispatchEvent(new Event('change', { bubbles: true }))
   }
 
   // ARIA radiogroups (older LinkedIn UI)
@@ -357,18 +346,53 @@ function getYearsAnswer(label, skills) {
   return hasSkill ? '2' : '0'
 }
 
-function getAnswerForField(label, application) {
+// Returns the right string answer for a text/number field given its label
+function getAnswerForLabel(label, application) {
   if (!label) return null
   const l = label.toLowerCase()
 
-  if (l.includes('phone') || l.includes('mobile')) return application.phone
+  // URLs
+  if (l.includes('linkedin') || l.includes('profile url')) return application.linkedin_url || ''
+  if (l.includes('github')) return application.github_url || ''
+  if (l.includes('portfolio') || l.includes('website')) return application.portfolio_url || ''
+
+  // Personal
+  if (l.includes('first name')) return application.first_name || ''
+  if (l.includes('last name') || l.includes('family name')) return application.last_name || ''
+  if (l.includes('phone') || l.includes('mobile')) return application.phone || ''
   if (l.includes('city') || l.includes('location')) return application.city || 'Tel Aviv'
-  if (l.includes('linkedin')) return application.linkedin_url || ''
-  if (l.includes('website') || l.includes('portfolio')) return application.portfolio || ''
-  if (l.includes('salary') || l.includes('compensation')) return application.expected_salary || ''
-  if (l.includes('notice') || l.includes('start date')) return application.notice_period || '30 days'
+
+  // Work details
+  if (l.includes('salary') || l.includes('compensation') || l.includes('wage'))
+    return application.expected_salary || ''
+  if (l.includes('notice') || l.includes('availability') || l.includes('start date'))
+    return application.notice_period || '30'
+  if (l.includes('years') && l.includes('experience'))
+    return application.years_of_experience || '2'
+  if (l.includes('education') || l.includes('degree') || l.includes('qualification'))
+    return application.highest_education || "Bachelor's Degree"
 
   return null
+}
+
+// Returns the right boolean for a yes/no radio group given its label
+function getBooleanAnswer(label, application) {
+  if (!label) return true
+  const l = label.toLowerCase()
+
+  if (l.includes('authorized') || l.includes('eligible') || l.includes('right to work'))
+    return application.work_authorized ?? true
+  if (l.includes('sponsorship') || l.includes('visa'))
+    return !(application.requires_sponsorship ?? false) // "require sponsorship?" → No means false
+  if (l.includes('relocat'))
+    return application.willing_to_relocate ?? false
+
+  return true // default Yes for unknown yes/no questions
+}
+
+// Keep old name as alias — used by select dropdowns
+function getAnswerForField(label, application) {
+  return getAnswerForLabel(label, application)
 }
 
 function getInputLabel(input) {
