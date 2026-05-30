@@ -7,7 +7,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
-_client = anthropic.Anthropic()
+
+# Lazy client — created on first use so load_dotenv() has already run
+# before ANTHROPIC_API_KEY is read from the environment.
+_client: anthropic.Anthropic | None = None
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic()
+    return _client
 
 CACHE_TTL_HOURS = 6
 
@@ -152,7 +161,7 @@ Return ONLY valid JSON array, no explanation:
 CANDIDATE: {cv_data['years_experience']} years experience
 JOBS TO SCORE:
 {jobs_text}"""
-    message = _client.messages.create(
+    message = _get_client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
