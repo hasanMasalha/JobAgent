@@ -44,7 +44,7 @@ async function checkPendingApplication() {
 }
 
 async function startEasyApply(application) {
-  console.log('JobAgent: starting Easy Apply for:', application.id)
+  console.log('JobAgent: starting Easy Apply')
 
   const el = await waitForEasyApplyButton(20000)
   if (!el) {
@@ -53,34 +53,51 @@ async function startEasyApply(application) {
     return
   }
 
-  const href = el.getAttribute('href') || ''
-  console.log('JobAgent: Easy Apply href:', href)
+  console.log('JobAgent: clicking Easy Apply:', el.tagName, el.textContent.trim())
+  el.click()
 
-  if (href.includes('/apply/') || href.includes('openSDUIApplyFlow')) {
-    // Link navigates to a new page — save application data for the apply page to pick up
-    await chrome.storage.local.set({
-      pendingApplyData: {
-        applicationId: application.id,
-        application: application,
-        timestamp: Date.now()
-      }
-    })
-    console.log('JobAgent: saved apply data, navigating to apply page')
-    el.click()
+  // Wait for the side panel to appear on the same page
+  console.log('JobAgent: waiting for apply panel...')
+  await sleep(2000)
+
+  // Try multiple selectors for the apply panel
+  const panelSelectors = [
+    '.jobs-easy-apply-modal',
+    '[data-test-modal]',
+    '.artdeco-modal',
+    '.jobs-apply-modal',
+    '[role="dialog"]',
+    '.scaffold-layout__detail',
+    '.jobs-apply-button--top-card',
+    '.ember-application',
+    'aside',
+  ]
+
+  let panel = null
+  for (const sel of panelSelectors) {
+    const found = document.querySelector(sel)
+    if (found && found.offsetParent !== null) {
+      console.log('JobAgent: found panel with selector:', sel)
+      panel = found
+      break
+    }
+  }
+
+  // Log ALL dialogs/modals on page for diagnostics
+  const dialogs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]')
+  console.log('JobAgent: dialogs found:', dialogs.length)
+  dialogs.forEach((d, i) => {
+    console.log(`Dialog ${i}:`, d.className.substring(0, 80))
+  })
+
+  if (!panel) {
+    console.log('JobAgent: no panel found, trying to fill whole page')
+    await fillApplicationForm(application)
     return
   }
 
-  // Old modal flow (fallback)
-  el.click()
-  await sleep(2000)
-  const modal = await waitForElement(
-    '.jobs-easy-apply-modal, [data-test-modal], .artdeco-modal',
-    10000
-  )
-  console.log('JobAgent: modal appeared:', !!modal)
-  if (modal) {
-    await fillApplicationForm(application)
-  }
+  console.log('JobAgent: panel found, filling form')
+  await fillApplicationForm(application)
 }
 
 async function waitForEasyApplyButton(timeout) {
