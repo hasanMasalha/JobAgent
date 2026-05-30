@@ -144,16 +144,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const stored = await chrome.storage.local.get(['userId', 'activeApplyTab'])
         const url = await getServerUrl()
+        const status = message.status || 'applied'
+        console.log('[JobAgent bg] updating status:', message.applicationId, '→', status)
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             applicationId: message.applicationId,
-            status: message.status || 'applied',
+            status,
             userId: stored.userId,
           }),
         })
-        console.log('[JobAgent bg] update-status response:', res.status)
+        const resText = await res.text()
+        console.log('[JobAgent bg] update-status response:', res.status, resText)
 
         // Close the background tab
         if (stored.activeApplyTab) {

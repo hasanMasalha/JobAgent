@@ -178,6 +178,8 @@ export default function ApplyPage() {
           }
         } catch { /* network blip — keep polling */ }
       }, 3000)
+      // Stop polling after 5 minutes maximum
+      setTimeout(() => clearInterval(poll), 5 * 60 * 1000)
       return;
     }
 

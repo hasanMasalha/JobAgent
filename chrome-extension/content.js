@@ -215,6 +215,11 @@ async function fillApplicationForm(application, panel) {
       }
     }
   }
+
+  // Loop ended without detecting a success message — report manual so the
+  // dashboard polling can stop waiting.
+  console.log('[JobAgent] form loop ended without success, reporting manual')
+  await reportResult(application.id, 'manual')
 }
 
 async function fillCurrentStep(scope, application) {
@@ -482,8 +487,15 @@ function getAnswerForField(label, application) {
 // ── Learn-as-you-go popup ─────────────────────────────────────────────────────
 
 async function showQuestionOverlay(question, onAnswer) {
-  // If this tab is running in the background, bring it to the front so the
-  // user can see the overlay and answer the question.
+  // If the tab is hidden (background apply mode), skip the popup and resolve
+  // immediately with null — we don't want to yank the user's focus mid-browse.
+  if (document.visibilityState === 'hidden') {
+    console.log('[JobAgent] skipping overlay in background tab for:', question)
+    onAnswer(null, false)
+    return
+  }
+
+  // Visible tab — bring it forward if needed, then show the overlay.
   try {
     await chrome.runtime.sendMessage({ type: 'FOCUS_TAB' })
   } catch { /* ignore — tab may already be active */ }
@@ -631,15 +643,17 @@ function setInputValue(input, value) {
 // All network calls go through background.js — content scripts cannot make
 // cross-origin fetches on pages with strict CSP (LinkedIn blocks them).
 async function reportResult(applicationId, status) {
+  console.log('[JobAgent] reportResult called:', applicationId, status)
   try {
-    await chrome.runtime.sendMessage({
+    const response = await chrome.runtime.sendMessage({
       type: 'REPORT_APPLICATION_COMPLETE',
       applicationId,
       status,
       jobUrl: window.location.href
     })
+    console.log('[JobAgent] reportResult response:', response)
   } catch (e) {
-    console.error('JobAgent: failed to report result', e)
+    console.error('[JobAgent] failed to report result:', e)
   }
 }
 

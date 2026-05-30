@@ -27,11 +27,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
+    console.log("[update-status] updating:", applicationId, "to:", status, "for user:", userId);
     await db.$executeRaw`
       UPDATE "Application"
       SET status = ${status}
       WHERE id = ${applicationId} AND user_id = ${userId}
     `;
+    console.log("[update-status] done");
 
     return NextResponse.json({ success: true });
   } catch (err) {
