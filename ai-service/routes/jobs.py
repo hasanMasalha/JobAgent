@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 
 import asyncpg
 from fastapi import APIRouter
@@ -11,6 +12,29 @@ from company_discovery import CSV_PATH, discover_all_companies, discover_one_com
 from company_scraper import is_israeli_job
 from embedder import embed
 from scraper import scrape_israel_jobs
+
+_AUTO_ATS = [
+    "greenhouse.io", "lever.co", "ashbyhq.com",
+    "smartrecruiters.com", "bamboohr.com", "workable.com",
+]
+_EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def detect_apply_type(url: str, is_easy_apply: bool, description: str = "") -> str:
+    url_lower = (url or "").lower()
+    desc_lower = (description or "").lower()
+    if any(ats in url_lower for ats in _AUTO_ATS):
+        return "auto"
+    if _EMAIL_RE.search(desc_lower):
+        return "auto"
+    if "linkedin.com" in url_lower and is_easy_apply:
+        return "extension"
+    return "external"
+
+
+def extract_email(description: str) -> str | None:
+    match = _EMAIL_RE.search(description or "")
+    return match.group(0) if match else None
 
 router = APIRouter()
 
@@ -39,18 +63,24 @@ async def scrape_and_store():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
+            is_easy_apply = job.get("is_easy_apply", False)
+            apply_type = detect_apply_type(job["url"], is_easy_apply, job["description"])
+            recruiter_email = extract_email(job["description"])
+
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, scraped_at)
+                                   embedding, scraped_at, apply_type, recruiter_email)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, now())
+                        $9::vector, now(), $10, $11)
                 ON CONFLICT (url) DO UPDATE
-                    SET description = EXCLUDED.description,
-                        embedding    = EXCLUDED.embedding,
-                        scraped_at   = now()
+                    SET description     = EXCLUDED.description,
+                        embedding       = EXCLUDED.embedding,
+                        scraped_at      = now(),
+                        apply_type      = EXCLUDED.apply_type,
+                        recruiter_email = EXCLUDED.recruiter_email
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
@@ -63,6 +93,8 @@ async def scrape_and_store():
                 job["salary_min"],
                 job["salary_max"],
                 embedding_str,
+                apply_type,
+                recruiter_email,
             )
             if row is None:
                 pass  # conflict but description was already long enough — skip
@@ -212,30 +244,39 @@ async def scrape_and_store_company_careers():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
+            desc = job.get("description", "")
+            is_easy_apply = job.get("is_easy_apply", False)
+            apply_type = detect_apply_type(job["url"], is_easy_apply, desc)
+            recruiter_email = extract_email(desc)
+
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, scraped_at)
+                                   embedding, scraped_at, apply_type, recruiter_email)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, now())
+                        $9::vector, now(), $10, $11)
                 ON CONFLICT (url) DO UPDATE
-                    SET description = EXCLUDED.description,
-                        embedding    = EXCLUDED.embedding,
-                        scraped_at   = now()
+                    SET description     = EXCLUDED.description,
+                        embedding       = EXCLUDED.embedding,
+                        scraped_at      = now(),
+                        apply_type      = EXCLUDED.apply_type,
+                        recruiter_email = EXCLUDED.recruiter_email
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
                 job["title"],
                 job["company"],
-                job.get("description", ""),
+                desc,
                 job.get("location", ""),
                 job["url"],
                 job["source"],
                 job.get("salary_min"),
                 job.get("salary_max"),
                 embedding_str,
+                apply_type,
+                recruiter_email,
             )
             if row is None:
                 pass

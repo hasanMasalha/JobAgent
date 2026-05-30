@@ -63,6 +63,7 @@ async def scrape_israel_jobs() -> list[dict]:
                     "source": _clean(row.get("site")),
                     "salary_min": salary_min,
                     "salary_max": salary_max,
+                    "is_easy_apply": bool(row.get("is_easy_apply", False)),
                 }
             )
 
