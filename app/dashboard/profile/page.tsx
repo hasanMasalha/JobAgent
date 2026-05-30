@@ -9,6 +9,23 @@ interface Profile {
   preferences: { titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null } | null;
 }
 
+interface EasyApplyDefaults {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  city: string;
+  linkedin_url: string;
+  github_url: string;
+  portfolio_url: string;
+  expected_salary: string;
+  notice_period: string;
+  years_of_experience: string;
+  highest_education: string;
+  work_authorized: boolean;
+  requires_sponsorship: boolean;
+  willing_to_relocate: boolean;
+}
+
 function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +52,16 @@ function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Easy Apply defaults
+  const [defaults, setDefaults] = useState<EasyApplyDefaults>({
+    first_name: "", last_name: "", phone: "", city: "",
+    linkedin_url: "", github_url: "", portfolio_url: "",
+    expected_salary: "", notice_period: "30", years_of_experience: "2",
+    highest_education: "Bachelor's Degree",
+    work_authorized: true, requires_sponsorship: false, willing_to_relocate: false,
+  });
+  const [savingDefaults, setSavingDefaults] = useState(false);
+
   // Notifications
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [savingEmail, setSavingEmail] = useState(false);
@@ -56,11 +83,27 @@ function ProfileContent() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
-      .then((data: Profile & { email_notifications?: boolean }) => {
+      .then((data: Profile & { email_notifications?: boolean } & EasyApplyDefaults) => {
         setProfile(data);
         if (typeof data.email_notifications === "boolean") {
           setEmailNotifications(data.email_notifications);
         }
+        setDefaults({
+          first_name: data.first_name ?? "",
+          last_name: data.last_name ?? "",
+          phone: data.phone ?? "",
+          city: data.city ?? "",
+          linkedin_url: data.linkedin_url ?? "",
+          github_url: data.github_url ?? "",
+          portfolio_url: data.portfolio_url ?? "",
+          expected_salary: data.expected_salary ?? "",
+          notice_period: data.notice_period ?? "30",
+          years_of_experience: data.years_of_experience ?? "2",
+          highest_education: data.highest_education ?? "Bachelor's Degree",
+          work_authorized: data.work_authorized ?? true,
+          requires_sponsorship: data.requires_sponsorship ?? false,
+          willing_to_relocate: data.willing_to_relocate ?? false,
+        });
         if (data.preferences) {
           setTitles(data.preferences.titles ?? []);
           setLocation(data.preferences.locations?.[0] ?? "");
@@ -142,6 +185,23 @@ function ProfileContent() {
       setLinkedinError(err instanceof Error ? err.message : "Something went wrong. Try again.");
     } finally {
       setLinkedinConnecting(false);
+    }
+  }
+
+  async function handleSaveDefaults() {
+    setSavingDefaults(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(defaults),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      showToast("Auto Apply defaults saved", "success");
+    } catch {
+      showToast("Failed to save defaults", "error");
+    } finally {
+      setSavingDefaults(false);
     }
   }
 
@@ -653,6 +713,150 @@ function ProfileContent() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Auto Apply Defaults */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Auto Apply Defaults</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Used automatically when applying to jobs via the Chrome extension
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[
+            { label: "First name", key: "first_name", placeholder: "Hasan" },
+            { label: "Last name", key: "last_name", placeholder: "Masalha" },
+            { label: "Phone", key: "phone", placeholder: "+972-50-000-0000" },
+            { label: "City", key: "city", placeholder: "Tel Aviv" },
+          ].map(({ label, key, placeholder }) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
+              <input
+                type="text"
+                value={defaults[key as keyof EasyApplyDefaults] as string}
+                onChange={e => setDefaults({ ...defaults, [key]: e.target.value })}
+                placeholder={placeholder}
+                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+              />
+            </div>
+          ))}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">LinkedIn Profile URL</label>
+            <input
+              type="url"
+              value={defaults.linkedin_url}
+              onChange={e => setDefaults({ ...defaults, linkedin_url: e.target.value })}
+              placeholder="https://linkedin.com/in/yourname"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">GitHub URL</label>
+            <input
+              type="url"
+              value={defaults.github_url}
+              onChange={e => setDefaults({ ...defaults, github_url: e.target.value })}
+              placeholder="https://github.com/yourname"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Portfolio / Website</label>
+            <input
+              type="url"
+              value={defaults.portfolio_url}
+              onChange={e => setDefaults({ ...defaults, portfolio_url: e.target.value })}
+              placeholder="https://yourwebsite.com"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expected Salary (monthly, NIS)</label>
+            <input
+              type="text"
+              value={defaults.expected_salary}
+              onChange={e => setDefaults({ ...defaults, expected_salary: e.target.value })}
+              placeholder="20000"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notice period (days)</label>
+            <input
+              type="text"
+              value={defaults.notice_period}
+              onChange={e => setDefaults({ ...defaults, notice_period: e.target.value })}
+              placeholder="30"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Years of experience</label>
+            <input
+              type="text"
+              value={defaults.years_of_experience}
+              onChange={e => setDefaults({ ...defaults, years_of_experience: e.target.value })}
+              placeholder="2"
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Highest education</label>
+            <select
+              value={defaults.highest_education}
+              onChange={e => setDefaults({ ...defaults, highest_education: e.target.value })}
+              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
+            >
+              {["High School", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "PhD", "Bootcamp / Self-taught"].map(o => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Boolean defaults */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {([
+            { label: "Authorized to work in Israel?", key: "work_authorized", yesFirst: true },
+            { label: "Requires visa sponsorship?", key: "requires_sponsorship", yesFirst: false },
+            { label: "Willing to relocate?", key: "willing_to_relocate", yesFirst: true },
+          ] as { label: string; key: keyof EasyApplyDefaults; yesFirst: boolean }[]).map(({ label, key, yesFirst }) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{label}</label>
+              <div className="flex gap-4">
+                {(yesFirst ? [true, false] : [false, true]).map(val => (
+                  <label key={String(val)} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={defaults[key] === val}
+                      onChange={() => setDefaults({ ...defaults, [key]: val })}
+                      className="accent-[#1a2e5e]"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">{val ? "Yes" : "No"}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSaveDefaults}
+          disabled={savingDefaults}
+          className="mt-2 px-5 py-2 text-sm font-semibold text-white bg-[#1a2e5e] hover:opacity-90 rounded-lg disabled:opacity-50 transition-opacity"
+        >
+          {savingDefaults ? "Saving…" : "Save defaults"}
+        </button>
       </div>
 
       {/* Notifications */}

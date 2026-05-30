@@ -14,12 +14,28 @@ model User {
   id                    String   @id @default(uuid())
   email                 String   @unique
   name                  String?
+  first_name            String?
+  last_name             String?
+  phone                 String?
+  city                  String?
   linkedin_session_path String?
   google_access_token   String?
   google_refresh_token  String?
   google_connected      Boolean  @default(false)
   email_notifications   Boolean  @default(true)
   created_at            DateTime @default(now())
+
+  // Easy Apply default answers
+  notice_period        String?  @default("30")
+  work_authorized      Boolean? @default(true)
+  requires_sponsorship Boolean? @default(false)
+  expected_salary      String?
+  years_of_experience  String?  @default("2")
+  highest_education    String?  @default("Bachelor's Degree")
+  linkedin_url         String?
+  portfolio_url        String?
+  github_url           String?
+  willing_to_relocate  Boolean? @default(false)
 
   cvs             CV[]
   job_preferences JobPreference[]
