@@ -276,12 +276,13 @@ async def match_jobs(req: MatchRequest):
             "years_experience": int(skills_json.get("years_experience") or 0),
         }
 
-        # 3. Claude scoring
-        scores = _run_claude_scoring(jobs, cv_data)
+        # 3. Claude scoring — cap to top 20 by vector similarity to keep latency low
+        jobs_to_score = sorted(jobs, key=lambda x: x.get("similarity", 0), reverse=True)[:20]
+        scores = _run_claude_scoring(jobs_to_score, cv_data)
         if scores:
-            results = _merge_scores(jobs, scores)
+            results = _merge_scores(jobs_to_score, scores)
         else:
-            results = _vector_only(jobs)
+            results = _vector_only(jobs_to_score)
 
         # 4. Persist to DB cache
         await _set_db_cache(conn, req.user_id, results)
