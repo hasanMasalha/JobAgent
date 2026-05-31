@@ -76,6 +76,7 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_EXTENSION_ID: ${{ secrets.NEXT_PUBLIC_EXTENSION_ID }}
 
   # ── JOB 2: BUILD AND PUSH (master only) ──
   build:
@@ -105,6 +106,7 @@ jobs:
             --build-arg NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }} \
             --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
+            --build-arg NEXT_PUBLIC_EXTENSION_ID=${{ secrets.NEXT_PUBLIC_EXTENSION_ID }} \
             -t $ECR_NEXTJS:latest \
             -t $ECR_NEXTJS:${{ github.sha }} \
             .
