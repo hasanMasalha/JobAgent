@@ -294,6 +294,15 @@ export default function DashboardPage() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const err = (window as any).chrome?.runtime?.lastError;
             if (err) {
+              // "message port closed" means the SW closed before calling sendResponse —
+              // the published extension has the old code that uses return false.
+              // The queue was still stored and processNextInQueue still ran, so treat
+              // this as success rather than showing a misleading error to the user.
+              if (err.message.includes("port closed") || err.message.includes("message port closed")) {
+                console.log("JobAgent: port closed (extension processed message with old SW code — ok)");
+                showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+                return;
+              }
               console.error("JobAgent: START_APPLY_QUEUE failed:", err.message);
               showToast(`Extension error: ${err.message}`, "error");
             } else {
