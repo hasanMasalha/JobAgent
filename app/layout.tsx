@@ -15,8 +15,12 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "JobAgent",
+  title: "JobAgent — AI Job Assistant",
   description: "AI-powered job assistant for the Israeli market",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+  },
 };
 
 export const viewport: Viewport = {
