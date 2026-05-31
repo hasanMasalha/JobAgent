@@ -96,9 +96,9 @@ function TagInput({ tags, onChange, placeholder, suggestions }: {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(input); } }}
           placeholder={placeholder}
-          className="flex-1 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          className="flex-1 border dark:border-gray-600 rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
         />
-        <button type="button" onClick={() => add(input)} className="px-3 py-1.5 bg-gray-100 rounded text-sm hover:bg-gray-200">Add</button>
+        <button type="button" onClick={() => add(input)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-600 dark:text-white rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-500">Add</button>
       </div>
       {suggestions && suggestions.filter((s) => !tags.includes(s)).length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
@@ -107,7 +107,7 @@ function TagInput({ tags, onChange, placeholder, suggestions }: {
               key={s}
               type="button"
               onClick={() => onChange([...tags, s])}
-              className="text-xs border border-dashed border-gray-300 px-2 py-0.5 rounded-full text-gray-500 hover:border-black hover:text-black transition-colors"
+              className="text-xs border border-dashed border-gray-300 dark:border-gray-500 px-2 py-0.5 rounded-full text-gray-500 dark:text-gray-400 hover:border-black dark:hover:border-gray-300 hover:text-black dark:hover:text-white transition-colors"
             >
               + {s}
             </button>
@@ -231,15 +231,15 @@ export default function CVBuilderPage() {
   }
 
   // ── Input class ─────────────────────────────────────────────────────────────
-  const inp = "w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black";
-  const label = "block text-sm font-medium mb-1 text-gray-700";
+  const inp = "w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400";
+  const label = "block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300";
 
   if (generating) {
     return (
       <div className="max-w-xl mx-auto mt-24 text-center">
         <div className="inline-block w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-5" />
-        <p className="text-lg font-semibold text-gray-900">Claude is writing your CV…</p>
-        <p className="text-sm text-gray-500 mt-1">This takes about 15–20 seconds</p>
+        <p className="text-lg font-semibold text-gray-900 dark:text-white">Claude is writing your CV…</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">This takes about 15–20 seconds</p>
       </div>
     );
   }
@@ -248,21 +248,21 @@ export default function CVBuilderPage() {
     <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Build CV with AI</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Build CV with AI</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
       </div>
 
       {/* Progress bar */}
       <div className="flex gap-1.5 mb-8">
         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? "bg-purple-500" : "bg-gray-200"}`} />
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`} />
         ))}
       </div>
 
       {/* ── Step 1: Personal info ───────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-800">Personal information</h2>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-white">Personal information</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -308,14 +308,14 @@ export default function CVBuilderPage() {
       {step === 2 && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-800">Work experience</h2>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white">Work experience</h2>
             <button
               type="button"
               onClick={() => setSkipExperience((v) => !v)}
               className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
                 skipExperience
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "text-gray-500 border-gray-300 hover:border-gray-500"
+                  ? "bg-gray-900 text-white border-gray-900 dark:bg-gray-600 dark:border-gray-600"
+                  : "text-gray-500 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:border-gray-500 dark:hover:border-gray-300"
               }`}
             >
               {skipExperience ? "✓ No experience" : "Skip — no experience"}
@@ -323,16 +323,18 @@ export default function CVBuilderPage() {
           </div>
 
           {skipExperience && (
-            <div className="bg-gray-50 border border-dashed rounded-xl p-5 text-center text-sm text-gray-500">
-              No work experience will be included in your CV.
-              <br />
-              Claude will focus on your education, skills, and projects.
+            <div className="rounded-lg p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 flex items-start gap-3">
+              <span className="text-blue-500 dark:text-blue-400 text-base leading-tight mt-0.5">ℹ</span>
+              <p className="text-blue-800 dark:text-blue-200 text-sm">
+                No work experience will be included in your CV.
+                Claude will focus on your education, skills, and projects.
+              </p>
             </div>
           )}
 
           {!skipExperience && (<>
           {experiences.map((exp, i) => (
-            <div key={i} className="border rounded-xl p-4 space-y-3 relative">
+            <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 relative">
               {experiences.length > 1 && (
                 <button type="button" onClick={() => removeExp(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
                   Remove
@@ -385,7 +387,7 @@ export default function CVBuilderPage() {
                 {exp.current && <div className="col-span-2" />}
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
                 <input type="checkbox" checked={exp.current} onChange={(e) => updateExp(i, "current", e.target.checked)} />
                 Currently working here
               </label>
@@ -413,10 +415,10 @@ export default function CVBuilderPage() {
       {/* ── Step 3: Education ───────────────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-6">
-          <h2 className="text-base font-semibold text-gray-800">Education</h2>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-white">Education</h2>
 
           {educations.map((edu, i) => (
-            <div key={i} className="border rounded-xl p-4 space-y-3 relative">
+            <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 relative">
               {educations.length > 1 && (
                 <button type="button" onClick={() => removeEdu(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
                   Remove
@@ -467,7 +469,7 @@ export default function CVBuilderPage() {
       {step === 4 && (
         <div className="space-y-6">
           <div>
-            <h2 className="text-base font-semibold text-gray-800 mb-3">Skills</h2>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white mb-3">Skills</h2>
             <TagInput
               tags={skillsInfo.skills}
               onChange={(tags) => setSkillsInfo((p) => ({ ...p, skills: tags }))}
@@ -477,8 +479,8 @@ export default function CVBuilderPage() {
           </div>
 
           <div>
-            <h2 className="text-base font-semibold text-gray-800 mb-1">Languages</h2>
-            <p className="text-xs text-gray-500 mb-3">e.g. Hebrew (native), English (fluent)</p>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white mb-1">Languages</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">e.g. Hebrew (native), English (fluent)</p>
             <TagInput
               tags={skillsInfo.languages}
               onChange={(tags) => setSkillsInfo((p) => ({ ...p, languages: tags }))}
@@ -489,7 +491,7 @@ export default function CVBuilderPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-800">Projects <span className="text-xs font-normal text-gray-400">(optional, up to 3)</span></h2>
+                <h2 className="text-base font-semibold text-gray-800 dark:text-white">Projects <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(optional, up to 3)</span></h2>
               </div>
               {skillsInfo.projects.length < 3 && (
                 <button type="button" onClick={addProject} className="text-sm text-purple-600 hover:underline font-medium">+ Add project</button>
@@ -501,7 +503,7 @@ export default function CVBuilderPage() {
             )}
 
             {skillsInfo.projects.map((proj, i) => (
-              <div key={i} className="border rounded-xl p-4 space-y-3 mb-3 relative">
+              <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 mb-3 relative">
                 <button type="button" onClick={() => removeProject(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
                   Remove
                 </button>
@@ -540,7 +542,7 @@ export default function CVBuilderPage() {
         <button
           type="button"
           onClick={() => step === 1 ? router.push("/dashboard/onboarding") : setStep((s) => s - 1)}
-          className="flex-1 border py-2.5 rounded-lg text-sm hover:bg-gray-50"
+          className="flex-1 border dark:border-gray-600 dark:text-gray-300 py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           {step === 1 ? "Cancel" : "← Back"}
         </button>

@@ -21,14 +21,14 @@ function CVPreview({ cvText }: { cvText: string }) {
     <>
       {/* Carlito is metric-compatible with Calibri — used as fallback on non-Windows */}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}</style>
-    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
+    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 dark:text-gray-200 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
       {lines.map((line, i) => {
         const trimmed = line.trim();
 
         if (!nameWritten && trimmed) {
           nameWritten = true;
           return (
-            <div key={i} className="text-base font-bold text-center text-gray-900 mb-1">
+            <div key={i} className="text-base font-bold text-center text-gray-900 dark:text-white mb-1">
               {trimmed}
             </div>
           );
@@ -36,23 +36,23 @@ function CVPreview({ cvText }: { cvText: string }) {
         if (nameWritten && !contactWritten && trimmed) {
           contactWritten = true;
           return (
-            <div key={i} className="text-xs text-center text-gray-500 mb-4">
+            <div key={i} className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
               {trimmed}
             </div>
           );
         }
         if (SECTION_HEADERS.has(trimmed.toLowerCase().replace(/:$/, ""))) {
           return (
-            <div key={i} className="mt-4 mb-1 font-bold text-xs text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-0.5">
+            <div key={i} className="mt-4 mb-1 font-bold text-xs text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-600 pb-0.5">
               {trimmed.replace(/:$/, "")}
             </div>
           );
         }
         if (trimmed.startsWith("•")) {
-          return <div key={i} className="pl-4 text-gray-700">{trimmed}</div>;
+          return <div key={i} className="pl-4 text-gray-700 dark:text-gray-300">{trimmed}</div>;
         }
         if (!trimmed) return <div key={i} className="h-2" />;
-        return <div key={i} className="text-gray-700">{trimmed}</div>;
+        return <div key={i} className="text-gray-700 dark:text-gray-300">{trimmed}</div>;
       })}
     </div>
     </>
@@ -143,15 +143,15 @@ function PreviewContent() {
 
       <div className="flex items-start justify-between mb-6 gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Your CV is ready</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your CV is ready</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             Review it below, then download or go to your dashboard.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/dashboard/cv-builder"
-            className="text-xs font-medium border px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+            className="text-xs font-medium border dark:border-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             ← Regenerate
           </Link>
@@ -165,9 +165,9 @@ function PreviewContent() {
         </div>
       </div>
 
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-6">
-        <div className="bg-gray-50 border-b px-5 py-2 flex items-center justify-between">
-          <span className="text-xs text-gray-400 font-mono">preview</span>
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div className="bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 px-5 py-2 flex items-center justify-between">
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">preview</span>
         </div>
         {cvText && <CVPreview cvText={cvText} />}
       </div>
@@ -188,7 +188,7 @@ function PreviewContent() {
         </button>
         <Link
           href="/dashboard/onboarding"
-          className="text-xs text-gray-400 hover:text-gray-600 hover:underline"
+          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
         >
           Update job preferences
         </Link>
