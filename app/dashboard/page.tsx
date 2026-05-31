@@ -303,8 +303,17 @@ export default function DashboardPage() {
         fetch("/api/jobs/saved"),
         fetch("/api/applications?ids_only=true"),
       ]);
-      const matchData = await matchRes.json();
-      if (!matchRes.ok) throw new Error(matchData.error ?? "Failed to load jobs");
+      const matchText = await matchRes.text();
+      let matchData: { jobs: Job[]; hasMore: boolean; total: number; error?: string };
+      try {
+        matchData = JSON.parse(matchText);
+      } catch {
+        console.error("[match] Non-JSON response:", matchText.substring(0, 200));
+        throw new Error("Unable to load matches. Please refresh in a moment.");
+      }
+      if (!matchRes.ok || matchData.error) {
+        throw new Error(matchData.error ?? "Failed to load jobs");
+      }
       setJobs(matchData.jobs);
       setHasMore(matchData.hasMore);
       setLastFetched(new Date());
@@ -330,7 +339,15 @@ export default function DashboardPage() {
     try {
       const res = await fetch(`/api/match?page=${nextPage}&limit=20`);
       if (!res.ok) return;
-      const data = await res.json();
+      const text = await res.text();
+      let data: { jobs: Job[]; hasMore: boolean; error?: string };
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("[match/loadMore] Non-JSON response:", text.substring(0, 200));
+        return;
+      }
+      if (data.error || !Array.isArray(data.jobs)) return;
       setJobs((prev) => [...prev, ...data.jobs]);
       setMatchPage(nextPage);
       setHasMore(data.hasMore);
@@ -490,8 +507,19 @@ export default function DashboardPage() {
             )}
 
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5 text-sm text-red-700 dark:text-red-400">
-                {error}
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-5">
+                <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">
+                  Matches are loading…
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                  {error}
+                </p>
+                <button
+                  onClick={() => fetchJobs()}
+                  className="text-xs font-medium px-3 py-1.5 bg-amber-700 dark:bg-amber-600 text-white rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  Try again
+                </button>
               </div>
             )}
 

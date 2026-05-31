@@ -18,21 +18,39 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)));
 
-    const pythonRes = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/match-jobs`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id, force_refresh }),
-        signal: AbortSignal.timeout(120_000),
-      }
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    let pythonRes: Response;
+    try {
+      pythonRes = await fetch(
+        `${process.env.PYTHON_SERVICE_URL}/match-jobs`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: user.id, force_refresh }),
+          signal: controller.signal,
+        }
+      );
+    } catch (fetchErr) {
+      clearTimeout(timeout);
+      const label = fetchErr instanceof Error && fetchErr.name === "AbortError"
+        ? "[match] Python service timeout"
+        : `[match] Python service unreachable: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`;
+      console.error(label);
+      return NextResponse.json(
+        { error: "Matching service unavailable. Try again in a moment.", jobs: [], total: 0, page, limit, hasMore: false },
+        { status: 200 }
+      );
+    }
+    clearTimeout(timeout);
 
     if (!pythonRes.ok) {
-      const err = await pythonRes.text();
+      const errText = await pythonRes.text().catch(() => "");
+      console.error("[match] Python service error:", pythonRes.status, errText.substring(0, 200));
       return NextResponse.json(
-        { error: `Matching error: ${err}` },
-        { status: 500 }
+        { error: "Matching service unavailable. Try again in a moment.", jobs: [], total: 0, page, limit, hasMore: false },
+        { status: 200 }
       );
     }
 
@@ -57,8 +75,10 @@ export async function GET(req: NextRequest) {
       hasMore: start + limit < enriched.length,
     });
   } catch (err) {
-    console.error("[match]", err);
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[match] Unexpected error:", err);
+    return NextResponse.json(
+      { error: "Matching service unavailable. Try again in a moment.", jobs: [], total: 0, hasMore: false },
+      { status: 200 }
+    );
   }
 }
