@@ -195,7 +195,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={() => setCvPath("upload")}
-                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center hover:border-black hover:bg-gray-50 transition-all group"
+                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center bg-white dark:bg-gray-800 dark:border-gray-600 hover:border-black dark:hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all group"
               >
                 <div className="w-10 h-10 rounded-full bg-gray-100 group-hover:bg-black flex items-center justify-center transition-colors">
                   <svg className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -203,10 +203,10 @@ export default function OnboardingPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{isUpdate ? "Replace CV" : "Upload existing CV"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">PDF or Word document (.pdf, .docx)</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{isUpdate ? "Replace CV" : "Upload existing CV"}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">PDF or Word document (.pdf, .docx)</p>
                 </div>
-                <span className="text-xs font-medium border border-gray-300 px-3 py-1 rounded-lg group-hover:border-black transition-colors">
+                <span className="text-xs font-medium border border-gray-300 dark:border-gray-500 dark:text-gray-300 px-3 py-1 rounded-lg group-hover:border-black dark:group-hover:border-gray-300 transition-colors">
                   {isUpdate ? "Upload new CV" : "Upload CV"}
                 </span>
               </button>
@@ -215,7 +215,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={() => router.push("/dashboard/cv-builder")}
-                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center hover:border-purple-500 hover:bg-purple-50 transition-all group"
+                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center bg-white dark:bg-gray-800 dark:border-gray-600 hover:border-purple-500 hover:bg-purple-50 dark:hover:border-purple-400 dark:hover:bg-purple-900/20 transition-all group"
               >
                 <div className="w-10 h-10 rounded-full bg-purple-100 group-hover:bg-purple-500 flex items-center justify-center transition-colors">
                   <svg className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -223,8 +223,8 @@ export default function OnboardingPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Build CV with AI</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Answer a few questions, Claude writes it</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Build CV with AI</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Answer a few questions, Claude writes it</p>
                 </div>
                 <span className="text-xs font-medium bg-purple-600 text-white px-3 py-1 rounded-lg group-hover:bg-purple-700 transition-colors">
                   Start building →

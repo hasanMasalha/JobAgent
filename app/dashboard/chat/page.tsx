@@ -143,8 +143,8 @@ export default function ChatPage() {
   return (
     <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-80px)]">
       <div className="mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Chat Assistant</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Ask anything about your job search</p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Chat Assistant</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Ask anything about your job search</p>
       </div>
 
       {/* Message area */}
@@ -157,7 +157,7 @@ export default function ChatPage() {
                 <button
                   key={prompt}
                   onClick={() => sendMessage(prompt)}
-                  className="text-left px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                  className="text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                 >
                   {prompt}
                 </button>
@@ -175,7 +175,7 @@ export default function ChatPage() {
               className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
                 msg.role === "user"
                   ? "bg-blue-600 text-white rounded-br-sm"
-                  : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm"
+                  : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-sm"
               }`}
             >
               {msg.content}
@@ -194,7 +194,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input area */}
-      <div className="border-t pt-4">
+      <div className="border-t dark:border-gray-700 pt-4">
         {/* Tool status indicator */}
         {toolLabel && (
           <div className="flex items-center gap-2 mb-2 px-1">
@@ -207,7 +207,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        <div className="flex gap-2 items-end bg-white border rounded-2xl px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
+        <div className="flex gap-2 items-end bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-2xl px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
           <textarea
             ref={textareaRef}
             value={input}
@@ -228,7 +228,7 @@ export default function ChatPage() {
               resize: "none",
               overflowY: "hidden",
             }}
-            className="flex-1 text-sm text-gray-800 placeholder-gray-400 outline-none bg-transparent disabled:opacity-50"
+            className="flex-1 text-sm text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none bg-transparent disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage(input)}

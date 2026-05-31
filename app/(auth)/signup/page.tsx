@@ -65,6 +65,7 @@ export default function SignupPage() {
     borderRadius: 8,
     padding: "9px 12px",
     fontSize: 14,
+    color: "#111",
     boxSizing: "border-box" as const,
     outline: "none",
   };

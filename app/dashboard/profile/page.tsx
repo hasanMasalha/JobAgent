@@ -436,12 +436,12 @@ function ProfileContent() {
             </span>
           </div>
           {profile.cv.clean_summary && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-3">{profile.cv.clean_summary}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-3">{profile.cv.clean_summary}</p>
           )}
           {skills.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {skills.slice(0, 12).map((s: string) => (
-                <span key={s} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                <span key={s} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
                   {s}
                 </span>
               ))}
@@ -456,7 +456,7 @@ function ProfileContent() {
       <form onSubmit={handleSave} className="space-y-5">
         {/* CV upload */}
         <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
             {profile?.cv ? "Replace CV (optional)" : "Upload CV"}
           </h2>
           <label className="block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors">
@@ -477,7 +477,7 @@ function ProfileContent() {
               }}
             />
             {file ? (
-              <span className="text-sm font-medium text-gray-800">{file.name}</span>
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{file.name}</span>
             ) : (
               <span className="text-sm text-gray-400">
                 {profile?.cv ? "Click to upload a new PDF or Word doc" : "Click to choose a PDF or Word doc (.pdf, .docx)"}

@@ -120,6 +120,7 @@ export default function LoginPage() {
               borderRadius: 8,
               padding: "9px 12px",
               fontSize: 14,
+              color: "#111",
               boxSizing: "border-box",
               outline: "none",
             }}
@@ -151,6 +152,7 @@ export default function LoginPage() {
               borderRadius: 8,
               padding: "9px 12px",
               fontSize: 14,
+              color: "#111",
               boxSizing: "border-box",
               outline: "none",
             }}
