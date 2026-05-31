@@ -199,6 +199,14 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Lift chat FAB above batch-apply bar when it's visible
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--chat-fab-bottom",
+      selectedJobs.length > 0 ? "90px" : "24px"
+    );
+  }, [selectedJobs.length]);
+
   const toggleJobSelection = (jobId: string) =>
     setSelectedJobs((prev) =>
       prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
