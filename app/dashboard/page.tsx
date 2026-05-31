@@ -243,6 +243,7 @@ export default function DashboardPage() {
       }
 
       if (extensionJobs.length > 0) {
+        // Step 1: create pending_extension application rows on the server
         const res = await fetch("/api/apply/batch-mark-pending", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -251,35 +252,56 @@ export default function DashboardPage() {
         const data = await res.json();
         console.log("JobAgent: batch-mark-pending response:", data);
 
-        if (res.ok && data.results) {
-          const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
-            id: r.applicationId,
-            url: r.jobUrl,
-          }));
-          console.log("JobAgent: queue jobs to send:", queueJobs);
-
-          const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
-          console.log("JobAgent: sending START_APPLY_QUEUE to extension:", EXTENSION_ID);
-
-          if (EXTENSION_ID && typeof chrome !== "undefined" && chrome?.runtime?.sendMessage) {
-            chrome.runtime.sendMessage(
-              EXTENSION_ID,
-              { type: "START_APPLY_QUEUE", jobs: queueJobs },
-              (response) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const err = (chrome.runtime as any).lastError;
-                if (err) {
-                  console.error("JobAgent: START_APPLY_QUEUE failed:", err.message);
-                } else {
-                  console.log("JobAgent: START_APPLY_QUEUE response:", response);
-                }
-              }
-            );
-          } else {
-            console.warn("JobAgent: extension not available — EXTENSION_ID:", EXTENSION_ID, "chrome:", typeof chrome);
-          }
-          showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+        if (!res.ok || !data.results?.length) {
+          console.error("JobAgent: batch-mark-pending failed:", data.error ?? "no results");
+          showToast("Failed to prepare applications. Please try again.", "error");
+          return;
         }
+
+        // Step 2: build the queue from server-assigned application IDs + job URLs
+        const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
+          id: r.applicationId,
+          url: r.jobUrl,
+        }));
+        console.log("JobAgent: queue jobs to send:", queueJobs);
+
+        // Step 3: send to extension
+        const extensionId = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
+        console.log("JobAgent: NEXT_PUBLIC_EXTENSION_ID:", extensionId || "(not set — check .env)");
+
+        if (!extensionId) {
+          console.error("JobAgent: NEXT_PUBLIC_EXTENSION_ID is not configured");
+          showToast("Extension ID not configured — check NEXT_PUBLIC_EXTENSION_ID in .env", "error");
+          return;
+        }
+
+        // Use window.chrome to avoid TypeScript global type shadowing issues
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const chromeRuntime = (window as any).chrome?.runtime;
+        console.log("JobAgent: chrome.runtime available:", !!chromeRuntime?.sendMessage);
+
+        if (!chromeRuntime?.sendMessage) {
+          console.error("JobAgent: chrome.runtime.sendMessage not available — extension not installed or not active?");
+          showToast("Extension not detected. Install or reload it.", "error");
+          return;
+        }
+
+        console.log("JobAgent: sending START_APPLY_QUEUE →", extensionId, queueJobs);
+        chromeRuntime.sendMessage(
+          extensionId,
+          { type: "START_APPLY_QUEUE", jobs: queueJobs },
+          (response: unknown) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const err = (window as any).chrome?.runtime?.lastError;
+            if (err) {
+              console.error("JobAgent: START_APPLY_QUEUE failed:", err.message);
+              showToast(`Extension error: ${err.message}`, "error");
+            } else {
+              console.log("JobAgent: START_APPLY_QUEUE response:", response);
+              showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+            }
+          }
+        );
       }
     } catch (e) {
       console.error("JobAgent: batch apply error:", e);
