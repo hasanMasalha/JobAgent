@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: "JobAgent — AI Job Assistant",
   description: "AI-powered job assistant for the Israeli market",
   icons: {
-    icon: "/favicon.png",
+    icon: [{ url: "/favicon.png", type: "image/png" }],
     shortcut: "/favicon.png",
   },
 };
