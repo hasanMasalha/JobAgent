@@ -24,54 +24,39 @@ function extractJobId(url) {
   return null
 }
 
-// Open the LinkedIn job URL in a minimized, off-screen window so the user
-// never sees it. Falls back to active:false tab if windows.create fails.
+// Open the LinkedIn job URL in a visible tab.
+// chrome.windows.create with state:'minimized' + left/top/width/height conflicts
+// per Chrome API spec ("state cannot be combined with positional properties") and
+// fails silently — so we open a plain active tab instead.
 function openApplyWindow(jobUrl, applicationId) {
-  chrome.windows.create({
-    url: jobUrl,
-    state: 'minimized',
-    focused: false,
-    left: -2000,
-    top: -2000,
-    width: 1280,
-    height: 800,
-  })
-  .then(win => {
-    const tabId = win.tabs[0].id
-    console.log('[JobAgent bg] opened minimized window:', win.id, 'tab:', tabId)
-    return chrome.storage.local.set({
-      activeApplyTab: tabId,
-      activeApplyWindow: win.id,
-      activeApplicationId: applicationId,
-    })
-  })
-  .catch(e => {
-    console.error('[JobAgent bg] windows.create failed, falling back to tab:', e)
-    chrome.tabs.create({ url: jobUrl, active: false })
-      .then(tab => chrome.storage.local.set({
+  console.log('[JobAgent bg] openApplyWindow — opening tab for:', jobUrl, 'appId:', applicationId)
+  chrome.tabs.create({ url: jobUrl, active: true })
+    .then(tab => {
+      console.log('[JobAgent bg] tab created successfully, id:', tab.id)
+      return chrome.storage.local.set({
         activeApplyTab: tab.id,
         activeApplicationId: applicationId,
-      }))
-      .catch(e2 => console.error('[JobAgent bg] tab fallback also failed:', e2))
-  })
+      })
+    })
+    .catch(e => console.error('[JobAgent bg] tabs.create failed:', e.message))
 }
 
 async function processNextInQueue() {
+  console.log('[JobAgent bg] processNextInQueue called')
   const stored = await chrome.storage.local.get([
-    'applyQueue', 'applyQueueIndex', 'activeApplyTab', 'activeApplyWindow'
+    'applyQueue', 'applyQueueIndex', 'activeApplyTab'
   ])
   const queue = stored.applyQueue || []
   const index = stored.applyQueueIndex || 0
+  console.log('[JobAgent bg] queue length:', queue.length, 'index:', index, 'activeTab:', stored.activeApplyTab)
 
   if (index >= queue.length) {
-    // Close the LinkedIn tab/window when the whole queue is done
-    if (stored.activeApplyWindow) {
-      try { await chrome.windows.remove(stored.activeApplyWindow) } catch {}
-    } else if (stored.activeApplyTab) {
+    // Close the LinkedIn tab when the whole queue is done
+    if (stored.activeApplyTab) {
       try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
     }
     await chrome.storage.local.set({ isProcessingQueue: false })
-    await chrome.storage.local.remove(['activeApplyTab', 'activeApplyWindow', 'activeApplicationId'])
+    await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon48.png',
@@ -83,21 +68,22 @@ async function processNextInQueue() {
   }
 
   const job = queue[index]
-  console.log(`[JobAgent bg] queue ${index + 1}/${queue.length}:`, job.url)
+  console.log(`[JobAgent bg] processing job ${index + 1}/${queue.length}:`, job.url, 'id:', job.id)
 
   if (stored.activeApplyTab && index > 0) {
-    // Navigate the existing tab to the next job — no flicker, no new window
+    // Reuse the existing tab for subsequent jobs
     try {
       await chrome.tabs.update(stored.activeApplyTab, { url: job.url, active: true })
       console.log('[JobAgent bg] navigated existing tab to:', job.url)
-    } catch {
-      // Tab was closed — open a fresh minimized window
-      console.log('[JobAgent bg] tab gone, opening new window')
+    } catch (e) {
+      // Tab was closed — open a fresh one
+      console.log('[JobAgent bg] tab gone, opening new tab:', e.message)
       openApplyWindow(job.url, job.id)
       return
     }
   } else {
-    // First job — open a new minimized window
+    // First job (or no existing tab) — open a new tab
+    console.log('[JobAgent bg] opening first tab in queue')
     openApplyWindow(job.url, job.id)
     return
   }
@@ -223,7 +209,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ;(async () => {
       try {
         const stored = await chrome.storage.local.get([
-          'userId', 'activeApplyTab', 'activeApplyWindow'
+          'userId', 'activeApplyTab'
         ])
         const url = await getServerUrl()
         const status = message.status || 'applied'
@@ -240,27 +226,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const resText = await res.text()
         console.log('[JobAgent bg] update-status response:', res.status, resText)
 
-        // Close the minimized window (preferred) or fall back to closing the tab
-        if (stored.activeApplyWindow) {
-          try {
-            await chrome.windows.remove(stored.activeApplyWindow)
-            console.log('[JobAgent bg] closed apply window')
-          } catch {
-            if (stored.activeApplyTab) {
-              try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
-            }
-          }
-          await chrome.storage.local.remove([
-            'activeApplyTab', 'activeApplyWindow', 'activeApplicationId'
-          ])
-        } else if (stored.activeApplyTab) {
+        // Close the apply tab
+        if (stored.activeApplyTab) {
           try {
             await chrome.tabs.remove(stored.activeApplyTab)
-            await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
             console.log('[JobAgent bg] closed apply tab')
           } catch {
             console.log('[JobAgent bg] tab already closed')
           }
+          await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
         }
 
         // Notify the user (only for single applications, not mid-queue)
@@ -349,19 +323,19 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   }
 
   // Queue multiple LinkedIn jobs for batch apply.
-  // Respond immediately (sync) to avoid MV3 SW timing issues.
   if (message.type === 'START_APPLY_QUEUE') {
-    console.log('[JobAgent bg] START_APPLY_QUEUE received, jobs:', message.jobs?.length)
-    sendResponse({ success: true })
-    chrome.storage.local.set({
-      applyQueue: message.jobs,
-      applyQueueIndex: 0,
-      isProcessingQueue: true,
-    }).then(() => {
-      console.log('[JobAgent bg] queue stored, starting first job')
-      processNextInQueue()
-    })
-    return false
+    console.log('[JobAgent bg] START_APPLY_QUEUE received, jobs:', message.jobs?.length, message.jobs)
+    ;(async () => {
+      await chrome.storage.local.set({
+        applyQueue: message.jobs,
+        applyQueueIndex: 0,
+        isProcessingQueue: true,
+      })
+      console.log('[JobAgent bg] queue stored, calling processNextInQueue')
+      await processNextInQueue()
+      sendResponse({ success: true })
+    })()
+    return true
   }
 
   // Sent from the apply page when user confirms — stores application data so
