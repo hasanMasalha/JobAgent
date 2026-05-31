@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import anthropic
 import asyncpg
@@ -20,31 +21,38 @@ class MatchRequest(BaseModel):
 # ── cache helpers (stored in Postgres, survives restarts) ─────────────────────
 
 async def _get_db_cache(conn, user_id: str) -> list | None:
-    row = await conn.fetchrow(
-        """
-        SELECT results_json FROM match_cache
-        WHERE user_id = $1
-          AND computed_at > NOW() - INTERVAL '6 hours'
-        """,
-        user_id,
-    )
-    if row:
-        return json.loads(row["results_json"])
-    return None
+    try:
+        row = await conn.fetchrow(
+            """
+            SELECT results_json FROM match_cache
+            WHERE user_id = $1
+              AND computed_at > NOW() - INTERVAL '6 hours'
+            """,
+            user_id,
+        )
+        if row:
+            return json.loads(row["results_json"])
+        return None
+    except Exception as e:
+        print(f"[matching] cache read failed (non-fatal): {e}", file=sys.stderr)
+        return None
 
 
 async def _set_db_cache(conn, user_id: str, results: list) -> None:
-    await conn.execute(
-        """
-        INSERT INTO match_cache (user_id, results_json, computed_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (user_id) DO UPDATE
-          SET results_json = EXCLUDED.results_json,
-              computed_at  = EXCLUDED.computed_at
-        """,
-        user_id,
-        json.dumps(results),
-    )
+    try:
+        await conn.execute(
+            """
+            INSERT INTO match_cache (user_id, results_json, computed_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+              SET results_json = EXCLUDED.results_json,
+                  computed_at  = EXCLUDED.computed_at
+            """,
+            user_id,
+            json.dumps(results),
+        )
+    except Exception as e:
+        print(f"[matching] cache write failed (non-fatal): {e}", file=sys.stderr)
 
 
 async def _ensure_cache_table(conn) -> None:
