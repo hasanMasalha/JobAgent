@@ -1,0 +1,39 @@
+name: Daily Job Cleanup
+
+on:
+  schedule:
+    # Runs at 07:00 UTC daily — after APScheduler scrape (05:00) + match (06:00)
+    - cron: '0 7 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub UI
+
+jobs:
+  cleanup:
+    name: Cleanup stale jobs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run job cleanup
+        run: |
+          echo "Running job cleanup at $(date -u)..."
+
+          RESULT=$(curl -s -X POST https://jobagent.uk/api/admin/cleanup-jobs \
+            -H "x-api-key: ${{ secrets.INTERNAL_API_KEY }}" \
+            -H "Content-Type: application/json")
+
+          echo "Cleanup result: $RESULT"
+
+          SUCCESS=$(echo "$RESULT" | python3 -c "
+          import json, sys
+          try:
+              d = json.load(sys.stdin)
+              print(d.get('success', False))
+          except Exception as e:
+              print(False)
+          ")
+
+          if [ "$SUCCESS" != "True" ]; then
+            echo "Cleanup failed or returned unexpected response!"
+            exit 1
+          fi
+
+          echo "Cleanup completed successfully"
