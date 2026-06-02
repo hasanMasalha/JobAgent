@@ -12,6 +12,7 @@ psycopg2-binary
 apscheduler
 python-multipart
 httpx
+aiohttp>=3.9.0
 beautifulsoup4
 reportlab
 pytest
