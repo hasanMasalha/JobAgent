@@ -10,6 +10,7 @@ from fastapi import FastAPI  # noqa: E402
 from routes.apply import router as apply_router  # noqa: E402
 from routes.cv import router as cv_router  # noqa: E402
 from routes.jobs import router as jobs_router  # noqa: E402
+from routes.jobs_cleanup import router as cleanup_router  # noqa: E402
 from routes.linkedin_auth import router as linkedin_auth_router  # noqa: E402
 from routes.matching import router as matching_router  # noqa: E402
 from scheduler import start_scheduler, stop_scheduler  # noqa: E402
@@ -28,6 +29,7 @@ app.include_router(jobs_router)
 app.include_router(matching_router)
 app.include_router(apply_router)
 app.include_router(linkedin_auth_router)
+app.include_router(cleanup_router)
 
 
 @app.get("/health")

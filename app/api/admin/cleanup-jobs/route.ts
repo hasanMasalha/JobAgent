@@ -66,12 +66,33 @@ export async function POST(req: NextRequest) {
       db.job.count(),
     ])
 
+    // Step 5 — Check LinkedIn jobs for closure.
+    let linkedinCheck: Record<string, unknown> = {}
+    try {
+      const pythonUrl = process.env.PYTHON_SERVICE_URL || "http://fastapi:8000"
+      const checkRes = await fetch(
+        `${pythonUrl}/check-closed-jobs?batch_size=50&days_old=7`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+      if (checkRes.ok) {
+        linkedinCheck = await checkRes.json()
+        console.log("[cleanup] linkedin check:", linkedinCheck)
+      }
+    } catch (e) {
+      console.error("[cleanup] linkedin check failed:", e)
+      linkedinCheck = { error: "check failed" }
+    }
+
     const result = {
       success: true,
       timestamp: now.toISOString(),
       softDeleted: softDeleted.count,
       hardDeleted: Number(hardDeleted),
       brokenUrlsDeactivated: brokenUrls.count,
+      linkedinCheck,
       dbState: {
         active: activeCount,
         inactive: inactiveCount,
