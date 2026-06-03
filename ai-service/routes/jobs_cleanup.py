@@ -97,7 +97,7 @@ async def run_linkedin_closed_check(
             WHERE is_active = true
               AND url LIKE '%linkedin.com%'
               AND scraped_at < NOW() - INTERVAL '{days_old} days'
-            ORDER BY RANDOM()
+            ORDER BY last_status_check ASC NULLS FIRST
             LIMIT {batch_size}
         """)
 
@@ -122,6 +122,10 @@ async def run_linkedin_closed_check(
                         f"[linkedin_check] deactivated: "
                         f"{job['title']} at {job['company']}"
                     )
+                await conn.execute(
+                    'UPDATE "Job" SET last_status_check = NOW() WHERE id = $1',
+                    job["id"],
+                )
                 await asyncio.sleep(0.5)
 
         connector = aiohttp.TCPConnector(limit=5)
@@ -194,6 +198,10 @@ async def run_recent_closed_check(batch_size: int = 50) -> dict:
                         f"[recent_check] closed: "
                         f"{job['title']} at {job['company']}"
                     )
+                await conn.execute(
+                    'UPDATE "Job" SET last_status_check = NOW() WHERE id = $1',
+                    job["id"],
+                )
                 await asyncio.sleep(0.5)
 
         connector = aiohttp.TCPConnector(limit=5)
