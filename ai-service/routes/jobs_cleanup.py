@@ -62,8 +62,8 @@ async def check_linkedin_job_closed(
 
 
 async def run_linkedin_closed_check(
-    batch_size: int = 50,
-    days_old: int = 7,
+    batch_size: int = 200,
+    days_old: int = 3,
 ) -> dict:
     """
     Check LinkedIn jobs that are N+ days old for closure.
@@ -82,7 +82,7 @@ async def run_linkedin_closed_check(
             WHERE is_active = true
               AND url LIKE '%linkedin.com%'
               AND scraped_at < NOW() - INTERVAL '{days_old} days'
-            ORDER BY scraped_at ASC
+            ORDER BY scraped_at DESC
             LIMIT {batch_size}
         """)
 
@@ -128,11 +128,69 @@ async def run_linkedin_closed_check(
 
 @router.post("/check-closed-jobs")
 async def check_closed_jobs_endpoint(
-    batch_size: int = 50,
-    days_old: int = 7,
+    batch_size: int = 200,
+    days_old: int = 3,
 ):
-    """Check LinkedIn jobs for closure. Call from admin API or scheduler."""
+    """Check LinkedIn jobs older than days_old for closure."""
     return await run_linkedin_closed_check(
         batch_size=batch_size,
         days_old=days_old,
     )
+
+
+async def run_recent_closed_check(batch_size: int = 100) -> dict:
+    """
+    Check LinkedIn jobs posted in the last 3 days for fast closure.
+    Some jobs fill within hours and should be deactivated quickly.
+    """
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url:
+        return {"error": "no DATABASE_URL"}
+
+    conn = await asyncpg.connect(database_url)
+    try:
+        jobs = await conn.fetch(f"""
+            SELECT id, url, title, company
+            FROM "Job"
+            WHERE is_active = true
+              AND url LIKE '%linkedin.com%'
+              AND scraped_at > NOW() - INTERVAL '3 days'
+            ORDER BY scraped_at DESC
+            LIMIT {batch_size}
+        """)
+
+        print(f"[recent_check] checking {len(jobs)} jobs")
+        deactivated = 0
+        checked = 0
+        semaphore = asyncio.Semaphore(3)
+
+        async def check_one(job):
+            nonlocal deactivated, checked
+            async with semaphore:
+                is_closed = await check_linkedin_job_closed(session, job["url"])
+                checked += 1
+                if is_closed:
+                    await conn.execute(
+                        'UPDATE "Job" SET is_active = false WHERE id = $1',
+                        job["id"],
+                    )
+                    deactivated += 1
+                    print(
+                        f"[recent_check] closed: "
+                        f"{job['title']} at {job['company']}"
+                    )
+                await asyncio.sleep(0.5)
+
+        connector = aiohttp.TCPConnector(limit=5)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            await asyncio.gather(*[check_one(job) for job in jobs])
+
+        return {"checked": checked, "deactivated": deactivated}
+    finally:
+        await conn.close()
+
+
+@router.post("/check-recent-closed")
+async def check_recent_closed_endpoint(batch_size: int = 100):
+    """Check very recent LinkedIn jobs (0-3 days) for fast closure."""
+    return await run_recent_closed_check(batch_size)

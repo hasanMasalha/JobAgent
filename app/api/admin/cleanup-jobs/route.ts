@@ -17,14 +17,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const now = new Date()
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-    // Step 1 — Soft delete: mark jobs older than 30 days as inactive.
+    // Step 1 — Soft delete: mark jobs older than 14 days as inactive.
     // They stay in DB but are hidden from browse/match queries.
     const softDeleted = await db.job.updateMany({
       where: {
-        scraped_at: { lt: thirtyDaysAgo },
+        scraped_at: { lt: fourteenDaysAgo },
         is_active: { not: false },
       },
       data: { is_active: false },
@@ -66,12 +66,13 @@ export async function POST(req: NextRequest) {
       db.job.count(),
     ])
 
-    // Step 5 — Check LinkedIn jobs for closure.
+    const pythonUrl = process.env.PYTHON_SERVICE_URL || "http://fastapi:8000"
+
+    // Step 5 — Check LinkedIn jobs older than 3 days for closure.
     let linkedinCheck: Record<string, unknown> = {}
     try {
-      const pythonUrl = process.env.PYTHON_SERVICE_URL || "http://fastapi:8000"
       const checkRes = await fetch(
-        `${pythonUrl}/check-closed-jobs?batch_size=50&days_old=7`,
+        `${pythonUrl}/check-closed-jobs?batch_size=200&days_old=3`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -86,6 +87,25 @@ export async function POST(req: NextRequest) {
       linkedinCheck = { error: "check failed" }
     }
 
+    // Step 6 — Check very recent jobs (0-3 days) for fast closure.
+    let recentClosedCheck: Record<string, unknown> = {}
+    try {
+      const recentRes = await fetch(
+        `${pythonUrl}/check-recent-closed?batch_size=100`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+      if (recentRes.ok) {
+        recentClosedCheck = await recentRes.json()
+        console.log("[cleanup] recent closed check:", recentClosedCheck)
+      }
+    } catch (e) {
+      console.error("[cleanup] recent closed check failed:", e)
+      recentClosedCheck = { error: "check failed" }
+    }
+
     const result = {
       success: true,
       timestamp: now.toISOString(),
@@ -93,6 +113,7 @@ export async function POST(req: NextRequest) {
       hardDeleted: Number(hardDeleted),
       brokenUrlsDeactivated: brokenUrls.count,
       linkedinCheck,
+      recentClosedCheck,
       dbState: {
         active: activeCount,
         inactive: inactiveCount,
@@ -116,15 +137,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 
-  const [activeCount, inactiveCount, totalCount, olderThan30, olderThan90, brokenUrls] =
+  const [activeCount, inactiveCount, totalCount, olderThan14, olderThan90, brokenUrls] =
     await Promise.all([
       db.job.count({ where: { is_active: true } }),
       db.job.count({ where: { is_active: false } }),
       db.job.count(),
-      db.job.count({ where: { scraped_at: { lt: thirtyDaysAgo }, is_active: true } }),
+      db.job.count({ where: { scraped_at: { lt: fourteenDaysAgo }, is_active: true } }),
       db.job.count({ where: { scraped_at: { lt: ninetyDaysAgo } } }),
       db.job.count({
         where: {
@@ -143,7 +164,7 @@ export async function GET(req: NextRequest) {
       total: totalCount,
     },
     wouldCleanup: {
-      softDelete: olderThan30,
+      softDelete: olderThan14,
       eligibleForHardDelete: olderThan90,
       brokenUrls,
     },
