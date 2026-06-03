@@ -76,12 +76,13 @@ async def check_linkedin_job_closed(
 
 
 async def run_linkedin_closed_check(
-    batch_size: int = 200,
+    batch_size: int = 500,
     days_old: int = 3,
 ) -> dict:
     """
     Check LinkedIn jobs that are N+ days old for closure.
-    Process in batches to avoid rate limiting.
+    Uses RANDOM() ordering so each daily run covers a different slice of
+    the 4,200+ active jobs, rotating through all of them over time.
     """
     database_url = os.getenv("DATABASE_URL", "")
     if not database_url:
@@ -96,7 +97,7 @@ async def run_linkedin_closed_check(
             WHERE is_active = true
               AND url LIKE '%linkedin.com%'
               AND scraped_at < NOW() - INTERVAL '{days_old} days'
-            ORDER BY scraped_at DESC
+            ORDER BY RANDOM()
             LIMIT {batch_size}
         """)
 
@@ -142,7 +143,7 @@ async def run_linkedin_closed_check(
 
 @router.post("/check-closed-jobs")
 async def check_closed_jobs_endpoint(
-    batch_size: int = 200,
+    batch_size: int = 500,
     days_old: int = 3,
 ):
     """Check LinkedIn jobs older than days_old for closure."""

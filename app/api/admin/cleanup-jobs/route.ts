@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     let linkedinCheck: Record<string, unknown> = {}
     try {
       const checkRes = await fetch(
-        `${pythonUrl}/check-closed-jobs?batch_size=200&days_old=3`,
+        `${pythonUrl}/check-closed-jobs?batch_size=500&days_old=3`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
