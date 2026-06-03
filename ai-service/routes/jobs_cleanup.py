@@ -9,6 +9,8 @@ router = APIRouter()
 
 CLOSED_SIGNALS = [
     "no longer accepting applications",
+    "closed-job__flavor--closed",
+    "closed-job",
     "not accepting applications",
     "this job is closed",
     "position has been filled",
@@ -32,24 +34,36 @@ async def check_linkedin_job_closed(
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Cache-Control": "max-age=0",
         }
         async with session.get(
             url,
             headers=headers,
-            timeout=aiohttp.ClientTimeout(total=8),
+            timeout=aiohttp.ClientTimeout(total=10),
             allow_redirects=True,
+            ssl=False,
         ) as resp:
+            print(f"[check_job] {url[:60]} → status: {resp.status}")
+
             if resp.status == 404:
                 return True  # Job deleted
             if resp.status != 200:
+                print(f"[check_job] non-200: {resp.status}")
                 return False  # Can't tell — assume open
 
             html = await resp.text()
             html_lower = html.lower()
 
+            print(f"[check_job] html preview: {html[:200]}")
+
             for signal in CLOSED_SIGNALS:
                 if signal in html_lower:
+                    print(f"[check_job] CLOSED signal found: {signal}")
                     return True
 
             return False
@@ -194,3 +208,12 @@ async def run_recent_closed_check(batch_size: int = 100) -> dict:
 async def check_recent_closed_endpoint(batch_size: int = 100):
     """Check very recent LinkedIn jobs (0-3 days) for fast closure."""
     return await run_recent_closed_check(batch_size)
+
+
+@router.get("/test-job-check")
+async def test_job_check(url: str):
+    """Test if a specific job URL is detected as closed."""
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        is_closed = await check_linkedin_job_closed(session, url)
+        return {"url": url, "is_closed": is_closed}
