@@ -1,5 +1,7 @@
 import asyncio
+import re
 
+import aiohttp
 from jobspy import scrape_jobs
 
 from company_scraper import scrape_all_company_careers
@@ -104,6 +106,97 @@ async def scrape_israel_jobs() -> list[dict]:
         print(f"[scraper] company careers scrape failed: {e}")
 
     return results
+
+
+async def fetch_indeed_full_description(url: str) -> str | None:
+    """Fetch the full job description from an Indeed job page."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+                allow_redirects=True,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text()
+
+                patterns = [
+                    r'id="jobDescriptionText"[^>]*>(.*?)</div>',
+                    r'class="jobsearch-jobDescriptionText"[^>]*>(.*?)</div>',
+                    r'"description"\s*:\s*"(.*?)"(?=,|\})',
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        text = match.group(1)
+                        text = re.sub(r"<[^>]+>", " ", text)
+                        text = re.sub(r"\s+", " ", text).strip()
+                        text = (
+                            text.replace("&amp;", "&")
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&#39;", "'")
+                            .replace("&quot;", '"')
+                        )
+                        if len(text) > 200:
+                            return text
+                return None
+    except Exception as e:
+        print(f"[indeed_desc] error fetching {url}: {e}")
+        return None
+
+
+async def enrich_short_descriptions(
+    jobs: list[dict], threshold: int = 200
+) -> list[dict]:
+    """
+    For Indeed jobs with very short descriptions, fetch the full text from
+    the job URL. LinkedIn descriptions are handled by linkedin_fetcher.py.
+    """
+    to_enrich = [
+        (i, job)
+        for i, job in enumerate(jobs)
+        if (
+            len(job.get("description") or "") < threshold
+            and "indeed" in (job.get("url") or "").lower()
+            and job.get("url")
+        )
+    ]
+
+    if not to_enrich:
+        return jobs
+
+    print(f"[enrich] {len(to_enrich)} Indeed jobs need full descriptions...")
+
+    semaphore = asyncio.Semaphore(3)
+
+    async def _fetch_one(i: int, job: dict) -> tuple[int, str | None]:
+        async with semaphore:
+            full = await fetch_indeed_full_description(job["url"])
+            await asyncio.sleep(0.5)
+            return i, full
+
+    results = await asyncio.gather(*[_fetch_one(i, job) for i, job in to_enrich])
+
+    enriched = 0
+    for i, full_desc in results:
+        if full_desc:
+            old_len = len(jobs[i].get("description") or "")
+            jobs[i]["description"] = full_desc
+            print(f"[enrich] {jobs[i].get('title', '')[:40]}: {old_len} → {len(full_desc)} chars")
+            enriched += 1
+
+    print(f"[enrich] enriched {enriched}/{len(to_enrich)} Indeed jobs")
+    return jobs
 
 
 def _clean(value) -> str:

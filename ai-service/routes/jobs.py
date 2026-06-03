@@ -11,7 +11,7 @@ from ats_discovery import auto_discover_israeli_companies
 from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
 from company_scraper import is_israeli_job
 from embedder import embed
-from scraper import scrape_israel_jobs
+from scraper import enrich_short_descriptions, scrape_israel_jobs
 
 router = APIRouter()
 
@@ -48,6 +48,13 @@ async def scrape_and_store():
         j for j in jobs
         if is_israeli_job({'location': j.get('location', '') or j.get('job_location', '')})
     ]
+
+    # Enrich Indeed jobs that have short descriptions
+    jobs = await enrich_short_descriptions(jobs)
+
+    # Drop jobs whose descriptions are still too short to be useful for matching
+    jobs = [j for j in jobs if len((j.get("description") or "").strip()) >= 50]
+    print(f"[scrape] {len(jobs)} jobs after filtering short descriptions")
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)

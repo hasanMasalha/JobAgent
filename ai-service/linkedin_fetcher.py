@@ -37,16 +37,78 @@ _ISRAELI_KEYWORDS = [
     "ישראל",
 ]
 
+_EXPAND_SELECTORS = [
+    "button.show-more-less-html__button--more",
+    'button[aria-label="Show more, visually expands"]',
+    'button[data-tracking-control-name*="show_more"]',
+    "footer.show-more-less-html button",
+    ".jobs-description__footer-button",
+    'button:has-text("Show more")',
+    'button:has-text("more")',
+]
+
+_DESC_SELECTORS = [
+    ".show-more-less-html__markup",
+    ".jobs-description-content__text",
+    ".jobs-box__html-content",
+    "#job-details",
+    ".description__text",
+    '[class*="show-more-less-html"]',
+]
+
+
+async def _fetch_full_description(page, job_url: str) -> str | None:
+    """Navigate to a LinkedIn job detail page and extract the full expanded description."""
+    try:
+        await page.goto(job_url, wait_until="domcontentloaded", timeout=15000)
+        await page.wait_for_timeout(2000)
+
+        # Try to expand full description
+        for selector in _EXPAND_SELECTORS:
+            try:
+                btn = await page.query_selector(selector)
+                if btn:
+                    await btn.scroll_into_view_if_needed()
+                    await btn.click()
+                    await page.wait_for_timeout(800)
+                    print(f"[linkedin] expanded description with: {selector}")
+                    break
+            except Exception:
+                continue
+
+        await page.wait_for_timeout(500)
+
+        # Extract full description text
+        for selector in _DESC_SELECTORS:
+            try:
+                el = await page.query_selector(selector)
+                if el:
+                    text = await el.inner_text()
+                    if text and len(text) > 100:
+                        return text.strip()
+            except Exception:
+                continue
+        return None
+    except Exception as e:
+        print(f"[linkedin] description fetch error: {e}")
+        return None
+
 
 async def fetch_linkedin_jobs_for_term(
     search_term: str,
     browser_context,
 ) -> list[dict]:
-    """Fetch LinkedIn jobs for a single search term in Israel using Playwright."""
-    jobs = []
+    """
+    Two-phase scrape for a single search term.
+    Phase 1: fast HTML scan of search result cards → collect URLs + metadata.
+    Phase 2: navigate to each job detail page → expand and extract full description.
+    """
     page = await browser_context.new_page()
+    preliminary: list[dict] = []
+    seen_urls: set[str] = set()
 
     try:
+        # ── Phase 1: collect metadata from search result pages ────────────────
         for start in [0, 25, 50]:
             url = (
                 "https://www.linkedin.com/jobs/search"
@@ -67,13 +129,11 @@ async def fetch_linkedin_jobs_for_term(
                     "div",
                     class_=re.compile(r"base-card|job-search-card"),
                 )
-
                 if not job_cards:
                     job_cards = soup.find_all(
                         "li",
                         class_=re.compile(r"jobs-search-results__list-item"),
                     )
-
                 if not job_cards:
                     print(f"  No cards for '{search_term}' page {start // 25 + 1}")
                     break
@@ -100,35 +160,32 @@ async def fetch_linkedin_jobs_for_term(
                             if not job_url.startswith("http"):
                                 job_url = "https://www.linkedin.com" + job_url
 
-                        if not title or not job_url:
+                        if not title or not job_url or job_url in seen_urls:
                             continue
 
                         location_lower = location.lower()
                         if location and not any(kw in location_lower for kw in _ISRAELI_KEYWORDS):
                             continue
 
-                        # Try to grab a snippet from the card; fall back to
-                        # a synthesized string so storage never drops the job.
-                        desc_el = card.find(
+                        # Keep snippet as fallback in case detail-page fetch fails
+                        snippet_el = card.find(
                             class_=re.compile(r"description|snippet|summary|job-snippet")
                         )
-                        description = desc_el.get_text(strip=True) if desc_el else ""
-                        if not description:
-                            description = f"{title} at {company}, {location}".strip(", ")
+                        snippet = snippet_el.get_text(strip=True) if snippet_el else ""
 
-                        jobs.append(
+                        seen_urls.add(job_url)
+                        preliminary.append(
                             {
                                 "title": title,
                                 "company": company,
-                                "description": description,
                                 "location": location,
                                 "url": job_url,
+                                "snippet": snippet,
                                 "source": "linkedin",
                                 "salary_min": None,
                                 "salary_max": None,
                             }
                         )
-
                     except Exception:
                         continue
 
@@ -140,6 +197,32 @@ async def fetch_linkedin_jobs_for_term(
             except Exception as e:
                 print(f"  Page error for '{search_term}': {e}")
                 break
+
+        # ── Phase 2: navigate to each job page for the full description ────────
+        jobs: list[dict] = []
+        for meta in preliminary:
+            desc = await _fetch_full_description(page, meta["url"])
+
+            if desc and len(desc) >= 100:
+                description = desc
+            elif meta["snippet"]:
+                description = meta["snippet"]
+            else:
+                description = f"{meta['title']} at {meta['company']}, {meta['location']}".strip(", ")
+
+            jobs.append(
+                {
+                    "title": meta["title"],
+                    "company": meta["company"],
+                    "description": description,
+                    "location": meta["location"],
+                    "url": meta["url"],
+                    "source": "linkedin",
+                    "salary_min": None,
+                    "salary_max": None,
+                }
+            )
+            await asyncio.sleep(1)
 
     finally:
         await page.close()
