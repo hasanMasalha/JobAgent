@@ -30,7 +30,11 @@ def _detect_apply_type(job: dict) -> str:
     if _EMAIL_RE.search(desc):
         return "auto"
     if "linkedin.com" in url and "/jobs/view/" in url:
-        return "extension"
+        # Only "extension" when the scraper explicitly confirmed Easy Apply.
+        # linkedin_fetcher.py doesn't return is_easy_apply, so these stay external.
+        if job.get("is_easy_apply") is True:
+            return "extension"
+        return "external"
     return "external"
 
 

@@ -117,7 +117,7 @@ export default function JobCard({
   const [dismissing, setDismissing] = useState(false);
   const router = useRouter();
   const extensionInstalled = useExtensionInstalled();
-  const isLinkedIn = job.source?.toLowerCase() === "linkedin";
+  const isExtension = job.apply_type === "extension";
 
   const score =
     (job.claude_score ?? 0) > 0
@@ -273,12 +273,12 @@ export default function JobCard({
             router.push(`/dashboard/apply/${job.id}`);
           }}
           className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-            isLinkedIn && extensionInstalled
+            isExtension && extensionInstalled
               ? "bg-[#1a2e5e] text-white hover:opacity-90"
               : "bg-emerald-600 text-white hover:bg-emerald-700"
           }`}
         >
-          {isLinkedIn && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
+          {isExtension && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
         </button>
         <button
           disabled={saving}
