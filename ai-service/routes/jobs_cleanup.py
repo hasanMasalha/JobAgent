@@ -76,7 +76,7 @@ async def check_linkedin_job_closed(
 
 
 async def run_linkedin_closed_check(
-    batch_size: int = 500,
+    batch_size: int = 50,
     days_old: int = 3,
 ) -> dict:
     """
@@ -143,7 +143,7 @@ async def run_linkedin_closed_check(
 
 @router.post("/check-closed-jobs")
 async def check_closed_jobs_endpoint(
-    batch_size: int = 500,
+    batch_size: int = 50,
     days_old: int = 3,
 ):
     """Check LinkedIn jobs older than days_old for closure."""
@@ -153,7 +153,7 @@ async def check_closed_jobs_endpoint(
     )
 
 
-async def run_recent_closed_check(batch_size: int = 100) -> dict:
+async def run_recent_closed_check(batch_size: int = 50) -> dict:
     """
     Check LinkedIn jobs posted in the last 3 days for fast closure.
     Some jobs fill within hours and should be deactivated quickly.
@@ -206,7 +206,7 @@ async def run_recent_closed_check(batch_size: int = 100) -> dict:
 
 
 @router.post("/check-recent-closed")
-async def check_recent_closed_endpoint(batch_size: int = 100):
+async def check_recent_closed_endpoint(batch_size: int = 50):
     """Check very recent LinkedIn jobs (0-3 days) for fast closure."""
     return await run_recent_closed_check(batch_size)
 

@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     let linkedinCheck: Record<string, unknown> = {}
     try {
       const checkRes = await fetch(
-        `${pythonUrl}/check-closed-jobs?batch_size=500&days_old=3`,
+        `${pythonUrl}/check-closed-jobs?batch_size=50&days_old=3`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     let recentClosedCheck: Record<string, unknown> = {}
     try {
       const recentRes = await fetch(
-        `${pythonUrl}/check-recent-closed?batch_size=100`,
+        `${pythonUrl}/check-recent-closed?batch_size=50`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
