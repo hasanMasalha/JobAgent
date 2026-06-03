@@ -32,14 +32,11 @@ export function detectApplyType(job: {
     return "auto";
   }
 
-  // Extension — LinkedIn job that is (or might be) Easy Apply.
-  // has_easy_apply === false means the scraper explicitly told us it's NOT
-  // Easy Apply. undefined means we don't know, so we assume it could be.
+  // Extension — LinkedIn job only when the scraper explicitly confirmed Easy Apply.
+  // Unknown (undefined/null) defaults to external, not extension.
   if (url.includes("linkedin.com") && url.includes("/jobs/view/")) {
-    if (job.has_easy_apply === false) {
-      return "external";
-    }
-    return "extension";
+    if (job.has_easy_apply === true) return "extension";
+    return "external";
   }
 
   return "external";

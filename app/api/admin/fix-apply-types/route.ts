@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
 
-// One-time backfill endpoint. Protected by INTERNAL_API_KEY.
+// Backfill endpoint: re-detect apply_type and recruiter_email for all jobs.
+// Protected by INTERNAL_API_KEY.
 // Call with: curl -X POST http://localhost:3000/api/admin/fix-apply-types \
 //   -H "x-api-key: <INTERNAL_API_KEY>"
 export async function POST(req: NextRequest) {
@@ -15,23 +16,49 @@ export async function POST(req: NextRequest) {
     select: { id: true, url: true, source: true, description: true, apply_type: true },
   });
 
-  let fixed = 0;
+  // Bucket jobs by their correct apply_type and recruiter_email
+  const byType: Record<string, string[]> = { extension: [], external: [], auto: [] };
+  const emailUpdates: { id: string; email: string }[] = [];
+
   for (const job of jobs) {
+    const url = (job.url ?? "").toLowerCase();
+
+    // Skip LinkedIn — can't determine Easy Apply from URL alone.
+    // Only new scrapes with is_easy_apply=true should be 'extension'.
+    if (url.includes("linkedin.com")) continue;
+
     const applyType = detectApplyType({
       url: job.url ?? "",
       source: job.source ?? "",
       description: job.description ?? "",
     });
-    const email = extractRecruiterEmail(job.description ?? "");
-
-    if (applyType !== job.apply_type || email) {
-      await db.job.update({
-        where: { id: job.id },
-        data: { apply_type: applyType, recruiter_email: email ?? undefined },
-      });
-      fixed++;
+    if (applyType !== job.apply_type) {
+      byType[applyType]?.push(job.id);
     }
+    const email = extractRecruiterEmail(job.description ?? "");
+    if (email) emailUpdates.push({ id: job.id, email });
   }
 
-  return NextResponse.json({ success: true, total: jobs.length, fixed });
+  // Bulk-update each apply_type bucket in one query each
+  let fixed = 0;
+  for (const [applyType, ids] of Object.entries(byType)) {
+    if (!ids.length) continue;
+    await db.job.updateMany({
+      where: { id: { in: ids } },
+      data: { apply_type: applyType },
+    });
+    fixed += ids.length;
+  }
+
+  // Email updates are still per-row (different values each time)
+  for (const { id, email } of emailUpdates) {
+    await db.job.update({ where: { id }, data: { recruiter_email: email } });
+  }
+
+  return NextResponse.json({
+    success: true,
+    total: jobs.length,
+    fixed,
+    email_updated: emailUpdates.length,
+  });
 }

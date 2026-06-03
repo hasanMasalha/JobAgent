@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 
 import asyncpg
 from fastapi import APIRouter
@@ -13,6 +14,24 @@ from embedder import embed
 from scraper import scrape_israel_jobs
 
 router = APIRouter()
+
+_AUTO_ATS = {
+    "greenhouse.io", "lever.co", "ashbyhq.com",
+    "smartrecruiters.com", "bamboohr.com", "workable.com",
+}
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def _detect_apply_type(job: dict) -> str:
+    url = (job.get("url") or "").lower()
+    desc = job.get("description") or ""
+    if any(ats in url for ats in _AUTO_ATS):
+        return "auto"
+    if _EMAIL_RE.search(desc):
+        return "auto"
+    if "linkedin.com" in url and "/jobs/view/" in url:
+        return "extension"
+    return "external"
 
 
 @router.post("/scrape-and-store")
@@ -43,13 +62,14 @@ async def scrape_and_store():
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, scraped_at)
+                                   embedding, apply_type, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, now())
+                        $9::vector, $10, now())
                 ON CONFLICT (url) DO UPDATE
                     SET description = EXCLUDED.description,
                         embedding    = EXCLUDED.embedding,
+                        apply_type   = EXCLUDED.apply_type,
                         scraped_at   = now()
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
@@ -63,6 +83,7 @@ async def scrape_and_store():
                 job["salary_min"],
                 job["salary_max"],
                 embedding_str,
+                _detect_apply_type(job),
             )
             if row is None:
                 pass  # conflict but description was already long enough — skip
@@ -216,13 +237,14 @@ async def scrape_and_store_company_careers():
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, scraped_at)
+                                   embedding, apply_type, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, now())
+                        $9::vector, $10, now())
                 ON CONFLICT (url) DO UPDATE
                     SET description = EXCLUDED.description,
                         embedding    = EXCLUDED.embedding,
+                        apply_type   = EXCLUDED.apply_type,
                         scraped_at   = now()
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
@@ -236,6 +258,7 @@ async def scrape_and_store_company_careers():
                 job.get("salary_min"),
                 job.get("salary_max"),
                 embedding_str,
+                _detect_apply_type(job),
             )
             if row is None:
                 pass
