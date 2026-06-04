@@ -93,7 +93,37 @@ async def _fetch_full_description(page, job_url: str) -> str | None:
         """)
         await page.wait_for_timeout(300)
 
-        # Extract full description — innerText after CSS reset returns all text
+        # Debug: dump every selector result so we can see what LinkedIn actually returns
+        debug_info = await page.evaluate("""
+            () => {
+                const results = {};
+                const selectors = [
+                    '.show-more-less-html__markup',
+                    '.jobs-description-content__text',
+                    '.jobs-box__html-content',
+                    '#job-details',
+                    'article.jobs-description__container',
+                    '.description__text',
+                    '[class*="description"]',
+                    '[class*="job-details"]',
+                ];
+                for (const sel of selectors) {
+                    const el = document.querySelector(sel);
+                    results[sel] = el ? el.innerText.substring(0, 100) : 'NOT FOUND';
+                }
+                results['title'] = document.title;
+                results['lang'] = document.documentElement.lang;
+                const allEls = document.querySelectorAll('[class*="description"]');
+                results['desc_classes'] = Array.from(allEls)
+                    .map(el => el.className)
+                    .slice(0, 5);
+                return results;
+            }
+        """)
+        job_id = job_url.rstrip("/").split("/")[-1]
+        print(f"[linkedin_debug] {job_id} selectors: {debug_info}", flush=True)
+
+        # Approach 1: CSS class selectors (original approach, after CSS reset above)
         description = await page.evaluate("""
             () => {
                 const selectors = [
@@ -115,6 +145,47 @@ async def _fetch_full_description(page, job_url: str) -> str | None:
         """)
         if description and len(description) > 100:
             return description
+
+        # Approach 2: largest text block in main content area
+        print(f"[linkedin_debug] CSS selectors missed for {job_id}, trying text-block fallback", flush=True)
+        description = await page.evaluate("""
+            () => {
+                const candidates = [
+                    document.querySelector('main'),
+                    document.querySelector('#main-content'),
+                    document.querySelector('[role="main"]'),
+                    document.body,
+                ];
+                for (const container of candidates) {
+                    if (!container) continue;
+                    const textEls = container.querySelectorAll('p, li, h1, h2, h3, section');
+                    const texts = Array.from(textEls)
+                        .map(el => el.innerText.trim())
+                        .filter(t => t.length > 20)
+                        .join('\\n');
+                    if (texts.length > 200) return texts;
+                }
+                return '';
+            }
+        """)
+        if description and len(description) > 100:
+            print(f"[linkedin_debug] text-block fallback succeeded len={len(description)} for {job_id}", flush=True)
+            return description
+
+        # Approach 3: BeautifulSoup on raw HTML
+        print(f"[linkedin_debug] text-block fallback also missed for {job_id}, trying BeautifulSoup", flush=True)
+        html = await page.content()
+        print(f"[linkedin_debug] raw HTML length: {len(html)} for {job_id}", flush=True)
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in ["main", "article"]:
+            container = soup.find(tag)
+            if container:
+                text = container.get_text(separator="\n", strip=True)
+                if len(text) > 200:
+                    print(f"[linkedin_debug] BeautifulSoup <{tag}> len={len(text)} for {job_id}", flush=True)
+                    return text[:3000]
+
+        print(f"[linkedin_debug] all approaches failed for {job_id}", flush=True)
         return None
     except Exception as e:
         print(f"[linkedin] description fetch error: {e}")
