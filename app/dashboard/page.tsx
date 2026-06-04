@@ -365,7 +365,9 @@ export default function DashboardPage() {
 
   const loadMoreJobs = useCallback(async () => {
     if (!hasMore || loadingMore) return;
+    console.log('Load more clicked, current page:', matchPage);
     const nextPage = matchPage + 1;
+    console.log('Fetching page:', nextPage);
     setLoadingMore(true);
     try {
       const res = await fetch(`/api/match?page=${nextPage}&limit=20`);
@@ -379,6 +381,8 @@ export default function DashboardPage() {
         return;
       }
       if (data.error || !Array.isArray(data.jobs)) return;
+      console.log('Results received:', data.jobs.length);
+      console.log('Has more:', data.jobs.length === 20);
       setJobs((prev) => [...prev, ...data.jobs]);
       setMatchPage(nextPage);
       setHasMore(data.hasMore);
@@ -594,10 +598,20 @@ export default function DashboardPage() {
 
             {!loading && !error && (
               <>
-                <div ref={matchBottomRef} className="h-10 w-full" />
+                <div ref={matchBottomRef} className="h-4 w-full" />
                 {loadingMore && (
                   <div className="flex justify-center py-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-gray-100" />
+                  </div>
+                )}
+                {hasMore && !loadingMore && jobs.length > 0 && (
+                  <div className="flex justify-center py-4">
+                    <button
+                      onClick={loadMoreJobs}
+                      className="px-6 py-2.5 text-sm font-medium border rounded-xl hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Load More
+                    </button>
                   </div>
                 )}
               </>
