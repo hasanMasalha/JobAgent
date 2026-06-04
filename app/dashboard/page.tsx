@@ -119,8 +119,6 @@ export default function DashboardPage() {
   const [matchPage, setMatchPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const matchObserverRef = useRef<IntersectionObserver | null>(null);
-  const matchBottomRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
   // --- Selection + batch apply ---
@@ -365,9 +363,7 @@ export default function DashboardPage() {
 
   const loadMoreJobs = useCallback(async () => {
     if (!hasMore || loadingMore) return;
-    console.log('Load more clicked, current page:', matchPage);
     const nextPage = matchPage + 1;
-    console.log('Fetching page:', nextPage);
     setLoadingMore(true);
     try {
       const res = await fetch(`/api/match?page=${nextPage}&limit=20`);
@@ -381,8 +377,6 @@ export default function DashboardPage() {
         return;
       }
       if (data.error || !Array.isArray(data.jobs)) return;
-      console.log('Results received:', data.jobs.length);
-      console.log('Has more:', data.jobs.length === 20);
       setJobs((prev) => [...prev, ...data.jobs]);
       setMatchPage(nextPage);
       setHasMore(data.hasMore);
@@ -392,21 +386,6 @@ export default function DashboardPage() {
       setLoadingMore(false);
     }
   }, [hasMore, loadingMore, matchPage]);
-
-  useEffect(() => {
-    matchObserverRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreJobs();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    if (matchBottomRef.current) {
-      matchObserverRef.current.observe(matchBottomRef.current);
-    }
-    return () => matchObserverRef.current?.disconnect();
-  }, [hasMore, loadingMore, loadMoreJobs, loading]);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -596,25 +575,16 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!loading && !error && (
-              <>
-                <div ref={matchBottomRef} className="h-4 w-full" />
-                {loadingMore && (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-gray-100" />
-                  </div>
-                )}
-                {hasMore && !loadingMore && jobs.length > 0 && (
-                  <div className="flex justify-center py-4">
-                    <button
-                      onClick={loadMoreJobs}
-                      className="px-6 py-2.5 text-sm font-medium border rounded-xl hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      Load More
-                    </button>
-                  </div>
-                )}
-              </>
+            {!loading && !error && hasMore && jobs.length > 0 && (
+              <div className="flex justify-center py-6">
+                <button
+                  onClick={loadMoreJobs}
+                  disabled={loadingMore}
+                  className="px-6 py-3 bg-[#1a2e5e] text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all text-sm font-medium"
+                >
+                  {loadingMore ? "Loading…" : "Load More Jobs"}
+                </button>
+              </div>
             )}
           </div>
         </>
