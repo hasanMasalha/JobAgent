@@ -14,7 +14,13 @@ def test_is_israeli_job_known_company():
     }) is True
 
 def test_embed_returns_list():
-    from embedder import embed
-    result = embed('software engineer')
-    assert isinstance(result, list)
-    assert len(result) == 384
+    from unittest.mock import patch, MagicMock
+
+    mock_model = MagicMock()
+    mock_model.encode.return_value.tolist.return_value = [0.1] * 384
+
+    with patch('embedder._get_model', return_value=mock_model):
+        from embedder import embed
+        result = embed('software engineer')
+        assert isinstance(result, list)
+        assert len(result) == 384
