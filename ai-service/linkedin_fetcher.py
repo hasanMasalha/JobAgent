@@ -78,16 +78,43 @@ async def _fetch_full_description(page, job_url: str) -> str | None:
 
         await page.wait_for_timeout(500)
 
-        # Extract full description text
-        for selector in _DESC_SELECTORS:
-            try:
-                el = await page.query_selector(selector)
-                if el:
-                    text = await el.inner_text()
-                    if text and len(text) > 100:
-                        return text.strip()
-            except Exception:
-                continue
+        # Remove CSS truncation as a fallback in case the button click missed
+        await page.evaluate("""
+            () => {
+                document.querySelectorAll(
+                    '.show-more-less-html, .show-more-less-html__markup'
+                ).forEach(el => {
+                    el.style.maxHeight = 'none';
+                    el.style.overflow = 'visible';
+                    el.style.webkitLineClamp = 'unset';
+                    el.style.display = 'block';
+                });
+            }
+        """)
+        await page.wait_for_timeout(300)
+
+        # Extract full description — innerText after CSS reset returns all text
+        description = await page.evaluate("""
+            () => {
+                const selectors = [
+                    '.show-more-less-html__markup',
+                    '.jobs-description-content__text',
+                    '.jobs-box__html-content',
+                    '#job-details',
+                    '.description__text',
+                    '[class*="show-more-less-html"]',
+                ];
+                for (const sel of selectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.innerText.trim().length > 100) {
+                        return el.innerText.trim();
+                    }
+                }
+                return '';
+            }
+        """)
+        if description and len(description) > 100:
+            return description
         return None
     except Exception as e:
         print(f"[linkedin] description fetch error: {e}")
