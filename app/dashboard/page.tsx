@@ -364,6 +364,7 @@ export default function DashboardPage() {
   const loadMoreJobs = useCallback(async () => {
     if (!hasMore || loadingMore) return;
     const nextPage = matchPage + 1;
+    const savedScrollY = window.scrollY;
     setLoadingMore(true);
     try {
       const res = await fetch(`/api/match?page=${nextPage}&limit=20`);
@@ -380,6 +381,12 @@ export default function DashboardPage() {
       setJobs((prev) => [...prev, ...data.jobs]);
       setMatchPage(nextPage);
       setHasMore(data.hasMore);
+      // Double rAF: wait for React to flush new jobs into the DOM before restoring
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: savedScrollY, behavior: "instant" });
+        });
+      });
     } catch (err) {
       console.error("[loadMore]", err);
     } finally {
