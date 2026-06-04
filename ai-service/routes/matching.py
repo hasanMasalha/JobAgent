@@ -471,15 +471,19 @@ async def match_jobs(req: MatchRequest):
         if not jobs:
             return []
 
-        # 4. Claude scoring — top 20 by seniority-adjusted vector rank
+        # 4. Claude scoring — top 20 only (cost control); rest get vector-only scores
         jobs_to_score = jobs[:20]
+        remaining = jobs[20:]
         scores = _run_claude_scoring(jobs_to_score, cv_data)
         if scores:
-            results = _merge_scores(jobs_to_score, scores)
+            scored_results = _merge_scores(jobs_to_score, scores)
         else:
-            results = _vector_only(jobs_to_score)
+            scored_results = _vector_only(jobs_to_score)
 
-        # 5. Persist to DB cache
+        vector_tail = _vector_only(remaining)
+        results = scored_results + vector_tail
+
+        # 5. Persist to DB cache (all jobs, so pagination works)
         await _set_db_cache(conn, req.user_id, results)
 
     finally:
