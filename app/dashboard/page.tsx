@@ -119,6 +119,7 @@ export default function DashboardPage() {
   const [matchPage, setMatchPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   // --- Selection + batch apply ---
@@ -395,6 +396,20 @@ export default function DashboardPage() {
   }, [hasMore, loadingMore, matchPage]);
 
   useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreJobs();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMoreJobs, loading]);
+
+  useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
       .then((d) => {
@@ -582,16 +597,20 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!loading && !error && hasMore && jobs.length > 0 && (
-              <div className="flex justify-center py-6">
-                <button
-                  onClick={loadMoreJobs}
-                  disabled={loadingMore}
-                  className="px-6 py-3 bg-[#1a2e5e] text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all text-sm font-medium"
-                >
-                  {loadingMore ? "Loading…" : "Load More Jobs"}
-                </button>
-              </div>
+            {!loading && !error && jobs.length > 0 && (
+              <>
+                <div ref={sentinelRef} style={{ height: "1px" }} />
+                {loadingMore && (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400 dark:border-gray-500" />
+                  </div>
+                )}
+                {!hasMore && (
+                  <p className="text-center py-4 text-sm text-gray-400 dark:text-gray-500">
+                    All matches loaded
+                  </p>
+                )}
+              </>
             )}
           </div>
         </>
