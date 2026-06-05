@@ -18,8 +18,15 @@ router = APIRouter()
 
 
 def _clean_description(text: str) -> str:
-    """Unescape HTML entities from scraped descriptions."""
-    return html.unescape(text or "").strip()
+    """Unescape HTML entities and strip markdown artifacts from scraped descriptions."""
+    if not text:
+        return ""
+    text = html.unescape(text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)   # strip **bold**
+    text = re.sub(r"^-{3,}$", "", text, flags=re.MULTILINE)  # remove HR lines
+    text = re.sub(r"\n{3,}", "\n\n", text)             # collapse excess blank lines
+    text = re.sub(r"[ \t]+", " ", text)                # collapse spaces/tabs
+    return text.strip()
 
 _AUTO_ATS = {
     "greenhouse.io", "lever.co", "ashbyhq.com",

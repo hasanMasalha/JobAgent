@@ -6,17 +6,20 @@ import { showToast } from "@/app/components/Toast";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
 
-const PREVIEW_LENGTH = 300;
+const PREVIEW_LINES = 6;
 
 function cleanDescription(text: string): string {
   return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")  // strip **bold** markers
+    .replace(/^-{3,}$/gm, "")           // remove horizontal rules
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")         // collapse 3+ blank lines to 1
+    .replace(/[ \t]+/g, " ")            // collapse spaces/tabs but preserve newlines
     .trim();
 }
 
@@ -166,10 +169,9 @@ export default function JobCard({
   }
 
   const cleanDesc = job.description ? cleanDescription(job.description) : "";
-  const isLong = cleanDesc.length > PREVIEW_LENGTH;
-  const displayDescription = expanded
-    ? cleanDesc
-    : cleanDesc.slice(0, PREVIEW_LENGTH) + (isLong ? "..." : "");
+  const lines = cleanDesc.split("\n").filter((l) => l.trim());
+  const isLong = lines.length > PREVIEW_LINES;
+  const displayLines = expanded ? lines : lines.slice(0, PREVIEW_LINES);
 
   const reasons = job.reasons ?? [];
   const gaps = job.gaps ?? [];
@@ -219,11 +221,15 @@ export default function JobCard({
         )}
       </div>
 
-      {/* Description — truncated or full depending on expanded state */}
+      {/* Description — line-by-line rendering with bullet normalisation */}
       {cleanDesc && (
-        <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 whitespace-pre-line">
-          {displayDescription}
-        </p>
+        <div className="text-sm text-gray-600 dark:text-gray-300 mt-3 space-y-1">
+          {displayLines.map((line, i) => (
+            <p key={i} className={line.startsWith("*") || line.startsWith("•") ? "ml-3" : ""}>
+              {line.startsWith("*") ? "• " + line.replace(/^\*\s*/, "") : line}
+            </p>
+          ))}
+        </div>
       )}
 
       {/* Show more / Show less — only rendered when description exceeds preview length */}
