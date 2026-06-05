@@ -6,6 +6,20 @@ import { showToast } from "@/app/components/Toast";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
 
+const PREVIEW_LENGTH = 300;
+
+function cleanDescription(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function useExtensionInstalled() {
   const [installed, setInstalled] = useState(false)
   useEffect(() => {
@@ -151,6 +165,12 @@ export default function JobCard({
     }
   }
 
+  const cleanDesc = job.description ? cleanDescription(job.description) : "";
+  const isLong = cleanDesc.length > PREVIEW_LENGTH;
+  const displayDescription = expanded
+    ? cleanDesc
+    : cleanDesc.slice(0, PREVIEW_LENGTH) + (isLong ? "..." : "");
+
   const reasons = job.reasons ?? [];
   const gaps = job.gaps ?? [];
 
@@ -199,22 +219,24 @@ export default function JobCard({
         )}
       </div>
 
-      {/* Description preview */}
-      {job.description && (
-        <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 line-clamp-2">
-          {job.description}
+      {/* Description — truncated or full depending on expanded state */}
+      {cleanDesc && (
+        <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 whitespace-pre-line">
+          {displayDescription}
         </p>
       )}
 
-      {/* Expand toggle */}
-      <button
-        className="text-xs text-blue-600 dark:text-blue-400 mt-2 hover:underline focus:outline-none"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        {expanded ? "Show less" : "Show more"}
-      </button>
+      {/* Show more / Show less — only rendered when description exceeds preview length */}
+      {isLong && (
+        <button
+          className="text-xs text-blue-600 dark:text-blue-400 mt-2 hover:underline focus:outline-none"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
 
-      {expanded && (
+      {expanded && (reasons.length > 0 || gaps.length > 0) && (
         <div className="mt-3 space-y-3">
           {reasons.length > 0 && (
             <div>
@@ -242,16 +264,6 @@ export default function JobCard({
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
-          {job.description && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                Full description
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line">
-                {job.description}
-              </p>
             </div>
           )}
         </div>

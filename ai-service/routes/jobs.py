@@ -1,4 +1,5 @@
 import csv
+import html
 import os
 import re
 
@@ -14,6 +15,11 @@ from embedder import embed
 from scraper import enrich_short_descriptions, scrape_israel_jobs
 
 router = APIRouter()
+
+
+def _clean_description(text: str) -> str:
+    """Unescape HTML entities from scraped descriptions."""
+    return html.unescape(text or "").strip()
 
 _AUTO_ATS = {
     "greenhouse.io", "lever.co", "ashbyhq.com",
@@ -65,7 +71,8 @@ async def scrape_and_store():
         for job in jobs:
             if not (job.get("description") or "").strip():
                 continue  # never store jobs without a description
-            embed_text = f"{job['title']} {job['description'][:500]}"
+            description = _clean_description(job["description"])
+            embed_text = f"{job['title']} {description[:500]}"
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
@@ -87,7 +94,7 @@ async def scrape_and_store():
                 """,
                 job["title"],
                 job["company"],
-                job["description"],
+                description,
                 job["location"],
                 job["url"],
                 job["source"],
@@ -240,7 +247,8 @@ async def scrape_and_store_company_careers():
             if not job.get("url", "").strip():
                 skipped += 1
                 continue
-            embed_text = f"{job['title']} {job.get('description', '')[:500]}".strip()
+            description = _clean_description(job.get("description", ""))
+            embed_text = f"{job['title']} {description[:500]}".strip()
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
@@ -262,7 +270,7 @@ async def scrape_and_store_company_careers():
                 """,
                 job["title"],
                 job["company"],
-                job.get("description", ""),
+                description,
                 job.get("location", ""),
                 job["url"],
                 job["source"],
