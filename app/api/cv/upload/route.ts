@@ -2,6 +2,49 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
+// Allow up to 60 seconds for the synchronous part + background call
+export const maxDuration = 60;
+
+const URL_PATTERNS = [
+  {
+    regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g,
+    buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}/${m[2]}`,
+    buildText: (m: RegExpExecArray) => `github.com/${m[1]}/${m[2]}`,
+  },
+  {
+    regex: /github\.com\/([a-zA-Z0-9_-]+)(?!\/[a-zA-Z0-9])/g,
+    buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}`,
+    buildText: (m: RegExpExecArray) => `github.com/${m[1]}`,
+  },
+  {
+    regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/g,
+    buildUrl: (m: RegExpExecArray) => `https://linkedin.com/in/${m[1]}`,
+    buildText: (m: RegExpExecArray) => `linkedin.com/in/${m[1]}`,
+  },
+  {
+    regex: /https?:\/\/(?!linkedin|github)[^\s,;)>\]'"]+/g,
+    buildUrl: (m: RegExpExecArray) => m[0],
+    buildText: (m: RegExpExecArray) => m[0],
+  },
+];
+
+function scanTextForUrls(
+  text: string,
+  allLinks: { text: string; url: string; context: string }[]
+) {
+  for (const pattern of URL_PATTERNS) {
+    const regex = new RegExp(pattern.regex.source, "g");
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      const url = pattern.buildUrl(m);
+      const txt = pattern.buildText(m);
+      if (!allLinks.some((l) => l.url === url)) {
+        allLinks.push({ text: txt, url, context: "inline" });
+      }
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -19,6 +62,7 @@ export async function POST(req: NextRequest) {
     const location = (form.get("location") as string) ?? "";
     const remoteOk = form.get("remote_ok") === "true";
     const minSalaryRaw = form.get("min_salary") as string;
+    const workModesRaw = form.get("work_modes") as string;
 
     if (!cvFile) {
       return NextResponse.json({ error: "No CV file provided" }, { status: 400 });
@@ -46,50 +90,12 @@ export async function POST(req: NextRequest) {
     let rawText: string;
     const allLinks: { text: string; url: string; context: string }[] = [];
 
-    const URL_PATTERNS = [
-      {
-        regex: /github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g,
-        buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}/${m[2]}`,
-        buildText: (m: RegExpExecArray) => `github.com/${m[1]}/${m[2]}`,
-      },
-      {
-        regex: /github\.com\/([a-zA-Z0-9_-]+)(?!\/[a-zA-Z0-9])/g,
-        buildUrl: (m: RegExpExecArray) => `https://github.com/${m[1]}`,
-        buildText: (m: RegExpExecArray) => `github.com/${m[1]}`,
-      },
-      {
-        regex: /linkedin\.com\/in\/([a-zA-Z0-9_-]+)/g,
-        buildUrl: (m: RegExpExecArray) => `https://linkedin.com/in/${m[1]}`,
-        buildText: (m: RegExpExecArray) => `linkedin.com/in/${m[1]}`,
-      },
-      {
-        regex: /https?:\/\/(?!linkedin|github)[^\s,;)>\]'"]+/g,
-        buildUrl: (m: RegExpExecArray) => m[0],
-        buildText: (m: RegExpExecArray) => m[0],
-      },
-    ];
-
-    const scanTextForUrls = (text: string) => {
-      for (const pattern of URL_PATTERNS) {
-        const regex = new RegExp(pattern.regex.source, "g");
-        let m: RegExpExecArray | null;
-        while ((m = regex.exec(text)) !== null) {
-          const url = pattern.buildUrl(m);
-          const txt = pattern.buildText(m);
-          if (!allLinks.some((l) => l.url === url)) {
-            allLinks.push({ text: txt, url, context: "inline" });
-          }
-        }
-      }
-    };
-
     if (isPdf) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
       const result = await pdfParse(buffer);
       rawText = result.text;
-      // PDFs lose all hyperlinks — detect via regex only
-      scanTextForUrls(rawText);
+      scanTextForUrls(rawText, allLinks);
     } else {
       // .docx
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -100,8 +106,6 @@ export async function POST(req: NextRequest) {
       ]);
       rawText = rawResult.value;
 
-      // Method 1: extract anchor hrefs from HTML output
-      // Use [\s\S]*? to handle nested tags like <a href="..."><span>text</span></a>
       const linkRegex = /<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
       const html: string = htmlResult.value;
       let match: RegExpExecArray | null;
@@ -120,71 +124,80 @@ export async function POST(req: NextRequest) {
           allLinks.push({ text: text || url, url, context });
         }
       }
-
-      // Method 2: detect raw URLs as fallback
-      scanTextForUrls(rawText);
+      scanTextForUrls(rawText, allLinks);
     }
 
-    // Send to Python service for Claude extraction + embedding
-    const pythonRes = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/process-cv`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raw_text: rawText, user_id: user.id }),
-        signal: AbortSignal.timeout(120_000), // 2 min — model loads on first call
-      }
-    );
+    // ── Step 1: Persist user row + CV raw text + preferences immediately ──
+    // This is fast — no AI calls. Returns to the user in < 2 seconds.
 
-    if (!pythonRes.ok) {
-      const err = await pythonRes.text();
-      return NextResponse.json(
-        { error: `AI service error: ${err}` },
-        { status: 500 }
-      );
-    }
-
-    const { skills_json, clean_summary, embedding } = await pythonRes.json();
-
-    // Ensure user row exists in public.User (Supabase Auth only creates auth.users)
     await db.$executeRaw`
       INSERT INTO "User" (id, email, created_at)
       VALUES (${user.id}, ${user.email ?? ""}, now())
       ON CONFLICT (id) DO NOTHING
     `;
 
-    // Upsert CV row (one CV per user)
     const hyperlinksJson = JSON.stringify(allLinks);
     await db.$executeRaw`
-      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, hyperlinks_json, updated_at)
-      VALUES (gen_random_uuid(), ${user.id}, ${rawText}, ${JSON.stringify(skills_json)}::jsonb,
-              ${clean_summary}, ${JSON.stringify(embedding)}::vector, ${hyperlinksJson}, now())
+      INSERT INTO "CV" (id, user_id, raw_text, hyperlinks_json, updated_at)
+      VALUES (gen_random_uuid(), ${user.id}, ${rawText}, ${hyperlinksJson}, now())
       ON CONFLICT (user_id) DO UPDATE
-        SET raw_text = EXCLUDED.raw_text,
-            skills_json = EXCLUDED.skills_json,
-            clean_summary = EXCLUDED.clean_summary,
-            embedding = EXCLUDED.embedding,
+        SET raw_text      = EXCLUDED.raw_text,
             hyperlinks_json = EXCLUDED.hyperlinks_json,
-            updated_at = now()
+            updated_at    = now()
     `;
 
-    // Save job preferences
     const titles: string[] = JSON.parse(titlesRaw ?? "[]");
+    const workModes: string[] = workModesRaw ? JSON.parse(workModesRaw) : ["Hybrid"];
     const minSalary = minSalaryRaw ? parseInt(minSalaryRaw) : null;
 
     await db.$executeRaw`
-      INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, min_salary, updated_at)
+      INSERT INTO "JobPreference" (id, user_id, titles, locations, remote_ok, work_modes, min_salary, updated_at)
       VALUES (gen_random_uuid(), ${user.id}, ${titles}::text[], ARRAY[${location}]::text[],
-              ${remoteOk}, ${minSalary}, now())
+              ${remoteOk}, ${workModes}::text[], ${minSalary}, now())
       ON CONFLICT (user_id) DO UPDATE
-        SET titles = EXCLUDED.titles,
-            locations = EXCLUDED.locations,
-            remote_ok = EXCLUDED.remote_ok,
+        SET titles     = EXCLUDED.titles,
+            locations  = EXCLUDED.locations,
+            remote_ok  = EXCLUDED.remote_ok,
+            work_modes = EXCLUDED.work_modes,
             min_salary = EXCLUDED.min_salary,
             updated_at = now()
     `;
 
-    return NextResponse.json({ success: true });
+    // ── Step 2: Process CV embedding in the background (fire and forget) ──
+    // The Node.js runtime continues executing after the response is sent.
+    // Skills/embedding are written to the CV row once Python finishes.
+    const capturedUserId = user.id;
+    const pythonUrl = process.env.PYTHON_SERVICE_URL ?? "http://localhost:8000";
+    void (async () => {
+      try {
+        console.log("[cv/upload] background embedding starting for", capturedUserId);
+        const pythonRes = await fetch(`${pythonUrl}/process-cv`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raw_text: rawText, user_id: capturedUserId }),
+          signal: AbortSignal.timeout(55_000),
+        });
+        if (!pythonRes.ok) {
+          const errText = await pythonRes.text();
+          console.error("[cv/upload] Python service error:", errText.substring(0, 200));
+          return;
+        }
+        const { skills_json, clean_summary, embedding } = await pythonRes.json();
+        await db.$executeRaw`
+          UPDATE "CV"
+          SET skills_json   = ${JSON.stringify(skills_json)}::jsonb,
+              clean_summary = ${clean_summary},
+              embedding     = ${JSON.stringify(embedding)}::vector,
+              updated_at    = now()
+          WHERE user_id = ${capturedUserId}
+        `;
+        console.log("[cv/upload] background embedding complete for", capturedUserId);
+      } catch (err) {
+        console.error("[cv/upload] background embedding failed:", err);
+      }
+    })();
+
+    return NextResponse.json({ success: true, processing: true });
   } catch (err) {
     console.error("[cv/upload]", err);
     const message = err instanceof Error ? err.message : "Internal server error";

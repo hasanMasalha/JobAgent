@@ -130,22 +130,52 @@ export default function OnboardingPage() {
         form.append("work_modes", JSON.stringify(workModes));
         form.append("min_salary", skipSalary ? "" : minSalary);
 
+        console.log("[onboarding] uploading CV...");
         const res = await fetch("/api/cv/upload", { method: "POST", body: form });
-        const data = await res.json();
+        console.log("[onboarding] response status:", res.status);
+
+        const text = await res.text();
+        console.log("[onboarding] response text:", text.substring(0, 200));
+
+        let data: { success?: boolean; processing?: boolean; error?: string };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.error("[onboarding] non-JSON from /api/cv/upload:", text.substring(0, 300));
+          setError("Something went wrong. Please try again.");
+          return;
+        }
+
         if (!res.ok) throw new Error(data.error ?? "Upload failed");
       } else {
+        const payload = {
+          titles,
+          locations: location ? [location] : [],
+          remote_ok: workModes.includes("Remote"),
+          work_modes: workModes,
+          min_salary: skipSalary ? null : (minSalary ? parseInt(minSalary) : null),
+        };
+        console.log("[onboarding] saving preferences:", payload);
+
         const res = await fetch("/api/profile/preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            titles,
-            locations: location ? [location] : [],
-            remote_ok: workModes.includes("Remote"),
-            work_modes: workModes,
-            min_salary: skipSalary ? null : (minSalary ? parseInt(minSalary) : null),
-          }),
+          body: JSON.stringify(payload),
         });
-        const data = await res.json();
+        console.log("[onboarding] response status:", res.status);
+
+        const text = await res.text();
+        console.log("[onboarding] response text:", text.substring(0, 200));
+
+        let data: { success?: boolean; error?: string };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.error("[onboarding] non-JSON from /api/profile/preferences:", text.substring(0, 300));
+          setError("Something went wrong. Please try again.");
+          return;
+        }
+
         if (!res.ok) throw new Error(data.error ?? "Update failed");
       }
 
@@ -560,6 +590,11 @@ export default function OnboardingPage() {
               {loading ? "Saving…" : isUpdate ? "Save changes" : "Finish setup"}
             </button>
           </div>
+          {loading && file && (
+            <p className="text-xs text-center text-gray-400 dark:text-gray-500">
+              Processing your CV in the background — this may take a moment.
+            </p>
+          )}
         </form>
       )}
     </div>
