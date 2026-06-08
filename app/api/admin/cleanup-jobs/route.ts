@@ -17,11 +17,27 @@ export async function POST(req: NextRequest) {
 
   try {
     const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-    // Step 1 — Soft delete: mark jobs older than 14 days as inactive.
-    // They stay in DB but are hidden from browse/match queries.
+    // Step 1a — LinkedIn/Indeed close faster; deactivate after 7 days.
+    const fastSourcesDeactivated = await db.job.updateMany({
+      where: {
+        scraped_at: { lt: sevenDaysAgo },
+        is_active: { not: false },
+        OR: [
+          { url: { contains: "linkedin.com" } },
+          { url: { contains: "indeed.com" } },
+          { source: "linkedin" },
+          { source: "indeed" },
+        ],
+      },
+      data: { is_active: false },
+    })
+    console.log(`[cleanup] linkedin/indeed deactivated: ${fastSourcesDeactivated.count}`)
+
+    // Step 1b — Soft delete: mark all other jobs older than 14 days as inactive.
     const softDeleted = await db.job.updateMany({
       where: {
         scraped_at: { lt: fourteenDaysAgo },
@@ -109,6 +125,7 @@ export async function POST(req: NextRequest) {
     const result = {
       success: true,
       timestamp: now.toISOString(),
+      fastSourcesDeactivated: fastSourcesDeactivated.count,
       softDeleted: softDeleted.count,
       hardDeleted: Number(hardDeleted),
       brokenUrlsDeactivated: brokenUrls.count,

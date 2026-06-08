@@ -8,14 +8,25 @@ from fastapi import APIRouter
 router = APIRouter()
 
 CLOSED_SIGNALS = [
+    # LinkedIn signals
     "no longer accepting applications",
     "closed-job__flavor--closed",
     "closed-job",
     "not accepting applications",
-    "this job is closed",
-    "position has been filled",
+    # Indeed signals
+    "this job has expired on indeed",
     "job has expired",
-    "application deadline has passed",
+    "employer is not accepting applications",
+    "this job posting has expired",
+    "job is no longer available",
+    # Generic signals
+    "this position has been filled",
+    "position has been filled",
+    "this job is closed",
+    "job has been removed",
+    "unable to load the page",
+    "job id provided may not be valid",
+    "job posting has been removed",
 ]
 
 
@@ -92,12 +103,13 @@ async def run_linkedin_closed_check(
 
     try:
         jobs = await conn.fetch(f"""
-            SELECT id, url, title, company
+            SELECT id, url, title, company, source
             FROM "Job"
             WHERE is_active = true
-              AND url LIKE '%linkedin.com%'
+              AND url IS NOT NULL
+              AND url != ''
               AND scraped_at < NOW() - INTERVAL '{days_old} days'
-            ORDER BY last_status_check ASC NULLS FIRST
+            ORDER BY RANDOM()
             LIMIT {batch_size}
         """)
 
@@ -169,10 +181,11 @@ async def run_recent_closed_check(batch_size: int = 50) -> dict:
     conn = await asyncpg.connect(database_url)
     try:
         jobs = await conn.fetch(f"""
-            SELECT id, url, title, company
+            SELECT id, url, title, company, source
             FROM "Job"
             WHERE is_active = true
-              AND url LIKE '%linkedin.com%'
+              AND url IS NOT NULL
+              AND url != ''
               AND scraped_at > NOW() - INTERVAL '3 days'
             ORDER BY scraped_at DESC
             LIMIT {batch_size}

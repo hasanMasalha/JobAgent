@@ -282,6 +282,13 @@ export default function JobCard({
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          onClick={() => {
+            fetch("/api/jobs/check-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ jobId: job.id, url: job.url }),
+            }).catch(() => {})
+          }}
         >
           View job
         </a>
