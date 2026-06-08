@@ -3,59 +3,46 @@ import { createServerClient } from "@/lib/supabase.server"
 import { db } from "@/lib/db"
 import { LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories"
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+type JobRow = {
+  id: string
+  title: string
+  company: string
+  description: string
+  location: string | null
+  url: string
+  source: string
+  apply_type: string | null
+  salary_min: number | null
+  salary_max: number | null
+  scraped_at: Date
+  total: bigint
+}
+
+async function queryJobs(
+  keywords: string[],
+  locationValues: string[],
+  seniorityValues: string[],
+  page: number
 ) {
-  const supabase = createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const search = await db.savedSearch.findFirst({
-    where: { id: params.id, user_id: user.id },
-  })
-  if (!search) return NextResponse.json({ error: "Not found" }, { status: 404 })
-
-  const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1")
   const limit = 20
   const offset = (page - 1) * limit
 
-  // Build keyword patterns for title/description
-  const kwPatterns = search.keywords.map((k) => `%${k.toLowerCase()}%`)
+  const kwPatterns = keywords.map((k) => `%${k.toLowerCase()}%`)
 
-  // Build location patterns from location values -> keywords lookup
-  const locPatterns: string[] = search.locations.flatMap((locValue) => {
-    const loc = LOCATIONS.find((l) => l.value === locValue)
-    return loc ? loc.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${locValue.toLowerCase()}%`]
+  const locPatterns: string[] = locationValues.flatMap((v) => {
+    const loc = LOCATIONS.find((l) => l.value === v)
+    return loc ? loc.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${v.toLowerCase()}%`]
   })
 
-  // Build seniority patterns from seniority values -> keywords lookup
-  const senPatterns: string[] = search.seniorities.flatMap((senValue) => {
-    const sen = SENIORITY_LEVELS.find((s) => s.value === senValue)
-    return sen ? sen.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${senValue.toLowerCase()}%`]
+  const senPatterns: string[] = seniorityValues.flatMap((v) => {
+    const sen = SENIORITY_LEVELS.find((s) => s.value === v)
+    return sen ? sen.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${v.toLowerCase()}%`]
   })
 
-  // Build the WHERE clause dynamically
-  // Keyword match: title OR description contains any keyword
-  // Location match (optional): if locations set, filter by them
-  // Seniority match (optional): if seniorities set, filter title by seniority keywords
-
-  type JobRow = {
-    id: string
-    title: string
-    company: string
-    description: string
-    location: string | null
-    url: string
-    source: string
-    apply_type: string | null
-    salary_min: number | null
-    salary_max: number | null
-    scraped_at: Date
-    total: bigint
+  if (kwPatterns.length === 0) {
+    return { jobs: [], total: 0 }
   }
 
-  // Use raw SQL for LIKE ANY(ARRAY[...]) pattern
   const kwArray = `ARRAY[${kwPatterns.map((_, i) => `$${i + 1}`).join(",")}]`
 
   let paramIndex = kwPatterns.length + 1
@@ -102,11 +89,37 @@ export async function GET(
     scraped_at: j.scraped_at.toISOString(),
   }))
 
+  return { jobs, total }
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const supabase = createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const search = await db.savedSearch.findFirst({
+    where: { id: params.id, user_id: user.id },
+  })
+  if (!search) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1")
+  const limit = 20
+
+  const { jobs, total } = await queryJobs(
+    search.keywords,
+    search.locations,
+    search.seniorities,
+    page
+  )
+
   return NextResponse.json({
     jobs,
     total,
     page,
-    hasMore: offset + jobs.length < total,
+    hasMore: (page - 1) * limit + jobs.length < total,
     search: {
       id: search.id,
       category: search.category,
@@ -114,5 +127,32 @@ export async function GET(
       locations: search.locations,
       seniorities: search.seniorities,
     },
+  })
+}
+
+export async function POST(
+  req: NextRequest,
+  { params: _params }: { params: { id: string } }
+) {
+  const supabase = createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json()
+  const { keywords = [], locations = [], seniorities = [], page = 1 } = body as {
+    keywords?: string[]
+    locations?: string[]
+    seniorities?: string[]
+    page?: number
+  }
+
+  const limit = 20
+  const { jobs, total } = await queryJobs(keywords, locations, seniorities, page)
+
+  return NextResponse.json({
+    jobs,
+    total,
+    page,
+    hasMore: (page - 1) * limit + jobs.length < total,
   })
 }

@@ -6,7 +6,35 @@ import { showToast } from "@/app/components/Toast";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
 
-const PREVIEW_LINES = 6;
+const PREVIEW_LINES = 4;
+
+function formatDescription(lines: string[]): JSX.Element {
+  return (
+    <div className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
+      {lines.map((line, i) => {
+        if (line.startsWith("*") || line.startsWith("•")) {
+          return (
+            <div key={i} className="flex gap-2">
+              <span className="text-violet-500 mt-0.5 flex-shrink-0">•</span>
+              <span>{line.replace(/^[*•]\s*/, "")}</span>
+            </div>
+          );
+        }
+        if (
+          line.endsWith(":") ||
+          (line.length < 50 && line.length > 3 && line === line.toUpperCase())
+        ) {
+          return (
+            <p key={i} className="font-semibold text-gray-800 dark:text-gray-200 mt-3 first:mt-0 mb-0.5">
+              {line}
+            </p>
+          );
+        }
+        return <p key={i}>{line}</p>;
+      })}
+    </div>
+  );
+}
 
 function cleanDescription(text: string): string {
   return text
@@ -221,14 +249,10 @@ export default function JobCard({
         )}
       </div>
 
-      {/* Description — line-by-line rendering with bullet normalisation */}
+      {/* Description */}
       {cleanDesc && (
-        <div className="text-sm text-gray-600 dark:text-gray-300 mt-3 space-y-1">
-          {displayLines.map((line, i) => (
-            <p key={i} className={line.startsWith("*") || line.startsWith("•") ? "ml-3" : ""}>
-              {line.startsWith("*") ? "• " + line.replace(/^\*\s*/, "") : line}
-            </p>
-          ))}
+        <div className="mt-3">
+          {formatDescription(displayLines)}
         </div>
       )}
 

@@ -236,7 +236,7 @@ export default function DashboardPage() {
       ) : (
         <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl divide-y dark:divide-gray-700 overflow-hidden">
           {searches.map((search) => (
-            <div key={search.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors group">
+            <div key={search.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 group">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-gray-900 dark:text-white">{search.category}</p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
