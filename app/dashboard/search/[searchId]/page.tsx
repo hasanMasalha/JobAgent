@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useParams } from "next/navigation";
 import JobCard, { Job } from "@/app/dashboard/JobCard";
 import { LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories";
 
@@ -24,8 +24,9 @@ function SkeletonCard() {
   );
 }
 
-export default function SearchResultsPage({ params }: { params: Promise<{ searchId: string }> }) {
-  const { searchId } = use(params);
+export default function SearchResultsPage() {
+  const routeParams = useParams();
+  const searchId = routeParams?.searchId as string;
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState<SearchMeta | null>(null);
