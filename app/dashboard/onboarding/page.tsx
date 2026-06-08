@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { JOB_CATEGORIES, LOCATIONS, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
 
 interface ExistingCV {
   clean_summary: string;
@@ -41,6 +42,13 @@ export default function OnboardingPage() {
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
 
+  // Step 3 — categories
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  // Step 4 — seniority + location preferences
+  const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+
   function toggleWorkMode(mode: string) {
     setWorkModes((prev) =>
       prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]
@@ -51,7 +59,6 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
 
-  // Load existing CV and preferences on mount
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
@@ -74,7 +81,7 @@ export default function OnboardingPage() {
         }
         if (d.google_connected) setGoogleConnected(true);
       })
-      .catch(() => {/* ignore, treat as new user */})
+      .catch(() => {})
       .finally(() => setProfileLoading(false));
   }, []);
 
@@ -88,6 +95,26 @@ export default function OnboardingPage() {
     setTitles(titles.filter((x) => x !== t));
   }
 
+  function toggleCategory(cat: string) {
+    if (selectedCategories.includes(cat)) {
+      setSelectedCategories((prev) => prev.filter((c) => c !== cat));
+    } else if (selectedCategories.length < 4) {
+      setSelectedCategories((prev) => [...prev, cat]);
+    }
+  }
+
+  function toggleSeniority(val: string) {
+    setSelectedSeniorities((prev) =>
+      prev.includes(val) ? prev.filter((s) => s !== val) : [...prev, val]
+    );
+  }
+
+  function toggleLocation(val: string) {
+    setSelectedLocations((prev) =>
+      prev.includes(val) ? prev.filter((l) => l !== val) : [...prev, val]
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -95,7 +122,6 @@ export default function OnboardingPage() {
 
     try {
       if (file) {
-        // New file provided — full CV upload (upserts CV row + re-embeds)
         const form = new FormData();
         form.append("cv", file);
         form.append("titles", JSON.stringify(titles));
@@ -108,7 +134,6 @@ export default function OnboardingPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Upload failed");
       } else {
-        // Returning user, no new file — just update preferences
         const res = await fetch("/api/profile/preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -124,6 +149,24 @@ export default function OnboardingPage() {
         if (!res.ok) throw new Error(data.error ?? "Update failed");
       }
 
+      // Save saved searches for each selected category
+      if (selectedCategories.length > 0) {
+        await Promise.all(
+          selectedCategories.map((category) =>
+            fetch("/api/saved-searches", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                category,
+                keywords: CATEGORY_KEYWORDS[category] ?? [],
+                locations: selectedLocations,
+                seniorities: selectedSeniorities,
+              }),
+            })
+          )
+        );
+      }
+
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -131,6 +174,8 @@ export default function OnboardingPage() {
       setLoading(false);
     }
   }
+
+  const TOTAL_STEPS = 4;
 
   if (profileLoading) {
     return (
@@ -146,12 +191,12 @@ export default function OnboardingPage() {
         <h1 className="text-xl font-semibold">
           {isUpdate ? "Update your profile" : "Set up your profile"}
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Step {step} of 2</p>
+        <p className="text-sm text-gray-500 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
       </div>
 
       {/* Step indicator */}
       <div className="flex gap-2 mb-8">
-        {[1, 2].map((s) => (
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
           <div
             key={s}
             className={`h-1.5 flex-1 rounded-full transition-colors ${
@@ -161,9 +206,9 @@ export default function OnboardingPage() {
         ))}
       </div>
 
+      {/* ── Step 1: CV ── */}
       {step === 1 && (
         <div className="space-y-4">
-          {/* Existing CV preview for returning users */}
           {isUpdate && existingCV && (
             <div className="bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current CV</p>
@@ -188,10 +233,8 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Two-card choice */}
           {cvPath === null && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              {/* Upload card */}
               <button
                 type="button"
                 onClick={() => setCvPath("upload")}
@@ -211,7 +254,6 @@ export default function OnboardingPage() {
                 </span>
               </button>
 
-              {/* Build with AI card */}
               <button
                 type="button"
                 onClick={() => router.push("/dashboard/cv-builder")}
@@ -233,7 +275,6 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Upload form — shown after choosing "Upload" */}
           {cvPath === "upload" && (
             <>
               <button type="button" onClick={() => setCvPath(null)} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
@@ -270,7 +311,6 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {/* For returning users with no path chosen — allow skipping to step 2 */}
           {isUpdate && cvPath === null && (
             <button
               onClick={() => setStep(2)}
@@ -282,39 +322,29 @@ export default function OnboardingPage() {
         </div>
       )}
 
+      {/* ── Step 2: Preferences ── */}
       {step === 2 && (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-5">
           {/* Job titles */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Job titles you&apos;re looking for
-            </label>
+            <label className="block text-sm font-medium mb-1">Job titles you&apos;re looking for</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); addTitle(); }
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
                 placeholder="e.g. Frontend Developer"
                 className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
-              <button
-                type="button"
-                onClick={addTitle}
-                className="bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-500 rounded-md px-3 py-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-500"
-              >
+              <button type="button" onClick={addTitle} className="bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-500 rounded-md px-3 py-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-500">
                 Add
               </button>
             </div>
             {titles.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {titles.map((t) => (
-                  <span
-                    key={t}
-                    className="flex items-center gap-1 bg-black text-white text-xs px-2 py-1 rounded-full"
-                  >
+                  <span key={t} className="flex items-center gap-1 bg-black text-white text-xs px-2 py-1 rounded-full">
                     {t}
                     <button type="button" onClick={() => removeTitle(t)} className="hover:opacity-70">×</button>
                   </span>
@@ -360,11 +390,7 @@ export default function OnboardingPage() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium">Minimum salary</label>
-              <button
-                type="button"
-                onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }}
-                className="text-xs text-gray-400 hover:text-gray-600 underline"
-              >
+              <button type="button" onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }} className="text-xs text-gray-400 hover:text-gray-600 underline">
                 {skipSalary ? "Add salary" : "Skip salary"}
               </button>
             </div>
@@ -377,18 +403,14 @@ export default function OnboardingPage() {
                 className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
               />
             )}
-            {skipSalary && (
-              <p className="text-sm text-gray-400 italic">No minimum salary set</p>
-            )}
+            {skipSalary && <p className="text-sm text-gray-400 italic">No minimum salary set</p>}
           </div>
 
           {/* Google Calendar */}
           <div className="border dark:border-gray-600 rounded-xl p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">Google Calendar</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Get interview reminders added automatically
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Get interview reminders added automatically</p>
             </div>
             {googleConnected ? (
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
@@ -396,31 +418,146 @@ export default function OnboardingPage() {
                 Connected
               </span>
             ) : (
-              <Link
-                href="/api/auth/google"
-                className="text-xs font-semibold bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800"
-              >
+              <Link href="/api/auth/google" className="text-xs font-semibold bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800">
                 Connect
               </Link>
             )}
           </div>
 
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep(1)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={titles.length === 0}
+              onClick={() => setStep(3)}
+              className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 3: Categories ── */}
+      {step === 3 && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">What job are you looking for?</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Pick up to 4 categories
+              <span className="ml-2 font-medium text-gray-700 dark:text-gray-300">
+                {selectedCategories.length}/4 selected
+              </span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {JOB_CATEGORIES.map((cat) => {
+              const isSelected = selectedCategories.includes(cat);
+              const isDisabled = !isSelected && selectedCategories.length >= 4;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => toggleCategory(cat)}
+                  disabled={isDisabled}
+                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    isSelected
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : isDisabled
+                      ? "opacity-40 cursor-not-allowed bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
+                  }`}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep(2)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={selectedCategories.length === 0}
+              onClick={() => setStep(4)}
+              className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
+            >
+              Continue
+            </button>
+          </div>
+          <button type="button" onClick={() => setStep(4)} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">
+            Skip for now →
+          </button>
+        </div>
+      )}
+
+      {/* ── Step 4: Seniority & Location ── */}
+      {step === 4 && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your preferences</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Optional — helps narrow down results</p>
+          </div>
+
+          {/* Seniority */}
+          <div>
+            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">What level are you at?</p>
+            <div className="flex flex-wrap gap-2">
+              {SENIORITY_LEVELS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => toggleSeniority(s.value)}
+                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    selectedSeniorities.includes(s.value)
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">Where do you want to work?</p>
+            <div className="flex flex-wrap gap-2">
+              {LOCATIONS.map((l) => (
+                <button
+                  key={l.value}
+                  type="button"
+                  onClick={() => toggleLocation(l.value)}
+                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    selectedLocations.includes(l.value)
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400"
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="flex-1 border py-2 rounded text-sm hover:bg-gray-50"
-            >
+            <button type="button" onClick={() => setStep(3)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
               Back
             </button>
             <button
               type="submit"
-              disabled={loading || titles.length === 0}
+              disabled={loading}
               className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
             >
-              {loading ? "Saving…" : isUpdate ? "Update CV" : "Save & continue"}
+              {loading ? "Saving…" : isUpdate ? "Save changes" : "Finish setup"}
             </button>
           </div>
         </form>

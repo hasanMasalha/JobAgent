@@ -43,6 +43,7 @@ model User {
   applications     Application[]
   interactions     UserJobInteraction[]
   easy_apply_answers EasyApplyAnswer[]
+  saved_searches   SavedSearch[]
 }
 
 model EasyApplyAnswer {
@@ -122,6 +123,20 @@ model Application {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
+}
+
+model SavedSearch {
+  id          String   @id @default(uuid())
+  user_id     String
+  category    String
+  keywords    String[]
+  locations   String[]
+  seniorities String[]
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, category])
 }
 
 model UserJobInteraction {

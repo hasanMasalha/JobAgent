@@ -44,7 +44,8 @@ function ExtensionBadge() {
 }
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Jobs" },
+  { href: "/dashboard", label: "Home" },
+  { href: "/dashboard/matches", label: "My Matches" },
   { href: "/dashboard/applications", label: "Applications" },
   { href: "/dashboard/saved", label: "Saved" },
   { href: "/dashboard/my-cv", label: "My CV" },
