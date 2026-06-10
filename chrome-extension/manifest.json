@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobAgent DEV",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Local dev build — do not submit to Chrome Web Store.",
   "permissions": [
     "cookies",
@@ -13,9 +13,10 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://www.linkedin.com/*",
+    "https://jobagent.uk/*",
     "http://localhost:3000/*",
-    "https://jobagent.uk/*"
+    "https://www.linkedin.com/*",
+    "https://il.linkedin.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -29,9 +30,9 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:3000/*", "https://jobagent.uk/*"],
+      "matches": ["https://jobagent.uk/*", "http://localhost:3000/*"],
       "js": ["auth-sync.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
   ],
   "action": {
@@ -50,7 +51,9 @@
   "externally_connectable": {
     "matches": [
       "https://jobagent.uk/*",
-      "http://localhost:3000/*"
+      "http://localhost:3000/*",
+      "https://www.linkedin.com/*",
+      "https://il.linkedin.com/*"
     ]
   }
 }
