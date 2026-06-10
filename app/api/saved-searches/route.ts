@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const { category, locations = [], seniorities = [] } = body
+  const { category, keywords: bodyKeywords, locations = [], seniorities = [] } = body
   if (!category) return NextResponse.json({ error: "category required" }, { status: 400 })
 
-  const keywords = CATEGORY_KEYWORDS[category] ?? []
+  const keywords = bodyKeywords ?? CATEGORY_KEYWORDS[category] ?? []
 
   const search = await db.savedSearch.upsert({
     where: { user_id_category: { user_id: user.id, category } },
