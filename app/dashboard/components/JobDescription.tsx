@@ -12,35 +12,40 @@ function cleanDescription(text: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/^-{3,}$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]+/g, " ")
+    .replace(/^[-]{3,}$/gm, "")
     .trim()
 }
 
-function FormattedLines({ lines }: { lines: string[] }) {
+function parseDescription(text: string): string[] {
+  const cleaned = cleanDescription(text)
+  if (!cleaned) return []
+
+  return cleaned
+    .split(/\n+/)
+    .flatMap((line) => {
+      line = line.trim()
+      if (!line) return []
+
+      if (line.length > 200) {
+        return line
+          .split(/(?=(?:What |About |Key |Job |Role |How |Why |Requirements?:|Responsibilities?:|Qualifications?:|Benefits?:|Nice to have:|Note:|Skills?:|Experience:|Education:|Overview:|Summary:|Description:))/i)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      }
+      return [line]
+    })
+    .filter((s) => s.length > 0)
+}
+
+function isHeader(line: string): boolean {
   return (
-    <>
-      {lines.map((line, i) => {
-        if (line.match(/^[*•\-]\s/)) {
-          return (
-            <div key={i} className="flex gap-2 items-start">
-              <span className="text-violet-400 flex-shrink-0">•</span>
-              <span>{line.replace(/^[*•\-]\s*/, "")}</span>
-            </div>
-          )
-        }
-        if (line.endsWith(":") && line.length < 60) {
-          return (
-            <p key={i} className="font-semibold text-gray-800 dark:text-gray-200 mt-2 first:mt-0">
-              {line}
-            </p>
-          )
-        }
-        return <p key={i}>{line}</p>
-      })}
-    </>
+    (line.endsWith(":") && line.length < 80 && !line.includes(".")) ||
+    (line === line.toUpperCase() && line.length > 3 && line.length < 60 && /[A-Z]/.test(line))
   )
+}
+
+function isBullet(line: string): boolean {
+  return /^[*•\-–]\s/.test(line) || /^\d+\.\s/.test(line)
 }
 
 export function JobDescription({ description }: { description: string }) {
@@ -49,24 +54,38 @@ export function JobDescription({ description }: { description: string }) {
   const cleaned = cleanDescription(description || "")
   if (!cleaned) return null
 
-  const lines = cleaned
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-
-  const isTruncated = lines.length > 3 || cleaned.length > 200
+  const isTruncated = cleaned.length > 300
 
   return (
     <div className="mt-2">
       {!expanded ? (
-        // Collapsed: plain text so line-clamp-3 works reliably on text nodes
-        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 leading-relaxed">
           {cleaned}
         </p>
       ) : (
-        // Expanded: full formatted JSX with bullets and section headers
-        <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-          <FormattedLines lines={lines} />
+        <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2 leading-relaxed">
+          {parseDescription(cleaned).map((line, i) => {
+            if (isHeader(line)) {
+              return (
+                <p key={i} className="font-semibold text-gray-800 dark:text-gray-200 mt-3 first:mt-0 text-sm">
+                  {line}
+                </p>
+              )
+            }
+            if (isBullet(line)) {
+              return (
+                <div key={i} className="flex gap-2 items-start ml-1">
+                  <span className="text-violet-500 flex-shrink-0 mt-0.5 text-xs">•</span>
+                  <span>{line.replace(/^[*•\-–]\s*/, "").replace(/^\d+\.\s*/, "")}</span>
+                </div>
+              )
+            }
+            return (
+              <p key={i} className="text-gray-600 dark:text-gray-400">
+                {line}
+              </p>
+            )
+          })}
         </div>
       )}
 
@@ -78,7 +97,7 @@ export function JobDescription({ description }: { description: string }) {
           }}
           className="text-violet-600 dark:text-violet-400 text-xs mt-1.5 hover:underline font-medium"
         >
-          {expanded ? "Show less ↑" : "Show more ↓"}
+          {expanded ? "↑ Show less" : "↓ Show more"}
         </button>
       )}
     </div>
