@@ -9,6 +9,27 @@ signal.id = 'jobagent-extension-installed'
 signal.style.display = 'none'
 document.documentElement.appendChild(signal)
 
+function randomDelay(min = 300, max = 1500) {
+  const ms = Math.floor(Math.random() * (max - min) + min)
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function isLinkedInBlocking() {
+  const captcha = document.querySelector(
+    '[id*="captcha"], [class*="captcha"], [id*="challenge"], .challenge-page'
+  )
+  if (captcha) return 'captcha'
+  if (document.title.includes('Security Verification') ||
+      document.title.includes('Are you a robot')) {
+    return 'verification'
+  }
+  if (document.querySelector('.error-container') &&
+      document.body.innerText.includes('unusual activity')) {
+    return 'rate_limit'
+  }
+  return null
+}
+
 // Check if this job has a pending application from JobAgent.
 // Data is pushed into extension storage by the app at confirm-time to avoid
 // SameSite cookie restrictions that block cross-site API fetches from linkedin.com.
@@ -18,8 +39,16 @@ async function checkPendingApplication() {
   const url = window.location.href
   console.log('JobAgent: checking pending application for:', url)
 
+  const blockType = await isLinkedInBlocking()
+  if (blockType) {
+    console.log(`[JobAgent] LinkedIn blocking detected: ${blockType}`)
+    chrome.runtime.sendMessage({ type: 'LINKEDIN_BLOCKED', blockType })
+    chrome.storage.local.set({ isProcessingQueue: false })
+    return
+  }
+
   for (let attempt = 0; attempt < 5; attempt++) {
-    await sleep(2000)
+    await randomDelay(1500, 3000)
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -66,7 +95,7 @@ async function startEasyApply(application) {
     return
   }
 
-  await sleep(1000)
+  await randomDelay(800, 1500)
   console.log('JobAgent: filling form')
   await fillApplicationForm(application, panel)
 }
@@ -76,7 +105,7 @@ async function waitForEasyApplyButton(timeout) {
   while (Date.now() - start < timeout) {
     const el = findEasyApplyElement()
     if (el) return el
-    await sleep(500)
+    await randomDelay(300, 700)
   }
   return null
 }
@@ -160,7 +189,7 @@ async function fillApplicationForm(application, panel) {
   const maxSteps = 10
 
   while (step < maxSteps) {
-    await sleep(1500)
+    await randomDelay(800, 2000)
 
     const currentPanel = getEasyApplyPanel() || scope
 
@@ -258,7 +287,7 @@ async function fillCurrentStep(scope, application) {
 
     if (answer) {
       console.log('JobAgent: filling input:', label, '→', answer.substring(0, 30))
-      setInputValue(input, answer)
+      await humanType(input, answer)
     }
   }
 
@@ -271,7 +300,7 @@ async function fillCurrentStep(scope, application) {
       || getYearsAnswer(label, application.skills || [])
       || application.years_of_experience
       || '2'
-    setInputValue(input, answer)
+    await humanType(input, String(answer))
   }
 
   // Fieldsets with real radio inputs (work auth, sponsorship, yes/no questions)
@@ -640,6 +669,32 @@ function setInputValue(input, value) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+async function humanType(element, text) {
+  element.focus()
+  await randomDelay(100, 300)
+
+  // Use native setter so React's fiber reconciler sees the value change
+  const proto = element instanceof HTMLTextAreaElement
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype
+  const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+  const setVal = (v) => nativeSetter ? nativeSetter.call(element, v) : (element.value = v)
+
+  setVal('')
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  await randomDelay(100, 200)
+
+  for (const char of text) {
+    setVal(element.value + char)
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+    element.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }))
+    await randomDelay(50, 150)
+  }
+
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+  await randomDelay(200, 500)
+}
+
 // All network calls go through background.js — content scripts cannot make
 // cross-origin fetches on pages with strict CSP (LinkedIn blocks them).
 async function reportResult(applicationId, status) {
@@ -700,7 +755,15 @@ async function handleApplyFlowPage() {
   const url = window.location.href
   console.log('JobAgent: apply page URL:', url)
 
-  await sleep(3000) // wait for SDUI page to render
+  await randomDelay(2000, 4000) // wait for SDUI page to render
+
+  const blockType = await isLinkedInBlocking()
+  if (blockType) {
+    console.log(`[JobAgent] LinkedIn blocking detected: ${blockType}`)
+    chrome.runtime.sendMessage({ type: 'LINKEDIN_BLOCKED', blockType })
+    chrome.storage.local.set({ isProcessingQueue: false })
+    return
+  }
 
   const stored = await chrome.storage.local.get(['pendingApplyData'])
   console.log('JobAgent: stored data:', stored.pendingApplyData)
