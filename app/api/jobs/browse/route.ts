@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       jobs: jobs.map((j: (typeof jobs)[number]) => ({
         ...j,
-        description: j.description?.slice(0, 300) ?? "",
+        description: j.description ?? "",
         apply_type: j.apply_type ?? detectApplyType({ url: j.url, source: j.source, description: j.description ?? "" }),
         recruiter_email: j.recruiter_email ?? extractRecruiterEmail(j.description ?? ""),
       })),
