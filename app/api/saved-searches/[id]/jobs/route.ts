@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase.server"
 import { db } from "@/lib/db"
-import { LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories"
+import { LOCATIONS } from "@/lib/job-categories"
+
+const JUNIOR_OR_BELOW = ['student', 'entry', 'junior']
+const SENIOR_OR_ABOVE = ['senior', 'lead', 'director']
 
 type JobRow = {
   id: string
@@ -34,11 +37,6 @@ async function queryJobs(
     return loc ? loc.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${v.toLowerCase()}%`]
   })
 
-  const senPatterns: string[] = seniorityValues.flatMap((v) => {
-    const sen = SENIORITY_LEVELS.find((s) => s.value === v)
-    return sen ? sen.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${v.toLowerCase()}%`]
-  })
-
   if (kwPatterns.length === 0) {
     return { jobs: [], total: 0 }
   }
@@ -50,21 +48,27 @@ async function queryJobs(
     ? `ARRAY[${locPatterns.map(() => `$${paramIndex++}`).join(",")}]`
     : null
 
-  const senArray = senPatterns.length
-    ? `ARRAY[${senPatterns.map(() => `$${paramIndex++}`).join(",")}]`
-    : null
-
   const locClause = locArray
     ? `AND LOWER(COALESCE(j.location,'')) LIKE ANY(${locArray})`
     : ""
-  const senClause = senArray
-    ? `AND (LOWER(j.title) LIKE ANY(${senArray}) OR LOWER(j.description) LIKE ANY(${senArray}))`
+
+  // Seniority: hard-exclude senior titles when only junior/entry/student is selected
+  const isJuniorSearch = seniorityValues.some((s) => JUNIOR_OR_BELOW.includes(s))
+  const hasSeniorSelected = seniorityValues.some((s) => SENIOR_OR_ABOVE.includes(s))
+  const excludeSeniorTitles = isJuniorSearch && !hasSeniorSelected
+
+  const seniorTitleClause = excludeSeniorTitles
+    ? `AND LOWER(j.title) NOT SIMILAR TO '%(senior|sr.|principal|architect|staff|lead|manager|director|vp |head of|chief|cto|coo|cfo|distinguished|fellow|group manager|r&d manager|engineering manager)%'`
+    : ""
+
+  const yearsClause = excludeSeniorTitles
+    ? `AND NOT (j.description ~* '\\y([5-9]|[1-9][0-9])\\+?\\s*years?\\s*(of\\s*)?(experience|exp)\\y')`
     : ""
 
   const offsetParam = `$${paramIndex++}`
   const limitParam = `$${paramIndex++}`
 
-  const allParams: unknown[] = [...kwPatterns, ...locPatterns, ...senPatterns, offset, limit]
+  const allParams: unknown[] = [...kwPatterns, ...locPatterns, offset, limit]
 
   const rows = await db.$queryRawUnsafe<JobRow[]>(
     `SELECT j.id, j.title, j.company, j.description, j.location, j.url,
@@ -77,7 +81,8 @@ async function queryJobs(
          OR LOWER(j.description) LIKE ANY(${kwArray})
        )
        ${locClause}
-       ${senClause}
+       ${seniorTitleClause}
+       ${yearsClause}
      ORDER BY j.scraped_at DESC
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     ...allParams
