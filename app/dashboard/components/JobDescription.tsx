@@ -16,36 +16,59 @@ function cleanDescription(text: string): string {
     .trim()
 }
 
-function parseDescription(text: string): string[] {
-  const cleaned = cleanDescription(text)
-  if (!cleaned) return []
+type Segment = { type: "header" | "bullet" | "paragraph"; content: string }
 
-  return cleaned
+function parseDescription(text: string): Segment[] {
+  if (!text) return []
+
+  // STEP 1: Insert newlines before known section headers
+  const withBreaks = text
+    .replace(/\s+(What you('ll| will) (do|be doing)[:\s])/gi, "\n\n$1")
+    .replace(/\s+(What we('re| are) looking for[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Requirements?[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Responsibilities?[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Qualifications?[:\s])/gi, "\n\n$1")
+    .replace(/\s+(About (us|the role|the team|the position)[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Key responsibilities[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Nice to have[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Bonus points?[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Benefits?[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Why join us[:\s])/gi, "\n\n$1")
+    .replace(/\s+(How you('ll| will)[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Your (role|responsibilities)[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Job (description|summary)[:\s])/gi, "\n\n$1")
+    .replace(/\s+(Overview[:\s])/gi, "\n\n$1")
+    .replace(/\s+(מה תעשה|דרישות|תחומי אחריות|אודות|יתרון)[:\s]/gi, "\n\n$1")
+
+  // STEP 2: Split inline numbered lists and sentence-boundary bullets
+  const withListBreaks = withBreaks
+    .replace(/\s+(\d+\.\s+[A-Z])/g, "\n$1")
+    .replace(/\.\s+([A-Z][a-z]+(?:ing|ion|ment|ure|ity|ance|ence)\s)/g, ".\n$1")
+
+  // STEP 3: Split into lines and classify
+  const lines = withListBreaks
     .split(/\n+/)
-    .flatMap((line) => {
-      line = line.trim()
-      if (!line) return []
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
 
-      if (line.length > 200) {
-        return line
-          .split(/(?=(?:What |About |Key |Job |Role |How |Why |Requirements?:|Responsibilities?:|Qualifications?:|Benefits?:|Nice to have:|Note:|Skills?:|Experience:|Education:|Overview:|Summary:|Description:))/i)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0)
+  return lines.map((line): Segment => {
+    if (
+      (line.endsWith(":") && line.length < 80 && !line.match(/\.\s/)) ||
+      (line.match(/^(What|About|Key|How|Why|Requirements?|Responsibilities?|Qualifications?|Benefits?|Bonus|Overview|Summary)/i) &&
+        line.length < 80)
+    ) {
+      return { type: "header", content: line }
+    }
+
+    if (line.match(/^[*•\-–]\s/) || line.match(/^\d+\.\s/)) {
+      return {
+        type: "bullet",
+        content: line.replace(/^[*•\-–]\s*/, "").replace(/^\d+\.\s*/, ""),
       }
-      return [line]
-    })
-    .filter((s) => s.length > 0)
-}
+    }
 
-function isHeader(line: string): boolean {
-  return (
-    (line.endsWith(":") && line.length < 80 && !line.includes(".")) ||
-    (line === line.toUpperCase() && line.length > 3 && line.length < 60 && /[A-Z]/.test(line))
-  )
-}
-
-function isBullet(line: string): boolean {
-  return /^[*•\-–]\s/.test(line) || /^\d+\.\s/.test(line)
+    return { type: "paragraph", content: line }
+  })
 }
 
 export function JobDescription({ description }: { description: string }) {
@@ -63,26 +86,26 @@ export function JobDescription({ description }: { description: string }) {
           {cleaned}
         </p>
       ) : (
-        <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2 leading-relaxed">
-          {parseDescription(cleaned).map((line, i) => {
-            if (isHeader(line)) {
+        <div className="space-y-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-1">
+          {parseDescription(cleaned).map((item, i) => {
+            if (item.type === "header") {
               return (
-                <p key={i} className="font-semibold text-gray-800 dark:text-gray-200 mt-3 first:mt-0 text-sm">
-                  {line}
+                <p key={i} className="font-bold text-gray-900 dark:text-gray-100 mt-4 first:mt-0 text-sm uppercase tracking-wide">
+                  {item.content}
                 </p>
               )
             }
-            if (isBullet(line)) {
+            if (item.type === "bullet") {
               return (
-                <div key={i} className="flex gap-2 items-start ml-1">
-                  <span className="text-violet-500 flex-shrink-0 mt-0.5 text-xs">•</span>
-                  <span>{line.replace(/^[*•\-–]\s*/, "").replace(/^\d+\.\s*/, "")}</span>
+                <div key={i} className="flex gap-2 items-start ml-2">
+                  <span className="text-violet-500 flex-shrink-0 mt-1 text-xs">•</span>
+                  <span className="text-gray-600 dark:text-gray-400">{item.content}</span>
                 </div>
               )
             }
             return (
               <p key={i} className="text-gray-600 dark:text-gray-400">
-                {line}
+                {item.content}
               </p>
             )
           })}
