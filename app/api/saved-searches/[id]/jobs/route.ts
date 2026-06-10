@@ -3,8 +3,8 @@ import { createServerClient } from "@/lib/supabase.server"
 import { db } from "@/lib/db"
 import { LOCATIONS } from "@/lib/job-categories"
 
-const JUNIOR_OR_BELOW = ['student', 'entry', 'junior']
-const SENIOR_OR_ABOVE = ['senior', 'lead', 'director']
+const JUNIOR_OR_BELOW = ['student', 'entry level', 'entry', 'junior']
+const SENIOR_OR_ABOVE = ['senior', 'lead', 'staff', 'director', 'team lead', 'director+']
 
 type JobRow = {
   id: string
@@ -18,83 +18,103 @@ type JobRow = {
   salary_min: number | null
   salary_max: number | null
   scraped_at: Date
-  total: bigint
 }
 
 async function queryJobs(
   keywords: string[],
   locationValues: string[],
-  seniorityValues: string[],
+  seniorities: string[],
   page: number
 ) {
   const limit = 20
   const offset = (page - 1) * limit
 
-  const kwPatterns = keywords.map((k) => `%${k.toLowerCase()}%`)
+  if (keywords.length === 0) return { jobs: [], total: 0 }
 
-  const locPatterns: string[] = locationValues.flatMap((v) => {
+  const isJuniorOnlySearch =
+    seniorities.length > 0 &&
+    seniorities.every((s) => JUNIOR_OR_BELOW.some((j) => s.includes(j))) &&
+    !seniorities.some((s) => SENIOR_OR_ABOVE.some((sr) => s.includes(sr)))
+
+  const kwConditions = keywords
+    .map((k) => {
+      const safe = k.toLowerCase().replace(/'/g, "''")
+      return `(LOWER(j.title) LIKE '%${safe}%' OR LOWER(j.description) LIKE '%${safe}%')`
+    })
+    .join(" OR ")
+
+  const locConditions = locationValues.flatMap((v) => {
     const loc = LOCATIONS.find((l) => l.value === v)
-    return loc ? loc.keywords.map((k) => `%${k.toLowerCase()}%`) : [`%${v.toLowerCase()}%`]
+    return loc
+      ? loc.keywords.map((k) => {
+          const safe = k.toLowerCase().replace(/'/g, "''")
+          return `LOWER(COALESCE(j.location,'')) LIKE '%${safe}%'`
+        })
+      : [`LOWER(COALESCE(j.location,'')) LIKE '%${v.toLowerCase().replace(/'/g, "''")}%'`]
   })
 
-  if (kwPatterns.length === 0) {
-    return { jobs: [], total: 0 }
+  const locClause = locConditions.length > 0
+    ? `AND (${locConditions.join(" OR ")})`
+    : ""
+
+  const seniorityExclusion = isJuniorOnlySearch
+    ? `AND LOWER(j.title) NOT LIKE '%senior%'
+       AND LOWER(j.title) NOT LIKE '%sr.%'
+       AND LOWER(j.title) NOT LIKE '%principal%'
+       AND LOWER(j.title) NOT LIKE '%architect%'
+       AND LOWER(j.title) NOT LIKE '% lead%'
+       AND LOWER(j.title) NOT LIKE '%tech lead%'
+       AND LOWER(j.title) NOT LIKE '%team lead%'
+       AND LOWER(j.title) NOT LIKE '%manager%'
+       AND LOWER(j.title) NOT LIKE '%director%'
+       AND LOWER(j.title) NOT LIKE '%staff %'
+       AND LOWER(j.title) NOT LIKE '%head of%'
+       AND LOWER(j.title) NOT LIKE '%vp %'
+       AND LOWER(j.title) NOT LIKE '%chief%'
+       AND LOWER(j.title) NOT LIKE '% ii%'
+       AND LOWER(j.title) NOT LIKE '% iii%'
+       AND LOWER(j.title) NOT LIKE '% iv%'
+       AND LOWER(j.title) NOT LIKE '%scientist%'
+       AND NOT (j.description ~* '\\y([5-9]|[1-9][0-9])\\+?\\s*years?\\s*(of\\s*)?(experience|exp)\\y')`
+    : ""
+
+  const whereClause = `
+    WHERE j.is_active = true
+      AND j.url IS NOT NULL
+      AND (${kwConditions})
+      ${locClause}
+      ${seniorityExclusion}
+  `
+
+  const sql = `
+    SELECT j.id, j.title, j.company, j.description, j.location, j.url,
+           j.source, j.apply_type, j.salary_min, j.salary_max, j.scraped_at
+    FROM "Job" j
+    ${whereClause}
+    ORDER BY j.scraped_at DESC
+    LIMIT ${limit} OFFSET ${offset}
+  `
+
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM "Job" j
+    ${whereClause}
+  `
+
+  const [jobs, countResult] = await Promise.all([
+    db.$queryRawUnsafe<JobRow[]>(sql),
+    db.$queryRawUnsafe<{ total: bigint }[]>(countSql),
+  ])
+
+  const total = Number(countResult[0]?.total ?? 0)
+
+  return {
+    jobs: jobs.map((j) => ({
+      ...j,
+      scraped_at: j.scraped_at.toISOString(),
+    })),
+    total,
   }
-
-  const kwArray = `ARRAY[${kwPatterns.map((_, i) => `$${i + 1}`).join(",")}]`
-
-  let paramIndex = kwPatterns.length + 1
-  const locArray = locPatterns.length
-    ? `ARRAY[${locPatterns.map(() => `$${paramIndex++}`).join(",")}]`
-    : null
-
-  const locClause = locArray
-    ? `AND LOWER(COALESCE(j.location,'')) LIKE ANY(${locArray})`
-    : ""
-
-  // Seniority: hard-exclude senior titles when only junior/entry/student is selected
-  const isJuniorSearch = seniorityValues.some((s) => JUNIOR_OR_BELOW.includes(s))
-  const hasSeniorSelected = seniorityValues.some((s) => SENIOR_OR_ABOVE.includes(s))
-  const excludeSeniorTitles = isJuniorSearch && !hasSeniorSelected
-
-  const seniorTitleClause = excludeSeniorTitles
-    ? `AND LOWER(j.title) NOT SIMILAR TO '%(senior|sr.|principal|architect|staff|lead|manager|director|vp |head of|chief|cto|coo|cfo|distinguished|fellow|group manager|r&d manager|engineering manager)%'`
-    : ""
-
-  const yearsClause = excludeSeniorTitles
-    ? `AND NOT (j.description ~* '\\y([5-9]|[1-9][0-9])\\+?\\s*years?\\s*(of\\s*)?(experience|exp)\\y')`
-    : ""
-
-  const offsetParam = `$${paramIndex++}`
-  const limitParam = `$${paramIndex++}`
-
-  const allParams: unknown[] = [...kwPatterns, ...locPatterns, offset, limit]
-
-  const rows = await db.$queryRawUnsafe<JobRow[]>(
-    `SELECT j.id, j.title, j.company, j.description, j.location, j.url,
-            j.source, j.apply_type, j.salary_min, j.salary_max, j.scraped_at,
-            COUNT(*) OVER() AS total
-     FROM "Job" j
-     WHERE j.is_active = true
-       AND (
-         LOWER(j.title) LIKE ANY(${kwArray})
-         OR LOWER(j.description) LIKE ANY(${kwArray})
-       )
-       ${locClause}
-       ${seniorTitleClause}
-       ${yearsClause}
-     ORDER BY j.scraped_at DESC
-     LIMIT ${limitParam} OFFSET ${offsetParam}`,
-    ...allParams
-  )
-
-  const total = rows[0] ? Number(rows[0].total) : 0
-  const jobs = rows.map(({ total: _t, ...j }) => ({
-    ...j,
-    scraped_at: j.scraped_at.toISOString(),
-  }))
-
-  return { jobs, total }
 }
 
 export async function GET(
