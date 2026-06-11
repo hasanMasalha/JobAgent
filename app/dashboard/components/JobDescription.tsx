@@ -86,11 +86,11 @@ export function JobDescription({ description }: { description: string }) {
           {cleaned}
         </p>
       ) : (
-        <div className="space-y-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-1">
+        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-2">
           {parseDescription(cleaned).map((item, i) => {
             if (item.type === "header") {
               return (
-                <p key={i} className="font-bold text-gray-900 dark:text-gray-100 mt-4 first:mt-0 text-sm uppercase tracking-wide">
+                <p key={i} className="font-bold text-gray-900 dark:text-gray-100 mt-3 first:mt-0 text-xs uppercase tracking-wide">
                   {item.content}
                 </p>
               )
@@ -98,13 +98,13 @@ export function JobDescription({ description }: { description: string }) {
             if (item.type === "bullet") {
               return (
                 <div key={i} className="flex gap-2 items-start ml-2">
-                  <span className="text-violet-500 flex-shrink-0 mt-1 text-xs">•</span>
-                  <span className="text-gray-600 dark:text-gray-400">{item.content}</span>
+                  <span className="text-violet-500 flex-shrink-0 mt-0.5 text-xs">•</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">{item.content}</span>
                 </div>
               )
             }
             return (
-              <p key={i} className="text-gray-600 dark:text-gray-400">
+              <p key={i} className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                 {item.content}
               </p>
             )
