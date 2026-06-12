@@ -6,6 +6,13 @@ export async function GET() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
+  console.log('[google-calendar-auth]', {
+    hasClientId: !!clientId,
+    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    hasRedirectUri: !!redirectUri,
+    redirectUri,
+  });
+
   if (!clientId || !redirectUri) {
     // Credentials not configured — send back to profile with a clear error
     return NextResponse.redirect(

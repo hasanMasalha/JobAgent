@@ -30,6 +30,12 @@ export async function GET() {
     } catch { /* ignore — email is best-effort */ }
   }
 
+  console.log('[google-calendar-status]', {
+    hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    hasRedirectUri: !!process.env.GOOGLE_REDIRECT_URI,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI,
+  });
   const configured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REDIRECT_URI);
   return NextResponse.json({ connected, email, configured });
 }
