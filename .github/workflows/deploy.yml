@@ -181,6 +181,19 @@ jobs:
               screenshots:
             COMPOSE
 
+            # Inject Google Calendar secrets into .env
+            for entry in \
+              "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
+              "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}"; do
+              key="${entry%%=*}"
+              if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
+                sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env
+              else
+                echo "${entry}" >> /home/ubuntu/jobagent/.env
+              fi
+            done
+
             # Start containers
             cd /home/ubuntu/jobagent
             docker-compose down || true
