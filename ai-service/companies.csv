@@ -2,14 +2,14 @@ name,careers_url,ats_type,slug,last_crawled,active
 Monday.com, https://monday.com/careers,comeet,41.00B:14B52C52C67790D3E1296BA37C20,2026-04-25,true
 Payoneer, https://careers.payoneer.com/,greenhouse,payoneer,2026-04-26,true
 Wix, https://careers.wix.com/,html,,2026-04-26,true
-Fiverr, https://www.fiverr.com/jobs,html,,2026-04-26,false
+Fiverr, https://jobs.ashbyhq.com/fiverr,html,,2026-06-16,true
 eToro, https://www.etoro.com/about/careers/,html,,2026-04-26,true
 Amdocs, https://www.amdocs.com/careers,html,,2026-04-26,true
 Check Point, https://careers.checkpoint.com/,html,,2026-04-26,true
 Nice Systems, https://www.nice.com/careers,html,,2026-04-26,true
 Nayax, https://www.nayax.com/careers/,html,,2026-04-26,true
 Wiz, https://www.wiz.io/careers,greenhouse,wizinc,2026-04-25,true
-Papaya Global, https://www.papayaglobal.com/careers/,html,,2026-04-26,true
+Papaya Global, https://www.papayaglobal.com/careers/,greenhouse,papaya,2026-06-16,true
 Lightricks, https://careers.lightricks.com/,greenhouse,lightricks,2026-04-25,true
 Outbrain, https://www.outbrain.com/careers/,html,,2026-04-26,true
 Taboola, https://www.taboola.com/careers,greenhouse,taboola,2026-04-25,true
@@ -147,3 +147,14 @@ One1, https://www.one1.co.il/careers/,html,,2026-04-26,true
 Malam Team, https://www.malamteam.com/careers/,html,,2026-04-26,true
 Abra, https://www.abra-it.com/careers/,html,,2026-04-26,true
 Commit, https://www.commit.co.il/careers/,html,,2026-04-26,true
+Axonius, https://www.axonius.com/company/careers/,greenhouse,axonius,2026-06-16,true
+Cymulate, https://cymulate.com/careers/,greenhouse,cymulate,2026-06-16,true
+Lusha, https://jobs.ashbyhq.com/lusha,html,,2026-06-16,true
+Sentra, https://jobs.ashbyhq.com/sentra,html,,2026-06-16,true
+Classiq, https://jobs.ashbyhq.com/classiq,html,,2026-06-16,true
+Incredibuild, https://jobs.ashbyhq.com/incredibuild,html,,2026-06-16,true
+Cloudinary, https://jobs.ashbyhq.com/cloudinary,html,,2026-06-16,true
+Varonis, https://jobs.ashbyhq.com/varonis,html,,2026-06-16,true
+Nuvei, https://jobs.ashbyhq.com/nuvei,html,,2026-06-16,true
+Overwolf, https://jobs.ashbyhq.com/overwolf,html,,2026-06-16,true
+Illusive Networks, https://jobs.ashbyhq.com/illusive,html,,2026-06-16,true
