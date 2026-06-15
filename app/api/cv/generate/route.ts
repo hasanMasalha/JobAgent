@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     // Generate CV text with Claude Sonnet
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 1500,
       messages: [{ role: "user", content: buildPrompt(formData) }],
     });
