@@ -51,6 +51,26 @@ def _detect_apply_type(job: dict) -> str:
     return "external"
 
 
+def _detect_ats(url: str) -> str | None:
+    """Detect ATS platform from job URL for API-submission routing."""
+    if not url:
+        return None
+    u = url.lower()
+    if "greenhouse.io" in u:
+        return "greenhouse"
+    if "lever.co" in u:
+        return "lever"
+    if "workable.com" in u:
+        return "workable"
+    if "bamboohr.com" in u:
+        return "bamboohr"
+    if "comeet.com" in u:
+        return "comeet"
+    if "teamtailor.com" in u:
+        return "teamtailor"
+    return None
+
+
 @router.post("/scrape-and-store")
 async def scrape_and_store():
     jobs = await scrape_israel_jobs()
@@ -87,15 +107,16 @@ async def scrape_and_store():
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, apply_type, scraped_at)
+                                   embedding, apply_type, ats_platform, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, $10, now())
+                        $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
-                    SET description = EXCLUDED.description,
-                        embedding    = EXCLUDED.embedding,
-                        apply_type   = EXCLUDED.apply_type,
-                        scraped_at   = now()
+                    SET description   = EXCLUDED.description,
+                        embedding     = EXCLUDED.embedding,
+                        apply_type    = EXCLUDED.apply_type,
+                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                        scraped_at    = now()
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
@@ -109,6 +130,7 @@ async def scrape_and_store():
                 job["salary_max"],
                 embedding_str,
                 _detect_apply_type(job),
+                _detect_ats(job.get("url", "")),
             )
             if row is None:
                 pass  # conflict but description was already long enough — skip
@@ -263,15 +285,16 @@ async def scrape_and_store_company_careers():
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
                                    url, source, salary_min, salary_max,
-                                   embedding, apply_type, scraped_at)
+                                   embedding, apply_type, ats_platform, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
                         $5, $6, $7, $8,
-                        $9::vector, $10, now())
+                        $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
-                    SET description = EXCLUDED.description,
-                        embedding    = EXCLUDED.embedding,
-                        apply_type   = EXCLUDED.apply_type,
-                        scraped_at   = now()
+                    SET description   = EXCLUDED.description,
+                        embedding     = EXCLUDED.embedding,
+                        apply_type    = EXCLUDED.apply_type,
+                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                        scraped_at    = now()
                     WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
@@ -285,6 +308,7 @@ async def scrape_and_store_company_careers():
                 job.get("salary_max"),
                 embedding_str,
                 _detect_apply_type(job),
+                _detect_ats(job.get("url", "")),
             )
             if row is None:
                 pass

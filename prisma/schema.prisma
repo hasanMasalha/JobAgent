@@ -88,6 +88,7 @@ model Job {
   scraped_at      DateTime                    @default(now())
   apply_type        String?                     @default("external")
   recruiter_email   String?
+  ats_platform      String?
   is_active         Boolean                     @default(true)
   last_status_check DateTime?
 

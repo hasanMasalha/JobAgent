@@ -24,6 +24,17 @@ function _detectExtension(): Promise<boolean> {
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched" | "applying_background";
 
+const ATS_PLATFORMS = ["greenhouse", "lever", "workable"] as const;
+type ATSPlatform = (typeof ATS_PLATFORMS)[number];
+
+function detectATS(url: string): ATSPlatform | null {
+  const u = (url ?? "").toLowerCase();
+  if (u.includes("greenhouse.io")) return "greenhouse";
+  if (u.includes("lever.co")) return "lever";
+  if (u.includes("workable.com")) return "workable";
+  return null;
+}
+
 interface PrepareResult {
   application_id: string;
   cover_letter: string;
@@ -106,6 +117,37 @@ export default function ApplyPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
     }).catch(() => null);
+
+    // ATS API submission — Greenhouse, Lever, Workable
+    const atsPlatform = detectATS(data.job_url);
+    if (atsPlatform) {
+      setStage("submitting");
+      try {
+        const res = await fetch("/api/apply/ats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId,
+            applicationId: data.application_id,
+            coverLetter,
+          }),
+        });
+        const json = await res.json() as { success?: boolean; error?: string; ats?: string };
+        if (!res.ok || !json.success) {
+          throw new Error(json.error ?? "ATS submission failed");
+        }
+        const atsName = atsPlatform.charAt(0).toUpperCase() + atsPlatform.slice(1);
+        setSubmitResult({ status: "applied", message: `Application submitted directly to ${atsName}!` });
+        showToast("Application submitted!", "success");
+        setTimeout(() => router.push("/dashboard/applications"), 2000);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "ATS submission failed";
+        setError(msg);
+        showToast(msg, "error");
+        setStage("error");
+      }
+      return;
+    }
 
     // For LinkedIn jobs use the extension flow — always proceed regardless of
     // detectExtension() result (service worker can be sleeping and fail the ping)

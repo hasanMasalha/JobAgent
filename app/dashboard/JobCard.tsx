@@ -52,7 +52,21 @@ interface Props {
   showSource?: boolean;
 }
 
-function ApplyTypeBadge({ type }: { type: string }) {
+const ATS_URL_PATTERNS = ["greenhouse.io", "lever.co", "workable.com"] as const;
+function isATSJob(url?: string): boolean {
+  return ATS_URL_PATTERNS.some((p) => (url ?? "").toLowerCase().includes(p));
+}
+
+function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
+  if (type === "auto" && isATSJob(url))
+    return (
+      <span
+        title="JobAgent will submit your application directly to the company ATS"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+      >
+        🎯 Direct Apply
+      </span>
+    );
   if (type === "extension")
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -180,7 +194,7 @@ export default function JobCard({
               {job.location ? ` · ${job.location}` : ""}
             </p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              {job.apply_type && <ApplyTypeBadge type={job.apply_type} />}
+              {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
               {showSource && job.source && <SourcePill source={job.source} />}
             </div>
             {salary && (
