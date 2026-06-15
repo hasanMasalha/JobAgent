@@ -5,8 +5,22 @@ import json
 import re
 
 import httpx
+from bs4 import BeautifulSoup
 
 CSV_PATH = "companies.csv"
+
+
+def _html_to_text(text: str) -> str:
+    """Convert HTML to structured plain text preserving bullets and sections."""
+    if not text:
+        return ""
+    soup = BeautifulSoup(text, "html.parser")
+    for li in soup.find_all("li"):
+        li.insert_before("\n• ")
+    for tag in soup.find_all(["p", "div", "h1", "h2", "h3", "h4", "br"]):
+        tag.append("\n")
+    result = soup.get_text(separator="\n")
+    return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 _NAME_ALIASES = ('Company', 'company name', 'Company Name')
 _URL_ALIASES = ('Careers URL', 'Careers_URL', 'careers url', 'url', 'URL')
@@ -90,8 +104,7 @@ async def scrape_greenhouse(company: dict) -> list[dict]:
                     location = job['location'].get('name', '')
 
                 raw_content = html.unescape(job.get('content', ''))
-                description = re.sub(r'<[^>]+>', ' ', raw_content)
-                description = re.sub(r'\s+', ' ', description).strip()[:3000]
+                description = _html_to_text(raw_content)[:3000]
 
                 jobs.append({
                     'title': job.get('title', ''),
@@ -256,8 +269,6 @@ async def fetch_job_description(url: str, client: httpx.AsyncClient) -> str:
             print(f"  DESC FETCH: {resp.status_code} for {url[:60]}")
             return ""
 
-        from bs4 import BeautifulSoup
-
         soup = BeautifulSoup(resp.text, 'html.parser')
 
         # JSON-LD first — parse before stripping any tags
@@ -269,8 +280,7 @@ async def fetch_job_description(url: str, client: httpx.AsyncClient) -> str:
                     if item.get('@type') == 'JobPosting':
                         desc = item.get('description', '')
                         if desc:
-                            clean = re.sub(r'<[^>]+>', ' ', desc)
-                            clean = re.sub(r'\s+', ' ', clean).strip()
+                            clean = _html_to_text(desc)
                             if len(clean) > 100:
                                 print(f"  DESC OK (JSON-LD): {url[:50]}")
                                 return clean[:3000]
@@ -300,7 +310,7 @@ async def fetch_job_description(url: str, client: httpx.AsyncClient) -> str:
         ]:
             el = soup.select_one(selector)
             if el:
-                text = el.get_text(separator=' ', strip=True)
+                text = _html_to_text(str(el))
                 preview = text[:100].lower()
                 if len(text) > 300 and not any(s in preview for s in _NAV_SIGNALS):
                     print(f"  DESC OK ({selector}): {url[:50]}")
@@ -313,7 +323,7 @@ async def fetch_job_description(url: str, client: httpx.AsyncClient) -> str:
                 and 'cookie' not in p.get_text().lower()
                 and 'privacy' not in p.get_text().lower()[:50])
         ]
-        text = ' '.join(job_paragraphs)
+        text = "\n\n".join(job_paragraphs)
         if len(text) > 300:
             print(f"  DESC OK (paragraphs): {url[:50]}")
             return text[:3000]

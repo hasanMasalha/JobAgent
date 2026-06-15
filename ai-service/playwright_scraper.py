@@ -311,5 +311,11 @@ def is_valid_job_url(url: str, source_url: str) -> bool:
 def _strip_html(text: str) -> str:
     if not text:
         return ''
-    clean = re.sub(r'<[^>]+>', ' ', text)
-    return re.sub(r'\s+', ' ', clean).strip()
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(text, "html.parser")
+    for li in soup.find_all("li"):
+        li.insert_before("\n• ")
+    for tag in soup.find_all(["p", "div", "h1", "h2", "h3", "h4", "br"]):
+        tag.append("\n")
+    result = soup.get_text(separator="\n")
+    return re.sub(r"\n{3,}", "\n\n", result).strip()

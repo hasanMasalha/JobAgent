@@ -2,6 +2,7 @@ import asyncio
 import re
 
 import aiohttp
+from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
 from company_scraper import scrape_all_company_careers
@@ -137,16 +138,14 @@ async def fetch_indeed_full_description(url: str) -> str | None:
                 for pattern in patterns:
                     match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
                     if match:
-                        text = match.group(1)
-                        text = re.sub(r"<[^>]+>", " ", text)
-                        text = re.sub(r"\s+", " ", text).strip()
-                        text = (
-                            text.replace("&amp;", "&")
-                            .replace("&lt;", "<")
-                            .replace("&gt;", ">")
-                            .replace("&#39;", "'")
-                            .replace("&quot;", '"')
-                        )
+                        raw = match.group(1)
+                        soup = BeautifulSoup(raw, "html.parser")
+                        for li in soup.find_all("li"):
+                            li.insert_before("\n• ")
+                        for tag in soup.find_all(["p", "div", "h1", "h2", "h3", "h4", "br"]):
+                            tag.append("\n")
+                        text = soup.get_text(separator="\n")
+                        text = re.sub(r"\n{3,}", "\n\n", text).strip()
                         if len(text) > 200:
                             return text
                 return None
