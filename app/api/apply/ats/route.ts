@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
-const ATS_API_PLATFORMS = ["greenhouse", "lever", "workable"] as const;
-type ATSPlatform = (typeof ATS_API_PLATFORMS)[number];
+type ATSPlatform = "greenhouse" | "lever" | "workable";
 
 function detectATS(url: string): ATSPlatform | null {
   const u = (url ?? "").toLowerCase();

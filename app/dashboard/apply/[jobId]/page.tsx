@@ -24,8 +24,7 @@ function _detectExtension(): Promise<boolean> {
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched" | "applying_background";
 
-const ATS_PLATFORMS = ["greenhouse", "lever", "workable"] as const;
-type ATSPlatform = (typeof ATS_PLATFORMS)[number];
+type ATSPlatform = "greenhouse" | "lever" | "workable";
 
 function detectATS(url: string): ATSPlatform | null {
   const u = (url ?? "").toLowerCase();
