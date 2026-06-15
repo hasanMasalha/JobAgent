@@ -52,7 +52,7 @@ interface Props {
   showSource?: boolean;
 }
 
-const ATS_URL_PATTERNS = ["greenhouse.io", "lever.co", "workable.com"] as const;
+const ATS_URL_PATTERNS = ["greenhouse.io", "lever.co", "workable.com", "ashbyhq.com"] as const;
 function isATSJob(url?: string): boolean {
   return ATS_URL_PATTERNS.some((p) => (url ?? "").toLowerCase().includes(p));
 }

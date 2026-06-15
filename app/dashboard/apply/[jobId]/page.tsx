@@ -24,13 +24,14 @@ function _detectExtension(): Promise<boolean> {
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "no_extension" | "extension_launched" | "applying_background";
 
-type ATSPlatform = "greenhouse" | "lever" | "workable";
+type ATSPlatform = "greenhouse" | "lever" | "workable" | "ashby";
 
 function detectATS(url: string): ATSPlatform | null {
   const u = (url ?? "").toLowerCase();
   if (u.includes("greenhouse.io")) return "greenhouse";
   if (u.includes("lever.co")) return "lever";
   if (u.includes("workable.com")) return "workable";
+  if (u.includes("ashbyhq.com")) return "ashby";
   return null;
 }
 

@@ -22,6 +22,8 @@ def _detect_ats(url: str) -> str | None:
         return "comeet"
     if "teamtailor.com" in u:
         return "teamtailor"
+    if "ashbyhq.com" in u:
+        return "ashby"
     return None
 
 
