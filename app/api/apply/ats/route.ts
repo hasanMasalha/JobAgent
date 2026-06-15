@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 
+export const maxDuration = 120; // 2 minutes — Playwright runs in background but PDF gen can be slow
+
 type ATSPlatform = "greenhouse" | "lever" | "workable";
 
 function detectATS(url: string): ATSPlatform | null {
@@ -88,7 +90,7 @@ export async function POST(req: NextRequest) {
         phone: profile.phone ?? "",
         linkedin_url: profile.linkedin_url ?? "",
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(110_000),
     });
 
     if (!pythonRes.ok) {
@@ -103,32 +105,27 @@ export async function POST(req: NextRequest) {
     const result = (await pythonRes.json()) as {
       success: boolean;
       error?: string;
-      ats?: string;
-      recaptcha?: boolean;
-      message?: string;
+      status?: string;
     };
 
-    if (result.recaptcha) {
-      await db.$executeRaw`
-        UPDATE "Application" SET status = 'manual'
-        WHERE id = ${applicationId} AND user_id = ${user.id}
-      `;
-      return NextResponse.json({
-        success: false,
-        recaptcha: true,
-        manual_url: job.url,
-        message: "This job requires manual application due to reCAPTCHA",
-      });
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error ?? "ATS submission failed" },
+        { status: 500 }
+      );
     }
 
-    if (result.success) {
-      await db.$executeRaw`
-        UPDATE "Application" SET status = 'applied'
-        WHERE id = ${applicationId} AND user_id = ${user.id}
-      `;
-    }
+    // Python accepted and queued the background task — mark as 'applying'
+    await db.$executeRaw`
+      UPDATE "Application" SET status = 'applying'
+      WHERE id = ${applicationId} AND user_id = ${user.id}
+    `;
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      status: "applying",
+      message: "Application is being submitted...",
+    });
   } catch (err) {
     console.error("[apply/ats]", err);
     const message = err instanceof Error ? err.message : "Internal server error";

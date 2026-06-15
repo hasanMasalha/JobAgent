@@ -135,7 +135,7 @@ export default function ApplyPage() {
         const json = await res.json() as {
           success?: boolean;
           error?: string;
-          ats?: string;
+          status?: string;
           recaptcha?: boolean;
           manual_url?: string;
           message?: string;
@@ -146,6 +146,17 @@ export default function ApplyPage() {
             "This job's form has reCAPTCHA protection. Click \"Apply Manually\" to open the job page."
           );
           setStage("error");
+          return;
+        }
+        if (json.status === "applying") {
+          setSubmitResult({
+            status: "applied",
+            message:
+              "Application submitted! We're filling the form in the background. " +
+              "Check Applications in a minute to confirm.",
+          });
+          showToast("Application submitted!", "success");
+          setTimeout(() => router.push("/dashboard/applications"), 3000);
           return;
         }
         if (!res.ok || !json.success) {

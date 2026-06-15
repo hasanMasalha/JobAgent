@@ -3,7 +3,7 @@ import os
 import tempfile
 
 import asyncpg
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
 from routes.apply import _build_cv_pdf
@@ -26,8 +26,8 @@ class ATSApplyRequest(BaseModel):
 
 
 @router.post("/ats-apply")
-async def ats_apply(req: ATSApplyRequest):
-    """Submit application to ATS platform via its public API."""
+async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
+    """Kick off ATS form fill in background and return immediately."""
     print(f"[ats-apply] {req.ats_platform} — {req.apply_url[:80]}")
 
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
@@ -74,11 +74,38 @@ async def ats_apply(req: ATSApplyRequest):
         "cover_letter": cover_letter,
     }
 
-    result = await submit_via_ats(
-        apply_url=req.apply_url,
-        ats_platform=req.ats_platform,
-        user_data=user_data,
-    )
+    background_tasks.add_task(_do_ats_apply, req, user_data)
+    return {"success": True, "status": "applying"}
 
-    print(f"[ats-apply] result for {req.application_id}: {result}")
-    return result
+
+async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
+    """Run Playwright form fill in background and update DB when done."""
+    try:
+        result = await submit_via_ats(
+            apply_url=req.apply_url,
+            ats_platform=req.ats_platform,
+            user_data=user_data,
+        )
+        print(f"[ats-apply] result for {req.application_id}: {result}")
+
+        if result.get("recaptcha"):
+            status = "manual"
+        elif result.get("success"):
+            status = "applied"
+        else:
+            status = "failed"
+            print(f"[ats-apply] form fill failed: {result.get('error')}")
+
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            await conn.execute(
+                'UPDATE "Application" SET status = $1, applied_at = NOW() WHERE id = $2',
+                status,
+                req.application_id,
+            )
+            print(f"[ats-apply] Updated {req.application_id} -> {status}")
+        finally:
+            await conn.close()
+
+    except Exception as e:
+        print(f"[ats-apply] Background error for {req.application_id}: {e}")
