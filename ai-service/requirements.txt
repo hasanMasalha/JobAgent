@@ -4,7 +4,7 @@ ruff
 python-dotenv
 uvicorn
 sentence-transformers
-playwright
+playwright>=1.40.0
 python-jobspy
 anthropic
 asyncpg
