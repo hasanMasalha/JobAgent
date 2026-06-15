@@ -18,7 +18,7 @@ async def fill_ats_form(
 ) -> dict:
     """Fill ATS application form using Playwright."""
 
-    print(f"[ats-form] fill_ats_form called")
+    print("[ats-form] fill_ats_form called")
     print(f"[ats-form] url={apply_url}")
     print(f"[ats-form] cv_bytes length={len(cv_bytes)}")
     print(f"[ats-form] first_name={first_name} last_name={last_name} email={email}")

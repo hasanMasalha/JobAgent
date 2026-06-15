@@ -78,13 +78,13 @@ async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
 
     print(f"[ats-apply] Scheduling background task for {req.application_id}")
     background_tasks.add_task(_do_ats_apply, req, user_data)
-    print(f"[ats-apply] Background task scheduled — returning 'applying'")
+    print("[ats-apply] Background task scheduled — returning 'applying'")
     return {"success": True, "status": "applying"}
 
 
 async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
     """Run Playwright form fill in background and update DB when done."""
-    print(f"[ats-apply-bg] ===== BACKGROUND TASK STARTED =====")
+    print("[ats-apply-bg] ===== BACKGROUND TASK STARTED =====")
     print(f"[ats-apply-bg] platform={req.ats_platform}")
     print(f"[ats-apply-bg] url={req.apply_url}")
     print(f"[ats-apply-bg] application_id={req.application_id}")
@@ -122,7 +122,7 @@ async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
 
     except Exception as e:
         print(f"[ats-apply-bg] EXCEPTION: {type(e).__name__}: {e}")
-        print(f"[ats-apply-bg] TRACEBACK:")
+        print("[ats-apply-bg] TRACEBACK:")
         traceback.print_exc(file=sys.stdout)
 
-    print(f"[ats-apply-bg] ===== BACKGROUND TASK ENDED =====")
+    print("[ats-apply-bg] ===== BACKGROUND TASK ENDED =====")

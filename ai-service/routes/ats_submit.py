@@ -27,7 +27,7 @@ def _detect_ats(url: str) -> str | None:
 
 async def submit_via_ats(apply_url: str, ats_platform: str, user_data: dict) -> dict:
     """Submit application via Playwright form fill."""
-    print(f"[ats-submit] ===== submit_via_ats called =====")
+    print("[ats-submit] ===== submit_via_ats called =====")
     print(f"[ats-submit] platform={ats_platform}")
     print(f"[ats-submit] url={apply_url}")
     try:
