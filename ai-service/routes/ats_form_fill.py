@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 
 from playwright.async_api import async_playwright
 
@@ -41,6 +42,19 @@ async def fill_ats_form(
             print(f"[ats-form] Opening: {apply_url}")
             await page.goto(apply_url, wait_until="networkidle", timeout=30000)
             await page.wait_for_timeout(2000)
+
+            # Dump all form fields so we know exactly what the form expects
+            inputs = await page.query_selector_all("input, textarea, select")
+            for inp in inputs:
+                name = await inp.get_attribute("name") or ""
+                id_ = await inp.get_attribute("id") or ""
+                type_ = await inp.get_attribute("type") or ""
+                placeholder = await inp.get_attribute("placeholder") or ""
+                required = await inp.get_attribute("required")
+                print(
+                    f"[ats-form] INPUT: name={name} id={id_} type={type_} "
+                    f"placeholder={placeholder} required={required}"
+                )
 
             result = await _fill_form_fields(
                 page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
@@ -124,12 +138,34 @@ async def _fill_form_fields(
         "#email",
     ], email, "email")
 
+    # Greenhouse uses a country-code dropdown + bare number input
+    try:
+        country_select = await page.query_selector('select[name="phone_country_code"]')
+        if country_select:
+            await country_select.select_option(value="IL")
+            print("[ats-form] Set phone country code to IL")
+    except Exception:
+        pass
+
+    bare_phone = phone.replace("+972", "").replace("972", "").strip().lstrip("0")
     await fill_field([
         'input[name="phone"]',
+        'input[id="phone"]',
         'input[type="tel"]',
         'input[id*="phone"]',
-        "#phone",
-    ], phone or "", "phone")
+    ], bare_phone or phone, "phone")
+
+    # Try clicking the upload trigger button first (Greenhouse hides the real input)
+    try:
+        upload_btn = await page.query_selector(
+            'button:has-text("Attach"), label[for*="resume"], button:has-text("Upload")'
+        )
+        if upload_btn:
+            await upload_btn.click()
+            await page.wait_for_timeout(500)
+            print("[ats-form] Clicked resume upload trigger")
+    except Exception:
+        pass
 
     await upload_file([
         'input[type="file"][name="resume"]',
@@ -169,6 +205,19 @@ async def _fill_form_fields(
             'input[placeholder*="linkedin"]',
         ], linkedin_url, "linkedin")
 
+    # GDPR / consent checkbox
+    try:
+        gdpr = await page.query_selector(
+            'input[name*="gdpr"], input[name*="consent"], input[id*="gdpr"], input[id*="consent"]'
+        )
+        if gdpr:
+            await gdpr.check()
+            filled.append("gdpr_consent")
+            print("[ats-form] Checked GDPR consent")
+    except Exception:
+        pass
+
+    # "How did you hear about us?" dropdown
     try:
         selects = await page.query_selector_all("select")
         for select in selects:
@@ -200,7 +249,28 @@ async def _fill_form_fields(
             await submit.click()
             await page.wait_for_timeout(3000)
 
-            page_text = (await page.inner_text("body")).lower()
+            # Screenshot to see what happened
+            screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
+            await page.screenshot(path=screenshot_path, full_page=True)
+            print(f"[ats-form] Screenshot saved: {screenshot_path}")
+
+            # Full page text
+            page_text = await page.inner_text("body")
+            print(f"[ats-form] Page text after submit:\n{page_text[:3000]}")
+
+            # Visible error elements
+            error_els = await page.query_selector_all(
+                '.error, .alert, [class*="error"], [class*="invalid"], [class*="required"]'
+            )
+            for el in error_els:
+                try:
+                    text = await el.inner_text()
+                    if text.strip():
+                        print(f"[ats-form] Error element: {text.strip()}")
+                except Exception:
+                    pass
+
+            page_text_lower = page_text.lower()
             success_signals = [
                 "thank you",
                 "application received",
@@ -209,12 +279,12 @@ async def _fill_form_fields(
                 "application has been submitted",
                 "תודה",
             ]
-            if any(s in page_text for s in success_signals):
+            if any(s in page_text_lower for s in success_signals):
                 return {"success": True, "filled": filled, "message": "Application submitted successfully"}
 
             error_signals = ["error", "required", "invalid"]
-            if any(s in page_text for s in error_signals):
-                return {"success": False, "error": "Form validation error after submit", "filled": filled}
+            if any(s in page_text_lower for s in error_signals):
+                return {"success": False, "error": "Form validation error after submit", "filled": filled, "errors": errors}
 
             return {"success": True, "filled": filled, "message": "Form submitted (no explicit confirmation)"}
 
