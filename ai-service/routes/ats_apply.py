@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os
 import sys
@@ -9,7 +10,6 @@ from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
 from routes.apply import _build_cv_pdf
-from routes.ats_submit import submit_via_ats
 
 router = APIRouter()
 
@@ -25,6 +25,59 @@ class ATSApplyRequest(BaseModel):
     email: str
     phone: str = ""
     linkedin_url: str = ""
+
+
+def _run_ats_apply_sync(request_dict: dict) -> None:
+    """Sync wrapper — runs in FastAPI's thread pool with its own event loop."""
+    print("[ats-apply-bg] ===== THREAD STARTED =====")
+    print(f"[ats-apply-bg] platform={request_dict['ats_platform']}")
+    print(f"[ats-apply-bg] url={request_dict['apply_url']}")
+    print(f"[ats-apply-bg] application_id={request_dict['application_id']}")
+    print(f"[ats-apply-bg] cv_base64 length={len(request_dict['user_data'].get('cv_base64') or '')}")
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _run() -> None:
+            from routes.ats_submit import submit_via_ats
+
+            print("[ats-apply-bg] Calling submit_via_ats...")
+            result = await submit_via_ats(
+                apply_url=request_dict["apply_url"],
+                ats_platform=request_dict["ats_platform"],
+                user_data=request_dict["user_data"],
+            )
+            print(f"[ats-apply-bg] submit_via_ats returned: {result}")
+
+            if result.get("recaptcha"):
+                status = "manual"
+            elif result.get("success"):
+                status = "applied"
+            else:
+                status = "failed"
+                print(f"[ats-apply-bg] form fill failed: {result.get('error')}")
+
+            print(f"[ats-apply-bg] Updating DB: {request_dict['application_id']} -> {status}")
+            conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+            try:
+                await conn.execute(
+                    'UPDATE "Application" SET status = $1, applied_at = NOW() WHERE id = $2',
+                    status,
+                    request_dict["application_id"],
+                )
+                print(f"[ats-apply-bg] DB updated: {request_dict['application_id']} -> {status}")
+            finally:
+                await conn.close()
+
+        loop.run_until_complete(_run())
+        loop.close()
+
+    except Exception as e:
+        print(f"[ats-apply-bg] EXCEPTION: {type(e).__name__}: {e}")
+        traceback.print_exc(file=sys.stdout)
+
+    print("[ats-apply-bg] ===== THREAD ENDED =====")
 
 
 @router.post("/ats-apply")
@@ -51,7 +104,6 @@ async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
     if not tailored_cv:
         return {"success": False, "error": "No tailored CV found — run /api/apply/prepare first"}
 
-    # Generate PDF from tailored CV text
     pdf_path = os.path.join(tempfile.gettempdir(), f"ats_{req.application_id}.pdf")
     try:
         _build_cv_pdf(tailored_cv, pdf_path)
@@ -65,64 +117,23 @@ async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
     name_part = f"{req.first_name}_{req.last_name}".strip("_").replace(" ", "_") or "applicant"
     cv_filename = f"{name_part}_cv.pdf"
 
-    user_data = {
-        "first_name": req.first_name,
-        "last_name": req.last_name,
-        "email": req.email,
-        "phone": req.phone,
-        "linkedin_url": req.linkedin_url,
-        "cv_base64": cv_base64,
-        "cv_filename": cv_filename,
-        "cover_letter": cover_letter,
+    request_dict = {
+        "apply_url": req.apply_url,
+        "ats_platform": req.ats_platform,
+        "application_id": req.application_id,
+        "user_data": {
+            "first_name": req.first_name,
+            "last_name": req.last_name,
+            "email": req.email,
+            "phone": req.phone,
+            "linkedin_url": req.linkedin_url,
+            "cv_base64": cv_base64,
+            "cv_filename": cv_filename,
+            "cover_letter": cover_letter,
+        },
     }
 
     print(f"[ats-apply] Scheduling background task for {req.application_id}")
-    background_tasks.add_task(_do_ats_apply, req, user_data)
+    background_tasks.add_task(_run_ats_apply_sync, request_dict)
     print("[ats-apply] Background task scheduled — returning 'applying'")
     return {"success": True, "status": "applying"}
-
-
-async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
-    """Run Playwright form fill in background and update DB when done."""
-    print("[ats-apply-bg] ===== BACKGROUND TASK STARTED =====")
-    print(f"[ats-apply-bg] platform={req.ats_platform}")
-    print(f"[ats-apply-bg] url={req.apply_url}")
-    print(f"[ats-apply-bg] application_id={req.application_id}")
-    print(f"[ats-apply-bg] first_name={req.first_name}")
-    print(f"[ats-apply-bg] cv_base64 length={len(user_data.get('cv_base64') or '')}")
-
-    try:
-        print("[ats-apply-bg] Calling submit_via_ats...")
-        result = await submit_via_ats(
-            apply_url=req.apply_url,
-            ats_platform=req.ats_platform,
-            user_data=user_data,
-        )
-        print(f"[ats-apply-bg] submit_via_ats returned: {result}")
-
-        if result.get("recaptcha"):
-            status = "manual"
-        elif result.get("success"):
-            status = "applied"
-        else:
-            status = "failed"
-            print(f"[ats-apply-bg] form fill failed: {result.get('error')}")
-
-        print(f"[ats-apply-bg] Updating DB: {req.application_id} -> {status}")
-        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
-        try:
-            await conn.execute(
-                'UPDATE "Application" SET status = $1, applied_at = NOW() WHERE id = $2',
-                status,
-                req.application_id,
-            )
-            print(f"[ats-apply-bg] DB updated: {req.application_id} -> {status}")
-        finally:
-            await conn.close()
-
-    except Exception as e:
-        print(f"[ats-apply-bg] EXCEPTION: {type(e).__name__}: {e}")
-        print("[ats-apply-bg] TRACEBACK:")
-        traceback.print_exc(file=sys.stdout)
-
-    print("[ats-apply-bg] ===== BACKGROUND TASK ENDED =====")
