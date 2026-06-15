@@ -1,6 +1,8 @@
 import base64
 import os
+import sys
 import tempfile
+import traceback
 
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks
@@ -74,19 +76,29 @@ async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
         "cover_letter": cover_letter,
     }
 
+    print(f"[ats-apply] Scheduling background task for {req.application_id}")
     background_tasks.add_task(_do_ats_apply, req, user_data)
+    print(f"[ats-apply] Background task scheduled — returning 'applying'")
     return {"success": True, "status": "applying"}
 
 
 async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
     """Run Playwright form fill in background and update DB when done."""
+    print(f"[ats-apply-bg] ===== BACKGROUND TASK STARTED =====")
+    print(f"[ats-apply-bg] platform={req.ats_platform}")
+    print(f"[ats-apply-bg] url={req.apply_url}")
+    print(f"[ats-apply-bg] application_id={req.application_id}")
+    print(f"[ats-apply-bg] first_name={req.first_name}")
+    print(f"[ats-apply-bg] cv_base64 length={len(user_data.get('cv_base64') or '')}")
+
     try:
+        print("[ats-apply-bg] Calling submit_via_ats...")
         result = await submit_via_ats(
             apply_url=req.apply_url,
             ats_platform=req.ats_platform,
             user_data=user_data,
         )
-        print(f"[ats-apply] result for {req.application_id}: {result}")
+        print(f"[ats-apply-bg] submit_via_ats returned: {result}")
 
         if result.get("recaptcha"):
             status = "manual"
@@ -94,8 +106,9 @@ async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
             status = "applied"
         else:
             status = "failed"
-            print(f"[ats-apply] form fill failed: {result.get('error')}")
+            print(f"[ats-apply-bg] form fill failed: {result.get('error')}")
 
+        print(f"[ats-apply-bg] Updating DB: {req.application_id} -> {status}")
         conn = await asyncpg.connect(os.environ["DATABASE_URL"])
         try:
             await conn.execute(
@@ -103,9 +116,13 @@ async def _do_ats_apply(req: ATSApplyRequest, user_data: dict) -> None:
                 status,
                 req.application_id,
             )
-            print(f"[ats-apply] Updated {req.application_id} -> {status}")
+            print(f"[ats-apply-bg] DB updated: {req.application_id} -> {status}")
         finally:
             await conn.close()
 
     except Exception as e:
-        print(f"[ats-apply] Background error for {req.application_id}: {e}")
+        print(f"[ats-apply-bg] EXCEPTION: {type(e).__name__}: {e}")
+        print(f"[ats-apply-bg] TRACEBACK:")
+        traceback.print_exc(file=sys.stdout)
+
+    print(f"[ats-apply-bg] ===== BACKGROUND TASK ENDED =====")

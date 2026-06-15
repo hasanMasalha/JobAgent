@@ -18,9 +18,16 @@ async def fill_ats_form(
 ) -> dict:
     """Fill ATS application form using Playwright."""
 
+    print(f"[ats-form] fill_ats_form called")
+    print(f"[ats-form] url={apply_url}")
+    print(f"[ats-form] cv_bytes length={len(cv_bytes)}")
+    print(f"[ats-form] first_name={first_name} last_name={last_name} email={email}")
+
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False, prefix="cv_") as tmp:
         tmp.write(cv_bytes)
         cv_path = tmp.name
+
+    print(f"[ats-form] CV written to temp file: {cv_path}")
 
     try:
         async with async_playwright() as p:
