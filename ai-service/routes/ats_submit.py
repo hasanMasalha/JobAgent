@@ -42,7 +42,7 @@ async def submit_greenhouse(
 
     company = match.group(1)
     job_id = match.group(2)
-    url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs/{job_id}/apply"
+    url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs/{job_id}"
 
     cover_letter_b64 = base64.b64encode(cover_letter.encode("utf-8")).decode("ascii")
 
@@ -57,7 +57,6 @@ async def submit_greenhouse(
         "cover_letter_content_filename": "cover_letter.txt",
         "linkedin_profile_url": linkedin_url,
         "question_answers": [],
-        "mapped_url_token": apply_url,
     }
 
     headers = {
