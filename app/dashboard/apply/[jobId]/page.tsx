@@ -56,6 +56,7 @@ export default function ApplyPage() {
   const [submitResult, setSubmitResult] = useState<{ status: string; message: string } | null>(null);
   const [downloadingCv, setDownloadingCv] = useState(false);
   const [bgStatus, setBgStatus] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/apply/prepare", {
@@ -131,7 +132,22 @@ export default function ApplyPage() {
             coverLetter,
           }),
         });
-        const json = await res.json() as { success?: boolean; error?: string; ats?: string };
+        const json = await res.json() as {
+          success?: boolean;
+          error?: string;
+          ats?: string;
+          recaptcha?: boolean;
+          manual_url?: string;
+          message?: string;
+        };
+        if (json.recaptcha) {
+          setManualUrl(json.manual_url ?? data.job_url);
+          setError(
+            "This job's form has reCAPTCHA protection. Click \"Apply Manually\" to open the job page."
+          );
+          setStage("error");
+          return;
+        }
         if (!res.ok || !json.success) {
           throw new Error(json.error ?? "ATS submission failed");
         }
@@ -392,6 +408,21 @@ export default function ApplyPage() {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5 text-sm text-red-700 dark:text-red-400">
           {error}
         </div>
+        {manualUrl && (
+          <div className="mt-4">
+            <a
+              href={manualUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-[#1a2e5e] text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-[#162650] transition-colors"
+            >
+              Apply Manually →
+            </a>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Your tailored cover letter is saved — paste it when you apply.
+            </p>
+          </div>
+        )}
         <button
           onClick={() => router.push("/dashboard")}
           className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:underline"

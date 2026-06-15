@@ -115,6 +115,8 @@ async def _fill_form_fields(
         print(f"[ats-form] WARNING: Could not upload {field_name}")
         return False
 
+    # ── Standard fields ──────────────────────────────────────────────────────
+
     await fill_field([
         'input[name="first_name"]',
         'input[id*="first_name"]',
@@ -205,7 +207,44 @@ async def _fill_form_fields(
             'input[placeholder*="linkedin"]',
         ], linkedin_url, "linkedin")
 
-    # GDPR / consent checkbox
+    # ── Custom questions (Greenhouse question_XXXXXXX fields) ────────────────
+
+    custom_questions = await page.query_selector_all(
+        'input[id^="question_"], textarea[id^="question_"]'
+    )
+    for q in custom_questions:
+        q_id = await q.get_attribute("id") or ""
+        q_type = await q.get_attribute("type") or "text"
+
+        label = await page.query_selector(f'label[for="{q_id}"]')
+        label_text = (await label.inner_text()).strip() if label else ""
+        print(f"[ats-form] Custom question: {q_id} — {label_text}")
+
+        if q_type not in ("file", "checkbox", "radio", "hidden"):
+            try:
+                await q.fill("Yes")
+                filled.append(f"custom_{q_id}")
+                print(f"[ats-form] Filled custom question {q_id}")
+            except Exception as e:
+                print(f"[ats-form] Could not fill custom question {q_id}: {e}")
+
+    # ── reCAPTCHA check — bail before submit if present ──────────────────────
+
+    recaptcha = await page.query_selector(
+        'iframe[src*="recaptcha"], .g-recaptcha, input[name="g-recaptcha-response"]'
+    )
+    if recaptcha:
+        print("[ats-form] reCAPTCHA detected — cannot auto-submit")
+        return {
+            "success": False,
+            "error": "recaptcha_detected",
+            "recaptcha": True,
+            "filled": filled,
+            "message": "Form has reCAPTCHA — requires manual submission",
+        }
+
+    # ── GDPR / consent checkbox ───────────────────────────────────────────────
+
     try:
         gdpr = await page.query_selector(
             'input[name*="gdpr"], input[name*="consent"], input[id*="gdpr"], input[id*="consent"]'
@@ -217,7 +256,8 @@ async def _fill_form_fields(
     except Exception:
         pass
 
-    # "How did you hear about us?" dropdown
+    # ── "How did you hear about us?" dropdown ────────────────────────────────
+
     try:
         selects = await page.query_selector_all("select")
         for select in selects:
@@ -240,6 +280,8 @@ async def _fill_form_fields(
     except Exception as e:
         print(f"[ats-form] referral select: {e}")
 
+    # ── Submit ────────────────────────────────────────────────────────────────
+
     try:
         submit = await page.wait_for_selector(
             'button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")',
@@ -249,16 +291,13 @@ async def _fill_form_fields(
             await submit.click()
             await page.wait_for_timeout(3000)
 
-            # Screenshot to see what happened
             screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
             await page.screenshot(path=screenshot_path, full_page=True)
             print(f"[ats-form] Screenshot saved: {screenshot_path}")
 
-            # Full page text
             page_text = await page.inner_text("body")
             print(f"[ats-form] Page text after submit:\n{page_text[:3000]}")
 
-            # Visible error elements
             error_els = await page.query_selector_all(
                 '.error, .alert, [class*="error"], [class*="invalid"], [class*="required"]'
             )
@@ -284,7 +323,12 @@ async def _fill_form_fields(
 
             error_signals = ["error", "required", "invalid"]
             if any(s in page_text_lower for s in error_signals):
-                return {"success": False, "error": "Form validation error after submit", "filled": filled, "errors": errors}
+                return {
+                    "success": False,
+                    "error": "Form validation error after submit",
+                    "filled": filled,
+                    "errors": errors,
+                }
 
             return {"success": True, "filled": filled, "message": "Form submitted (no explicit confirmation)"}
 

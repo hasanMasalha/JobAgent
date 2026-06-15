@@ -100,7 +100,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = (await pythonRes.json()) as { success: boolean; error?: string; ats?: string };
+    const result = (await pythonRes.json()) as {
+      success: boolean;
+      error?: string;
+      ats?: string;
+      recaptcha?: boolean;
+      message?: string;
+    };
+
+    if (result.recaptcha) {
+      await db.$executeRaw`
+        UPDATE "Application" SET status = 'manual'
+        WHERE id = ${applicationId} AND user_id = ${user.id}
+      `;
+      return NextResponse.json({
+        success: false,
+        recaptcha: true,
+        manual_url: job.url,
+        message: "This job requires manual application due to reCAPTCHA",
+      });
+    }
 
     if (result.success) {
       await db.$executeRaw`
