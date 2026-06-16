@@ -71,6 +71,70 @@ _BAD_JOB_TITLE_FRAGMENTS = (
     'product/solution info', '24/7 support', '24/7 chat support',
 )
 
+_JOB_TITLE_WORDS = (
+    'engineer', 'developer', 'manager', 'analyst',
+    'designer', 'scientist', 'architect', 'director',
+    'lead', 'senior', 'junior', 'intern', 'specialist',
+    'consultant', 'researcher', 'devops', 'qa', 'sre',
+    'fullstack', 'full stack', 'backend', 'frontend',
+    'product', 'data', 'cloud', 'security', 'software',
+    'hardware', 'sales', 'marketing', 'recruiter', 'hr',
+    'finance', 'legal', 'operations', 'support',
+    # Hebrew
+    'מהנד', 'מפתח', 'מנהל', 'אנליסט', 'מעצב',
+    'חוקר', 'מומחה', 'בכיר', 'מתמחה', 'ראש',
+)
+
+_NON_JOB_URL_PATHS = (
+    '/blog/', '/news/', '/docs/', '/api/',
+    '/support', '/product', '/solution',
+    '/about', '/contact',
+    '/pricing', '/legal', '/privacy',
+    '/terms', '/resources', '/learn/',
+    '/platform/', '/technology/', '/features/',
+    '/partners/', '/customers/', '/events/',
+    '/webinar', '/whitepaper', '/ebook',
+    'facebook.com', 'twitter.com', 'linkedin.com/shar',
+    'whatsapp', 'mailto:', 'javascript:',
+    '/engineering-blog', '/developer-blog',
+    '/trust/', '/compliance/', '/certification/',
+    '/leadership', '/board', '/team/',
+    '/press/', '/media/', '/investor',
+    '/search?', '/department?', '/filter?',
+)
+
+_VALID_CAREERS_PATTERNS = (
+    '/careers', '/jobs', '/positions',
+    '/vacancies', '/join', '/work-with-us',
+    '/joinus', 'greenhouse.io', 'lever.co',
+    'comeet.com', 'ashbyhq.com', 'workable.com',
+)
+
+
+def looks_like_job_title(title: str) -> bool:
+    if not title or len(title) < 3 or len(title) > 150:
+        return False
+    t = title.lower()
+    if t.startswith('<') or '</' in t:
+        return False
+    if t.startswith('http') or '://' in t:
+        return False
+    if any(c in title for c in ('©', '®', '™', '↓')):
+        return False
+    return any(word in t for word in _JOB_TITLE_WORDS)
+
+
+def looks_like_job_url(url: str) -> bool:
+    if not url:
+        return False
+    u = url.lower()
+    return not any(p in u for p in _NON_JOB_URL_PATHS)
+
+
+def is_valid_careers_url(url: str) -> bool:
+    u = url.lower()
+    return any(p in u for p in _VALID_CAREERS_PATTERNS)
+
 
 def is_valid_job(job: dict) -> bool:
     """Filter out non-job pages scraped by mistake."""
@@ -78,11 +142,13 @@ def is_valid_job(job: dict) -> bool:
     title = (job.get('title') or '').strip()
     title_lower = title.lower()
 
+    if not looks_like_job_title(title):
+        return False
+    if not looks_like_job_url(url):
+        return False
     if any(bad in url for bad in _BAD_JOB_URL_FRAGMENTS):
         return False
     if any(bad in title_lower for bad in _BAD_JOB_TITLE_FRAGMENTS):
-        return False
-    if len(title) < 3 or title.startswith('<'):
         return False
     return True
 
@@ -418,7 +484,9 @@ async def enrich_empty_descriptions(jobs: list[dict], max_concurrent: int = 5) -
 
 async def scrape_company(company: dict) -> list[dict]:
     """Route to correct scraper based on ATS type"""
+    name = company.get('name', '?')
     ats = company.get('ats_type', 'unknown')
+    careers_url = company.get('careers_url', '')
 
     _handlers = {
         'greenhouse': scrape_greenhouse,
@@ -427,6 +495,9 @@ async def scrape_company(company: dict) -> list[dict]:
     }
 
     if ats in ('html', 'ashby'):
+        if not is_valid_careers_url(careers_url):
+            print(f"[SKIP] {name}: careers URL doesn't look like a jobs page: {careers_url}")
+            return []
         from playwright_scraper import scrape_jobs_with_playwright
         handler = scrape_jobs_with_playwright
     else:
@@ -436,10 +507,19 @@ async def scrape_company(company: dict) -> list[dict]:
         return []  # workday, unknown etc — skip for now
 
     jobs = await handler(company)
-    before = len(jobs)
+    raw_count = len(jobs)
     jobs = [j for j in jobs if is_valid_job(j)]
-    if len(jobs) < before:
-        print(f"  {company.get('name')}: filtered {before - len(jobs)} garbage jobs")
+    filtered_count = raw_count - len(jobs)
+    if filtered_count:
+        print(f"  {name}: filtered {filtered_count} garbage jobs")
+
+    # Health check: warn if scraper is returning mostly garbage
+    if raw_count > 0:
+        filter_rate = filtered_count / raw_count
+        if filter_rate > 0.8 and raw_count > 10:
+            print(f"[WARNING] {name}: {filter_rate:.0%} of jobs filtered — careers page may be broken")
+        if len(jobs) == 0 and raw_count > 0:
+            print(f"[WARNING] {name}: ALL {raw_count} scraped pages were garbage — check careers URL")
 
     # For all html/ashby companies, drop any job with an explicit non-Israeli
     # location. Empty location passes through — many Israeli-office jobs don't
@@ -452,7 +532,7 @@ async def scrape_company(company: dict) -> list[dict]:
             or any(kw in (j.get('location') or '').lower() for kw in _ISRAELI_KEYWORDS)
         ]
         if len(jobs) < before_loc:
-            print(f"  {company.get('name')}: location filter removed {before_loc - len(jobs)} non-Israeli jobs")
+            print(f"  {name}: location filter removed {before_loc - len(jobs)} non-Israeli jobs")
 
     for job in jobs:
         job['known_israeli_company'] = True
