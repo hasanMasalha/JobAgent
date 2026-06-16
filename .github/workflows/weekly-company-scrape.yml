@@ -1,0 +1,27 @@
+name: Weekly Company HTML Scrape
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Every Sunday at 3am UTC
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  scrape:
+    name: Full Company Careers Scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+
+    steps:
+      - name: Scrape all company careers (HTML + API)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 90m
+          script: |
+            echo "Starting full company scrape (HTML + API)..."
+            curl -s -X POST http://localhost:8000/companies/scrape-and-store \
+              --max-time 5000 \
+              && echo "Full company scrape completed" \
+              || echo "Full company scrape failed or timed out"
