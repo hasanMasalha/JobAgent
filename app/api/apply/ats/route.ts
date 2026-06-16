@@ -39,12 +39,15 @@ export async function POST(req: NextRequest) {
       `;
     }
 
+    console.log("[ats] user.id:", user.id, "user.email:", user.email);
+
     const [jobRows, profile] = await Promise.all([
       db.$queryRaw<{ url: string; title: string }[]>`
         SELECT url, title FROM "Job" WHERE id = ${jobId} LIMIT 1
       `,
+      // Look up by email — User.id is a Prisma UUID, not the Supabase auth UUID
       db.user.findUnique({
-        where: { id: user.id },
+        where: { email: user.email! },
         select: {
           first_name: true,
           last_name: true,
@@ -72,8 +75,11 @@ export async function POST(req: NextRequest) {
 
     const firstName = profile.first_name || "";
     const lastName = profile.last_name || "";
+    const email = profile.email || user.email || "";
 
-    console.log("[ats] firstName:", firstName, "lastName:", lastName);
+    console.log("[ats] firstName:", firstName);
+    console.log("[ats] lastName:", lastName);
+    console.log("[ats] email:", email);
 
     const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/ats-apply`, {
       method: "POST",
@@ -86,7 +92,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         first_name: firstName,
         last_name: lastName,
-        email: profile.email ?? user.email ?? "",
+        email: email,
         phone: profile.phone ?? "",
         linkedin_url: profile.linkedin_url ?? "",
       }),

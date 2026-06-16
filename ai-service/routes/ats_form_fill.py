@@ -52,8 +52,8 @@ async def fill_ats_form(
                 print(f"[ats-form] Lever apply URL: {apply_url}")
 
             print(f"[ats-form] Opening: {apply_url}")
-            await page.goto(apply_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(2000)
+            await page.goto(apply_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(3000)
 
             screenshot_path = f"/tmp/ats_load_{int(time.time())}.png"
             await page.screenshot(path=screenshot_path, full_page=True)
