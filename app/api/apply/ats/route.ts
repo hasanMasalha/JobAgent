@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("[ats] profile:", JSON.stringify(profile));
+    console.log("[ats] raw profile:", JSON.stringify(profile));
 
     const fullName = profile.first_name
       ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()

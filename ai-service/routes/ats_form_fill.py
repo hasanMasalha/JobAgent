@@ -46,9 +46,18 @@ async def fill_ats_form(
             )
             page = await context.new_page()
 
+            # Lever job listing URLs need /apply appended to reach the form
+            if "lever.co" in apply_url and not apply_url.rstrip("/").endswith("/apply"):
+                apply_url = apply_url.rstrip("/") + "/apply"
+                print(f"[ats-form] Lever apply URL: {apply_url}")
+
             print(f"[ats-form] Opening: {apply_url}")
             await page.goto(apply_url, wait_until="networkidle", timeout=30000)
             await page.wait_for_timeout(2000)
+
+            screenshot_path = f"/tmp/ats_load_{int(time.time())}.png"
+            await page.screenshot(path=screenshot_path, full_page=True)
+            print(f"[ats-form] Screenshot saved: {screenshot_path}")
 
             # Dump all form fields so we know exactly what the form expects
             inputs = await page.query_selector_all("input, textarea, select")
@@ -59,7 +68,7 @@ async def fill_ats_form(
                 placeholder = await inp.get_attribute("placeholder") or ""
                 required = await inp.get_attribute("required")
                 print(
-                    f"[ats-form] INPUT: name={name} id={id_} type={type_} "
+                    f"[ats-form] FIELD: name={name} id={id_} type={type_} "
                     f"placeholder={placeholder} required={required}"
                 )
 
