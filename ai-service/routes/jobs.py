@@ -114,12 +114,20 @@ async def scrape_and_store():
                         $5, $6, $7, $8,
                         $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
-                    SET description   = EXCLUDED.description,
-                        embedding     = EXCLUDED.embedding,
+                    SET description   = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.description
+                                          ELSE "Job".description
+                                        END,
+                        embedding     = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.embedding
+                                          ELSE "Job".embedding
+                                        END,
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                        is_active     = true,
                         scraped_at    = now()
-                    WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
                 job["title"],
@@ -292,12 +300,20 @@ async def scrape_and_store_company_careers():
                         $5, $6, $7, $8,
                         $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
-                    SET description   = EXCLUDED.description,
-                        embedding     = EXCLUDED.embedding,
+                    SET description   = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.description
+                                          ELSE "Job".description
+                                        END,
+                        embedding     = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.embedding
+                                          ELSE "Job".embedding
+                                        END,
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                        is_active     = true,
                         scraped_at    = now()
-                    WHERE length("Job".description) < 100
                 RETURNING (xmax = 0) AS is_insert
                 """,
                 job["title"],
