@@ -7,7 +7,7 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from routes.jobs import scrape_and_store
+from routes.jobs import scrape_and_store, scrape_and_store_company_careers
 from routes.matching import MatchRequest, match_jobs
 
 UTC = timezone.utc  # noqa: UP017 - datetime.UTC requires Python 3.11+
@@ -43,6 +43,15 @@ async def _notify_user_if_matches(user_id: str, match_count: int):
             logger.info("[scheduler] Email notify user %s: %s", user_id, resp.text)
     except Exception:
         logger.exception("[scheduler] Email notify failed for user %s", user_id)
+
+
+async def _run_company_scrape():
+    logger.info("[scheduler] Starting company careers scrape…")
+    try:
+        result = await scrape_and_store_company_careers()
+        logger.info("[scheduler] Company scrape done: %s", result)
+    except Exception:
+        logger.exception("[scheduler] Company scrape failed")
 
 
 async def _run_match_all():
@@ -89,6 +98,7 @@ async def _recovery_scrape_if_stale():
 
 def start_scheduler():
     scheduler.add_job(_run_scrape, CronTrigger(hour=5, minute=0, timezone="UTC"), id="daily_scrape")
+    scheduler.add_job(_run_company_scrape, CronTrigger(hour=5, minute=30, timezone="UTC"), id="company_scrape")
     scheduler.add_job(_run_match_all, CronTrigger(hour=6, minute=0, timezone="UTC"), id="daily_match")
     # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
     from datetime import datetime, timedelta
@@ -96,7 +106,7 @@ def start_scheduler():
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — scrape@05:00 UTC, match@06:00 UTC, recovery check in 5s")
+    logger.info("[scheduler] Started — scrape@05:00 UTC, company_scrape@05:30 UTC, match@06:00 UTC, recovery check in 5s")
 
 
 def stop_scheduler():
