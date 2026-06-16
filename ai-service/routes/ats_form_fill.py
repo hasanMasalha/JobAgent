@@ -178,27 +178,58 @@ async def _fill_lever_form(
     except Exception:
         pass
 
-    # Submit
+    # Check for hCaptcha before attempting submit
+    hcaptcha = await page.query_selector(
+        'input[name="h-captcha-response"], .h-captcha, iframe[src*="hcaptcha"]'
+    )
+    if hcaptcha:
+        print("[ats-form] hCaptcha detected — cannot auto-submit")
+        return {
+            "success": False,
+            "error": "captcha_detected",
+            "captcha": True,
+            "captcha_type": "hcaptcha",
+            "filled": filled,
+            "message": "Form has hCaptcha — requires manual submission",
+        }
+
+    async def _check_success() -> dict | None:
+        page_text = await page.inner_text("body")
+        print(f"[ats-form] Lever: page text after submit:\n{page_text[:2000]}")
+        if any(s in page_text.lower() for s in [
+            "thank you", "application received", "successfully", "we'll be in touch"
+        ]):
+            return {"success": True, "filled": filled, "ats": "lever"}
+        return None
+
+    # Try JS form.submit() first — bypasses LinkedIn iframe overlay
     try:
-        submit = await page.wait_for_selector(
-            'button[type="submit"], '
-            'button:has-text("Submit application"), '
-            'button:has-text("Apply"), '
-            'button:has-text("Submit")',
-            timeout=5000,
-        )
+        submitted = await page.evaluate("""() => {
+            const form = document.querySelector('form')
+            if (form) { form.submit(); return true }
+            return false
+        }""")
+        if submitted:
+            await page.wait_for_timeout(3000)
+            ok = await _check_success()
+            if ok:
+                return ok
+    except Exception as e:
+        print(f"[ats-form] Lever: JS submit error: {e}")
+
+    # Fall back to hiding LinkedIn iframe + force click
+    try:
+        submit = await page.query_selector('button[type="submit"]')
         if submit:
-            await submit.click()
+            await page.evaluate("""() => {
+                document.querySelectorAll('.IN-widget iframe')
+                    .forEach(f => f.style.display = 'none')
+            }""")
+            await submit.click(force=True)
             await page.wait_for_timeout(4000)
-
-            page_text = await page.inner_text("body")
-            print(f"[ats-form] Lever: page text after submit:\n{page_text[:2000]}")
-
-            if any(s in page_text.lower() for s in [
-                "thank you", "application received", "successfully", "we'll be in touch"
-            ]):
-                return {"success": True, "filled": filled, "ats": "lever"}
-
+            ok = await _check_success()
+            if ok:
+                return ok
             return {
                 "success": True,
                 "filled": filled,
@@ -206,9 +237,9 @@ async def _fill_lever_form(
                 "message": "Submitted (no explicit confirmation)",
             }
     except Exception as e:
-        return {"success": False, "error": f"Lever submit failed: {e}", "filled": filled}
+        print(f"[ats-form] Lever: submit click error: {e}")
 
-    return {"success": False, "error": "Lever submit button not found", "filled": filled}
+    return {"success": False, "error": "Lever submit failed", "filled": filled}
 
 
 async def _fill_form_fields(
@@ -374,19 +405,25 @@ async def _fill_form_fields(
             except Exception as e:
                 print(f"[ats-form] Could not fill custom question {q_id}: {e}")
 
-    # ── reCAPTCHA check — bail before submit if present ──────────────────────
+    # ── CAPTCHA check (reCAPTCHA + hCaptcha) — bail before submit ───────────
 
-    recaptcha = await page.query_selector(
-        'iframe[src*="recaptcha"], .g-recaptcha, input[name="g-recaptcha-response"]'
+    captcha_el = await page.query_selector(
+        'iframe[src*="recaptcha"], .g-recaptcha, input[name="g-recaptcha-response"], '
+        'input[name="h-captcha-response"], .h-captcha, iframe[src*="hcaptcha"]'
     )
-    if recaptcha:
-        print("[ats-form] reCAPTCHA detected — cannot auto-submit")
+    if captcha_el:
+        name_attr = await captcha_el.get_attribute("name") or ""
+        src_attr = await captcha_el.get_attribute("src") or ""
+        class_attr = await captcha_el.get_attribute("class") or ""
+        captcha_type = "hcaptcha" if "hcaptcha" in (name_attr + src_attr + class_attr) else "recaptcha"
+        print(f"[ats-form] CAPTCHA detected: {captcha_type}")
         return {
             "success": False,
-            "error": "recaptcha_detected",
-            "recaptcha": True,
+            "error": "captcha_detected",
+            "captcha": True,
+            "captcha_type": captcha_type,
             "filled": filled,
-            "message": "Form has reCAPTCHA — requires manual submission",
+            "message": f"Form has {captcha_type} — requires manual submission",
         }
 
     # ── GDPR / consent checkbox ───────────────────────────────────────────────

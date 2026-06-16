@@ -51,7 +51,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             )
             print(f"[ats-apply-bg] submit_via_ats returned: {result}")
 
-            if result.get("recaptcha"):
+            if result.get("recaptcha") or result.get("captcha"):
                 status = "manual"
             elif result.get("success"):
                 status = "applied"

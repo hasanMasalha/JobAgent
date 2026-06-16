@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
       db.$queryRaw<{ url: string; title: string }[]>`
         SELECT url, title FROM "Job" WHERE id = ${jobId} LIMIT 1
       `,
-      // Look up by email — User.id is a Prisma UUID, not the Supabase auth UUID
-      db.user.findUnique({
-        where: { email: user.email! },
+      // Try both id and email — User.id is a Prisma UUID that may differ from Supabase auth UUID
+      db.user.findFirst({
+        where: { OR: [{ id: user.id }, { email: user.email! }] },
         select: {
           first_name: true,
           last_name: true,
@@ -112,7 +112,25 @@ export async function POST(req: NextRequest) {
       success: boolean;
       error?: string;
       status?: string;
+      captcha?: boolean;
+      captcha_type?: string;
+      filled?: string[];
     };
+
+    if (result.captcha) {
+      await db.$executeRaw`
+        UPDATE "Application" SET status = 'manual'
+        WHERE id = ${applicationId} AND user_id = ${user.id}
+      `;
+      return NextResponse.json({
+        success: false,
+        captcha: true,
+        captcha_type: result.captcha_type,
+        manual_url: job.url,
+        filled: result.filled,
+        message: `Form filled (${result.filled?.join(", ")}) but has ${result.captcha_type ?? "captcha"} — please submit manually`,
+      });
+    }
 
     if (!result.success) {
       return NextResponse.json(
