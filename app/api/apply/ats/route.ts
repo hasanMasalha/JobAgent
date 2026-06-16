@@ -39,28 +39,26 @@ export async function POST(req: NextRequest) {
       `;
     }
 
-    const [jobRows, profileRows] = await Promise.all([
+    const [jobRows, profile] = await Promise.all([
       db.$queryRaw<{ url: string; title: string }[]>`
         SELECT url, title FROM "Job" WHERE id = ${jobId} LIMIT 1
       `,
-      db.$queryRaw<{
-        first_name: string | null;
-        last_name: string | null;
-        name: string | null;
-        email: string;
-        phone: string | null;
-        linkedin_url: string | null;
-      }[]>`
-        SELECT first_name, last_name, name, email, phone, linkedin_url
-        FROM "User" WHERE id = ${user.id} LIMIT 1
-      `,
+      db.user.findUnique({
+        where: { id: user.id },
+        select: {
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone: true,
+          linkedin_url: true,
+        },
+      }),
     ]);
 
     if (!jobRows.length) return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    if (!profileRows.length) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!profile) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const job = jobRows[0];
-    const profile = profileRows[0];
 
     const atsPlatform = detectATS(job.url);
     if (!atsPlatform) {
@@ -72,13 +70,8 @@ export async function POST(req: NextRequest) {
 
     console.log("[ats] raw profile:", JSON.stringify(profile));
 
-    const fullName = profile.first_name
-      ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
-      : profile.name ?? "";
-    const nameParts = fullName.trim().split(/\s+/);
-    const firstName = profile.first_name || nameParts[0] || "";
-    const lastName =
-      profile.last_name || nameParts.slice(1).join(" ") || "";
+    const firstName = profile.first_name || "";
+    const lastName = profile.last_name || "";
 
     console.log("[ats] firstName:", firstName, "lastName:", lastName);
 
