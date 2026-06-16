@@ -129,6 +129,8 @@ export default function JobCard({
   const [saved, setSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
+  const [quickApplying, setQuickApplying] = useState(false);
+  const [quickApplied, setQuickApplied] = useState(false);
   const router = useRouter();
   const extensionInstalled = useExtensionInstalled();
   const isExtension = job.apply_type === "extension";
@@ -150,6 +152,48 @@ export default function JobCard({
       : job.salary_min
       ? `From ₪${job.salary_min.toLocaleString()}`
       : null;
+
+  const handleQuickApply = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (quickApplying || quickApplied) return;
+    setQuickApplying(true);
+    try {
+      const res = await fetch("/api/apply/quick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      const data = await res.json();
+      if (data.needs_extension) {
+        router.push(`/dashboard/apply/${job.id}`);
+        return;
+      }
+      if (data.status === "external") {
+        window.open(data.external_url, "_blank");
+        setQuickApplied(true);
+        showToast("Job opened — apply on their website", "success");
+        return;
+      }
+      if (data.status === "applying") {
+        setQuickApplied(true);
+        showToast("Applying in background...", "success");
+        return;
+      }
+      showToast((data.error as string) || "Apply failed", "error");
+    } catch {
+      showToast("Apply failed", "error");
+    } finally {
+      setQuickApplying(false);
+    }
+  };
+
+  const handleTailorApply = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onApply?.(job.id);
+    router.push(`/dashboard/apply/${job.id}`);
+  };
 
   async function handleDismiss() {
     setDismissing(true);
@@ -266,18 +310,37 @@ export default function JobCard({
         >
           View job
         </a>
+        {/* Quick Apply */}
         <button
-          onClick={() => {
-            onApply?.(job.id);
-            router.push(`/dashboard/apply/${job.id}`);
-          }}
-          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-            isExtension && extensionInstalled
+          onClick={handleQuickApply}
+          disabled={quickApplying || quickApplied}
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
+            quickApplied
+              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              : isExtension && extensionInstalled
               ? "bg-[#1a2e5e] text-white hover:opacity-90"
               : "bg-emerald-600 text-white hover:bg-emerald-700"
           }`}
         >
-          {isExtension && extensionInstalled ? "⚡ Auto Apply" : "Apply"}
+          {quickApplying ? (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+              Applying...
+            </span>
+          ) : quickApplied ? (
+            "✓ Applied"
+          ) : isExtension && extensionInstalled ? (
+            "⚡ Auto Apply"
+          ) : (
+            "Apply"
+          )}
+        </button>
+        {/* Tailor CV & Apply */}
+        <button
+          onClick={handleTailorApply}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200"
+        >
+          ✨ Tailor CV
         </button>
         <button
           disabled={saving}

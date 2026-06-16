@@ -1,0 +1,145 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase.server";
+import { db } from "@/lib/db";
+
+export const maxDuration = 60;
+
+type ATSPlatform = "greenhouse" | "lever" | "workable";
+
+function detectATS(url: string): ATSPlatform | null {
+  const u = (url ?? "").toLowerCase();
+  if (u.includes("greenhouse.io")) return "greenhouse";
+  if (u.includes("lever.co")) return "lever";
+  if (u.includes("workable.com")) return "workable";
+  return null;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { jobId } = (await req.json()) as { jobId: string };
+    if (!jobId) return NextResponse.json({ error: "jobId required" }, { status: 400 });
+
+    const jobRows = await db.$queryRaw<{ url: string; title: string; company: string }[]>`
+      SELECT url, title, company FROM "Job" WHERE id = ${jobId} LIMIT 1
+    `;
+    if (!jobRows.length) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    const job = jobRows[0];
+
+    const profile = await db.user.findFirst({
+      where: { OR: [{ id: user.id }, { email: user.email! }] },
+      select: {
+        first_name: true,
+        last_name: true,
+        email: true,
+        phone: true,
+        linkedin_url: true,
+      },
+    });
+    if (!profile) return NextResponse.json({ error: "User profile not found" }, { status: 404 });
+
+    const applyUrl = job.url ?? "";
+
+    // LinkedIn — requires extension, redirect to full flow
+    if (applyUrl.includes("linkedin.com")) {
+      return NextResponse.json({
+        success: false,
+        needs_extension: true,
+        message: "LinkedIn jobs require the browser extension",
+      });
+    }
+
+    const atsPlatform = detectATS(applyUrl);
+
+    if (atsPlatform) {
+      // Create application record before calling Python
+      const appRows = await db.$queryRaw<{ id: string }[]>`
+        INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
+        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'applying', now())
+        RETURNING id
+      `;
+      const applicationId = appRows[0].id;
+
+      const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/ats-apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: jobId,
+          apply_url: applyUrl,
+          ats_platform: atsPlatform,
+          application_id: applicationId,
+          user_id: user.id,
+          first_name: profile.first_name ?? "",
+          last_name: profile.last_name ?? "",
+          email: profile.email ?? user.email ?? "",
+          phone: profile.phone ?? "",
+          linkedin_url: profile.linkedin_url ?? "",
+        }),
+        signal: AbortSignal.timeout(110_000),
+      });
+
+      if (!pythonRes.ok) {
+        const text = await pythonRes.text();
+        console.error("[apply/quick] python error:", pythonRes.status, text.slice(0, 300));
+        await db.$executeRaw`
+          UPDATE "Application" SET status = 'manual' WHERE id = ${applicationId}
+        `;
+        return NextResponse.json(
+          { success: false, error: `ATS service error (${pythonRes.status})` },
+          { status: 500 }
+        );
+      }
+
+      const result = (await pythonRes.json()) as {
+        success: boolean;
+        error?: string;
+        status?: string;
+        captcha?: boolean;
+        captcha_type?: string;
+        filled?: string[];
+      };
+
+      if (result.captcha) {
+        await db.$executeRaw`
+          UPDATE "Application" SET status = 'manual' WHERE id = ${applicationId}
+        `;
+        return NextResponse.json({
+          success: false,
+          captcha: true,
+          captcha_type: result.captcha_type,
+          manual_url: applyUrl,
+          message: "Form has CAPTCHA — please apply manually",
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        status: "applying",
+        application_id: applicationId,
+        message: "Application submitted in background",
+      });
+    }
+
+    // External job — no ATS detected, open directly
+    await db.$queryRaw<{ id: string }[]>`
+      INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
+      VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'manual', now())
+      RETURNING id
+    `;
+    return NextResponse.json({
+      success: true,
+      status: "external",
+      external_url: applyUrl,
+      message: "Opening job page",
+    });
+  } catch (err) {
+    console.error("[apply/quick]", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
