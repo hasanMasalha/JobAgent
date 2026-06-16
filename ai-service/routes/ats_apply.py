@@ -4,9 +4,10 @@ import os
 import sys
 import tempfile
 import traceback
+import threading
 
 import asyncpg
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from routes.apply import _build_cv_pdf
@@ -81,7 +82,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
 
 
 @router.post("/ats-apply")
-async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
+async def ats_apply(req: ATSApplyRequest):
     """Kick off ATS form fill in background and return immediately."""
     print(f"[ats-apply] {req.ats_platform} — {req.apply_url[:80]}")
 
@@ -133,7 +134,11 @@ async def ats_apply(req: ATSApplyRequest, background_tasks: BackgroundTasks):
         },
     }
 
-    print(f"[ats-apply] Scheduling background task for {req.application_id}")
-    background_tasks.add_task(_run_ats_apply_sync, request_dict)
-    print("[ats-apply] Background task scheduled — returning 'applying'")
+    thread = threading.Thread(
+        target=_run_ats_apply_sync,
+        args=(request_dict,),
+        daemon=True,
+    )
+    thread.start()
+    print(f"[ats-apply] Thread started: {thread.ident}")
     return {"success": True, "status": "applying"}
