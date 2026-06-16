@@ -266,12 +266,14 @@ async def _extract_job_links(
     for link in links:
         text = (link.get('text') or '').strip()
         href = (link.get('href') or '').strip()
+        text_lower = text.lower()
         if (
             not text or not href
             or href in seen
             or 'mailto:' in href
             or len(text) < 5 or len(text) > 150
             or not _JOB_TITLE_RE.search(text)
+            or any(bad in text_lower for bad in _GARBAGE_TITLE_WORDS)
             or not is_valid_job_url(href, careers_url)
         ):
             continue
@@ -290,11 +292,36 @@ async def _extract_job_links(
 
 
 _BAD_URL_PATTERNS = [
+    # Index / category pages
     r'/career/$', r'/careers/$', r'/jobs/$',
     r'/career/cat', r'/jobs/category',
-    r'page=', r'category=', r'department=',
+    r'[?&]page=', r'[?&]category=', r'[?&]department=',
     r'/career/#', r'/jobs/#',
+    # Social share / tracking
+    r'facebook\.com/shar', r'whatsapp\.com/send', r'api\.whatsapp\.com',
+    r'linkedin\.com/shar', r'twitter\.com/share', r't\.co/',
+    r'share_job_id',
+    # Non-job navigation pages — trailing slash or end-of-string so
+    # "security-engineer" is NOT rejected but "/security" IS.
+    r'/solution[s]?(?:/|$)', r'/service[s]?(?:/|$)',
+    r'/support(?:/|$)', r'/contact(?:/|$)',
+    r'/security(?:/|$)', r'/product[s]?(?:/|$)',
+    r'/blog(?:/|$)', r'/news(?:/|$)',
+    r'/about(?:-us)?(?:/|$)', r'/privacy(?:/|$)',
+    r'/terms(?:/|$)', r'/cookie[s]?(?:/|$)',
+    r'/learn(?:/|$)', r'/resource[s]?(?:/|$)',
+    r'/partner[s]?(?:/|$)', r'/pricing(?:/|$)',
+    r'/platform(?:/|$)', r'/technology(?:/|$)',
 ]
+
+# Link text that indicates a navigation/marketing element, not a job title
+_GARBAGE_TITLE_WORDS = frozenset({
+    'sign in', 'log in', 'login', 'support center', 'contact sales',
+    'privacy policy', 'cookie policy', 'terms of service', 'terms of use',
+    'learn more', 'get started', 'sign up', 'register', 'free trial',
+    'whatsapp', 'share on', 'follow us', 'contact us',
+    'linkedin corporation', 'read more', 'view all',
+})
 
 
 def is_valid_job_url(url: str, source_url: str) -> bool:
@@ -302,8 +329,9 @@ def is_valid_job_url(url: str, source_url: str) -> bool:
         return False
     if url.rstrip('/') == source_url.rstrip('/'):
         return False
+    u = url.lower()
     for pattern in _BAD_URL_PATTERNS:
-        if re.search(pattern, url):
+        if re.search(pattern, u):
             return False
     return True
 

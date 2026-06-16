@@ -35,6 +35,40 @@ _ISRAELI_KEYWORDS = [
 ]
 
 
+_BAD_JOB_URL_FRAGMENTS = (
+    'facebook.com/shar', 'whatsapp.com/send', 'api.whatsapp.com',
+    'linkedin.com/shar', 'twitter.com/share', 'share_job_id',
+    '/solutions/', '/solution/', '/services/', '/service/',
+    '/support', '/contact', '/product/', '/products/',
+    '/blog/', '/news/', '/about/', '/privacy', '/terms', '/cookies',
+    '/learn/', '/resources/', '/partners/', '/pricing/', '/platform/',
+    '/technology/',
+)
+
+_BAD_JOB_TITLE_FRAGMENTS = (
+    'sign in', 'log in', 'support center', 'contact sales',
+    'privacy policy', 'cookie policy', 'terms of service', 'terms of use',
+    'learn more', 'get started', 'sign up', 'register', 'free trial',
+    'whatsapp', 'share on', 'follow us', 'contact us', 'read more',
+    'view all', 'linkedin corporation', '<img',
+)
+
+
+def is_valid_job(job: dict) -> bool:
+    """Filter out non-job pages scraped by mistake."""
+    url = (job.get('url') or '').lower()
+    title = (job.get('title') or '').strip()
+    title_lower = title.lower()
+
+    if any(bad in url for bad in _BAD_JOB_URL_FRAGMENTS):
+        return False
+    if any(bad in title_lower for bad in _BAD_JOB_TITLE_FRAGMENTS):
+        return False
+    if len(title) < 3 or title.startswith('<'):
+        return False
+    return True
+
+
 def is_israeli_job(job: dict) -> bool:
     location = (job.get('location') or '').lower().strip()
     url = (job.get('url') or '').lower().strip()
@@ -384,6 +418,10 @@ async def scrape_company(company: dict) -> list[dict]:
         return []  # workday, unknown etc — skip for now
 
     jobs = await handler(company)
+    before = len(jobs)
+    jobs = [j for j in jobs if is_valid_job(j)]
+    if len(jobs) < before:
+        print(f"  {company.get('name')}: filtered {before - len(jobs)} garbage jobs")
     for job in jobs:
         job['known_israeli_company'] = True
     return jobs
