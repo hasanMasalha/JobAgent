@@ -26,16 +26,16 @@ jobs:
               && echo "LinkedIn/Indeed scrape completed" \
               || echo "LinkedIn/Indeed scrape failed or timed out"
 
-      - name: Scrape company careers
+      - name: Scrape company careers (API-based only)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 20m
+          command_timeout: 10m
           script: |
-            echo "Starting company careers scrape..."
-            curl -s -X POST http://localhost:8000/companies/scrape-and-store \
-              --max-time 1000 \
-              && echo "Company careers scrape completed" \
-              || echo "Company careers scrape failed or timed out"
+            echo "Starting API company scrape (greenhouse/comeet/lever/ashby)..."
+            curl -s -X POST http://localhost:8000/companies/scrape-api-only \
+              --max-time 300 \
+              && echo "API company scrape completed" \
+              || echo "API company scrape failed or timed out"

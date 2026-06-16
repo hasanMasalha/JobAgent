@@ -345,6 +345,114 @@ async def scrape_and_store_company_careers():
     }
 
 
+@router.post("/companies/scrape-api-only")
+async def scrape_api_companies_only():
+    """Scrape only API-based ATS companies (fast)."""
+    from company_scraper import load_companies, scrape_company
+
+    companies = load_companies()
+
+    api_companies = [
+        c for c in companies
+        if c.get('ats_type') in ('greenhouse', 'comeet', 'lever', 'ashby')
+        and c.get('active', 'true').lower() == 'true'
+    ]
+
+    print(f"[company-api] Scraping {len(api_companies)} API companies")
+
+    all_jobs: list[dict] = []
+    summary: list[dict] = []
+    failed = 0
+
+    for company in api_companies:
+        try:
+            jobs = await scrape_company(company)
+            all_jobs.extend(jobs)
+            summary.append({'name': company.get('name'), 'ats': company.get('ats_type'), 'jobs': len(jobs)})
+            print(f"[company-api] {company.get('name')}: {len(jobs)} jobs")
+        except Exception as e:
+            failed += 1
+            print(f"[company-api] ERROR {company.get('name')}: {e}")
+
+    if not all_jobs:
+        return {"new_jobs": 0, "updated_jobs": 0, "total_processed": 0, "failed": failed, "companies": summary}
+
+    jobs_before = len(all_jobs)
+    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
+    print(f"[company-api] Israel filter: {jobs_before} -> {len(all_jobs)} jobs")
+
+    database_url = os.environ["DATABASE_URL"]
+    conn = await asyncpg.connect(database_url)
+
+    new_jobs = 0
+    updated_jobs = 0
+    skipped = 0
+    try:
+        for job in all_jobs:
+            if not job.get("url", "").strip():
+                skipped += 1
+                continue
+            description = _clean_description(job.get("description", ""))
+            embed_text = f"{job['title']} {description[:500]}".strip()
+            embedding = embed(embed_text)
+            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO "Job" (id, title, company, description, location,
+                                   url, source, salary_min, salary_max,
+                                   embedding, apply_type, ats_platform, scraped_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4,
+                        $5, $6, $7, $8,
+                        $9::vector, $10, $11, now())
+                ON CONFLICT (url) DO UPDATE
+                    SET description   = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.description
+                                          ELSE "Job".description
+                                        END,
+                        embedding     = CASE
+                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                          THEN EXCLUDED.embedding
+                                          ELSE "Job".embedding
+                                        END,
+                        apply_type    = EXCLUDED.apply_type,
+                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                        is_active     = true,
+                        scraped_at    = now()
+                RETURNING (xmax = 0) AS is_insert
+                """,
+                job["title"],
+                job["company"],
+                description,
+                job.get("location", ""),
+                job["url"],
+                job["source"],
+                job.get("salary_min"),
+                job.get("salary_max"),
+                embedding_str,
+                _detect_apply_type(job),
+                _detect_ats(job.get("url", "")),
+            )
+            if row is None:
+                pass
+            elif row["is_insert"]:
+                new_jobs += 1
+            else:
+                updated_jobs += 1
+    finally:
+        await conn.close()
+
+    return {
+        "new_jobs": new_jobs,
+        "updated_jobs": updated_jobs,
+        "skipped": skipped,
+        "total_processed": len(all_jobs),
+        "failed_companies": failed,
+        "companies": summary,
+    }
+
+
 class SetAtsRequest(BaseModel):
     name: str
     ats_type: str
