@@ -63,9 +63,14 @@ async def fill_ats_form(
                     f"placeholder={placeholder} required={required}"
                 )
 
-            result = await _fill_form_fields(
-                page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
-            )
+            if "lever.co" in apply_url:
+                result = await _fill_lever_form(
+                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
+                )
+            else:
+                result = await _fill_form_fields(
+                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
+                )
 
             await browser.close()
             return result
@@ -75,6 +80,126 @@ async def fill_ats_form(
             os.unlink(cv_path)
         except Exception:
             pass
+
+
+async def _fill_lever_form(
+    page,
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    cv_path: str,
+    cover_letter: str,
+    linkedin_url: str,
+) -> dict:
+    """Fill Lever-specific application form (lever.co)."""
+
+    filled = []
+    full_name = f"{first_name} {last_name}".strip()
+
+    async def _try_fill(selector: str, value: str, field: str) -> bool:
+        try:
+            el = await page.wait_for_selector(selector, timeout=5000)
+            if el:
+                await el.fill(value)
+                filled.append(field)
+                print(f"[ats-form] Lever: filled {field}")
+                return True
+        except Exception as e:
+            print(f"[ats-form] Lever: {field} error: {e}")
+        return False
+
+    # Lever uses a single "name" field
+    await _try_fill('input[name="name"]', full_name, "name")
+    await _try_fill('input[name="email"]', email, "email")
+    await _try_fill('input[name="phone"]', phone or "", "phone")
+
+    # Resume upload
+    try:
+        el = await page.wait_for_selector('input[type="file"]', timeout=3000)
+        if el:
+            await el.set_input_files(cv_path)
+            filled.append("resume")
+            print("[ats-form] Lever: uploaded resume")
+    except Exception as e:
+        print(f"[ats-form] Lever: resume upload error: {e}")
+
+    # LinkedIn URL
+    if linkedin_url:
+        try:
+            el = await page.query_selector('input[name="urls[LinkedIn]"]')
+            if el:
+                await el.fill(linkedin_url)
+                filled.append("linkedin")
+                print("[ats-form] Lever: filled linkedin")
+        except Exception:
+            pass
+
+    # Cover letter in comments / org field
+    try:
+        el = await page.query_selector(
+            'textarea[name="comments"], '
+            'textarea[placeholder*="cover"], '
+            'textarea[placeholder*="Cover"]'
+        )
+        if el:
+            await el.fill(cover_letter)
+            filled.append("cover_letter")
+            print("[ats-form] Lever: filled cover letter")
+    except Exception:
+        pass
+
+    # Dropdowns — pick "No" for employee-status questions, first option otherwise
+    try:
+        selects = await page.query_selector_all("select")
+        for select in selects:
+            options = await select.query_selector_all("option")
+            picked = False
+            for opt in options:
+                text = (await opt.inner_text()).strip().lower()
+                val = await opt.get_attribute("value") or ""
+                if text == "no":
+                    await select.select_option(value=val)
+                    picked = True
+                    break
+            if not picked and len(options) > 1:
+                val = await options[1].get_attribute("value") or ""
+                if val:
+                    await select.select_option(value=val)
+    except Exception:
+        pass
+
+    # Submit
+    try:
+        submit = await page.wait_for_selector(
+            'button[type="submit"], '
+            'button:has-text("Submit application"), '
+            'button:has-text("Apply"), '
+            'button:has-text("Submit")',
+            timeout=5000,
+        )
+        if submit:
+            await submit.click()
+            await page.wait_for_timeout(4000)
+
+            page_text = await page.inner_text("body")
+            print(f"[ats-form] Lever: page text after submit:\n{page_text[:2000]}")
+
+            if any(s in page_text.lower() for s in [
+                "thank you", "application received", "successfully", "we'll be in touch"
+            ]):
+                return {"success": True, "filled": filled, "ats": "lever"}
+
+            return {
+                "success": True,
+                "filled": filled,
+                "ats": "lever",
+                "message": "Submitted (no explicit confirmation)",
+            }
+    except Exception as e:
+        return {"success": False, "error": f"Lever submit failed: {e}", "filled": filled}
+
+    return {"success": False, "error": "Lever submit button not found", "filled": filled}
 
 
 async def _fill_form_fields(
@@ -125,26 +250,29 @@ async def _fill_form_fields(
     # ── Standard fields ──────────────────────────────────────────────────────
 
     await fill_field([
+        "#first_name",
+        'input[id="first_name"]',
         'input[name="first_name"]',
-        'input[id*="first_name"]',
         'input[placeholder*="First"]',
         'input[id="first-name"]',
-        "#first_name",
+        'input[id*="first_name"]',
     ], first_name, "first_name")
 
     await fill_field([
+        "#last_name",
+        'input[id="last_name"]',
         'input[name="last_name"]',
-        'input[id*="last_name"]',
         'input[placeholder*="Last"]',
         'input[id="last-name"]',
-        "#last_name",
+        'input[id*="last_name"]',
     ], last_name, "last_name")
 
     await fill_field([
+        "#email",
+        'input[id="email"]',
         'input[name="email"]',
         'input[type="email"]',
         'input[id*="email"]',
-        "#email",
     ], email, "email")
 
     # Greenhouse uses a country-code dropdown + bare number input
@@ -177,6 +305,8 @@ async def _fill_form_fields(
         pass
 
     await upload_file([
+        "#resume",
+        'input[id="resume"]',
         'input[type="file"][name="resume"]',
         'input[type="file"][id*="resume"]',
         'input[type="file"][accept*="pdf"]',

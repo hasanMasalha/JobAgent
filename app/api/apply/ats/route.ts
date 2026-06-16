@@ -70,10 +70,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const firstName =
-      profile.first_name ?? profile.name?.split(" ")[0] ?? "";
+    console.log("[ats] profile:", JSON.stringify(profile));
+
+    const fullName = profile.first_name
+      ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
+      : profile.name ?? "";
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstName = profile.first_name || nameParts[0] || "";
     const lastName =
-      profile.last_name ?? profile.name?.split(" ").slice(1).join(" ") ?? "";
+      profile.last_name || nameParts.slice(1).join(" ") || "";
+
+    console.log("[ats] firstName:", firstName, "lastName:", lastName);
 
     const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/ats-apply`, {
       method: "POST",
