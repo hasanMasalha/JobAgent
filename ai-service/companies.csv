@@ -2,12 +2,12 @@ name,careers_url,ats_type,slug,last_crawled,active
 Monday.com, https://monday.com/careers,comeet,41.00B:14B52C52C67790D3E1296BA37C20,2026-04-25,true
 Payoneer, https://careers.payoneer.com/,greenhouse,payoneer,2026-04-26,true
 Wix, https://careers.wix.com/,html,,2026-04-26,true
-Fiverr, https://jobs.ashbyhq.com/fiverr,html,,2026-06-16,true
+Fiverr, https://www.comeet.com/jobs/fiverr/60.002,comeet,fiverr:60.002,2026-06-16,true
 eToro, https://www.etoro.com/about/careers/,html,,2026-04-26,true
 Amdocs, https://www.amdocs.com/careers,html,,2026-04-26,true
 Check Point, https://careers.checkpoint.com/,html,,2026-04-26,true
 Nice Systems, https://www.nice.com/careers,html,,2026-04-26,true
-Nayax, https://www.nayax.com/careers/,html,,2026-04-26,true
+Nayax, https://www.comeet.com/jobs/nayax/13.009,comeet,nayax:13.009,2026-06-16,true
 Wiz, https://www.wiz.io/careers,greenhouse,wizinc,2026-04-25,true
 Papaya Global, https://www.papayaglobal.com/careers/,greenhouse,papaya,2026-06-16,true
 Lightricks, https://careers.lightricks.com/,greenhouse,lightricks,2026-04-25,true
@@ -25,7 +25,7 @@ JFrog, https://jfrog.com/careers/,greenhouse,jfrog,2026-04-25,true
 Redis, https://redis.com/company/careers/,html,,2026-04-26,true
 WalkMe, https://www.walkme.com/company/careers/,lever,walkme,2026-04-25,true
 Playtika, https://www.playtika.com/careers/,greenhouse,playtikaltd,2026-04-26,true
-Moon Active, https://www.moonactive.com/careers/,html,,2026-04-26,true
+Moon Active, https://www.comeet.com/jobs/moonactive/A2.00C,comeet,moonactive:A2.00C,2026-06-16,true
 Viber, https://careers.viber.com/,html,,2026-04-26,true
 Gett, https://gett.com/careers/,html,,2026-04-26,true
 Mobileye, https://careers.mobileye.com/,html,,2026-04-26,true
