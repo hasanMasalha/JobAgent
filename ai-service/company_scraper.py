@@ -46,11 +46,29 @@ _BAD_JOB_URL_FRAGMENTS = (
 )
 
 _BAD_JOB_TITLE_FRAGMENTS = (
+    # Navigation / auth actions
     'sign in', 'log in', 'support center', 'contact sales',
     'privacy policy', 'cookie policy', 'terms of service', 'terms of use',
     'learn more', 'get started', 'sign up', 'register', 'free trial',
     'whatsapp', 'share on', 'follow us', 'contact us', 'read more',
     'view all', 'linkedin corporation', '<img',
+    # Company org / marketing pages
+    'board of directors', 'leadership team', 'product warranty',
+    'maintenance and support', 'voip technology products',
+    'device manager', 'routing manager', 'survivability products',
+    'developer platform', 'token manager', 'data api',
+    'international exchange api', 'product groups',
+    'industry leading security', 'wealth managers', 'asset managers',
+    'managed tech', 'data centers & networks',
+    # Security marketing pages (ceragon, allot etc.)
+    '5g security', '5g network security', 'network-native security',
+    'connected home security', 'converged security',
+    'service provider security', 'network security for business',
+    'sp security', 'siklu by ceragon',
+    # Support / feedback pages
+    'product feedback', 'historical market data',
+    'secure internal communication', 'get support help',
+    'product/solution info', '24/7 support', '24/7 chat support',
 )
 
 

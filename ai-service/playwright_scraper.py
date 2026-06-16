@@ -1,5 +1,6 @@
 import json
 import re
+from urllib.parse import urlparse
 
 from playwright.async_api import Browser, Page, async_playwright
 
@@ -261,6 +262,7 @@ async def _extract_job_links(
         "    href: a.href"
         "}))"
     )
+    total = len(links)
     jobs = []
     seen: set[str] = set()
     for link in links:
@@ -270,11 +272,10 @@ async def _extract_job_links(
         if (
             not text or not href
             or href in seen
-            or 'mailto:' in href
             or len(text) < 5 or len(text) > 150
             or not _JOB_TITLE_RE.search(text)
             or any(bad in text_lower for bad in _GARBAGE_TITLE_WORDS)
-            or not is_valid_job_url(href, careers_url)
+            or not is_job_link(href, careers_url)
         ):
             continue
         seen.add(href)
@@ -288,6 +289,7 @@ async def _extract_job_links(
             'salary_min': None,
             'salary_max': None,
         })
+    print(f"[pw] {company_name}: {total} links found, {len(jobs)} job links kept")
     return jobs
 
 
@@ -322,6 +324,76 @@ _GARBAGE_TITLE_WORDS = frozenset({
     'whatsapp', 'share on', 'follow us', 'contact us',
     'linkedin corporation', 'read more', 'view all',
 })
+
+
+_ATS_DOMAINS = frozenset({
+    'greenhouse.io', 'lever.co', 'comeet.com', 'ashbyhq.com',
+    'workable.com', 'bamboohr.com', 'jobvite.com', 'smartrecruiters.com',
+    'taleo.net', 'successfactors.com',
+})
+
+_EXTERNAL_BLOCKLIST = (
+    'facebook.com', 'twitter.com', 'linkedin.com/shar',
+    'whatsapp.com', 't.co/', 'instagram.com', 'youtube.com', 'google.com',
+)
+
+_JOB_PATH_SIGNALS = (
+    '/job/', '/jobs/', '/career/', '/careers/',
+    '/position/', '/positions/', '/opening/', '/openings/',
+    '/vacancy/', '/vacancies/', '/role/', '/roles/',
+    '/apply', 'gh_jid=', '?job', 'job_id=',
+)
+
+_NON_JOB_PATHS = (
+    '/product', '/solution', '/service',
+    '/support', '/contact', '/about',
+    '/blog/', '/news/', '/press/',
+    '/privacy', '/terms', '/legal',
+    '/platform/', '/technology/', '/resources/', '/docs/', '/api/',
+    '/learn/', '/pricing/', '/partners/', '/customers/',
+    '/board', '/leadership', '/team/',
+    '/warranty', '/feedback', '/chat',
+    '/developer-', '/careers#',
+    '/whistleblow', '/tokenmanag', '/market-data', '/product-group',
+    '/security/', '/cookie', '/applications/', '/industries/',
+    '/use-cases/', '/case-studies/', '/white-papers/', '/events/',
+    '/webinars/', '/videos/', '/glossary/', '/newsletter/',
+)
+
+
+def is_job_link(href: str, base_careers_url: str) -> bool:
+    """Return True only if the link is likely a job listing page."""
+    if not href:
+        return False
+    h = href.lower().strip()
+
+    if h.startswith(('#', 'javascript:', 'mailto:')):
+        return False
+
+    if any(b in h for b in _EXTERNAL_BLOCKLIST):
+        return False
+
+    # Absolute URLs must stay on same domain or a known ATS platform
+    try:
+        base_netloc = urlparse(base_careers_url).netloc.lower()
+        link_netloc = urlparse(href).netloc.lower()
+        if link_netloc and link_netloc != base_netloc:
+            if not any(ats in link_netloc for ats in _ATS_DOMAINS):
+                return False
+    except Exception:
+        pass
+
+    path = urlparse(href).path.lower() if href.startswith('http') else h
+
+    if any(s in path for s in _NON_JOB_PATHS):
+        return False
+
+    if any(s in path for s in _JOB_PATH_SIGNALS):
+        return True
+
+    # No strong signal — accept only if it's a deep path (not a nav/category page)
+    depth = len([p for p in path.split('/') if p])
+    return depth > 2
 
 
 def is_valid_job_url(url: str, source_url: str) -> bool:
