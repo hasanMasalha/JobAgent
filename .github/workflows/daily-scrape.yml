@@ -28,7 +28,7 @@ jobs:
 
             echo "Starting company careers scrape..."
             curl -X POST http://localhost:8000/companies/scrape-and-store \
-              --max-time 300 \
+              --max-time 600 \
               --silent \
               --show-error \
               && echo "Company careers scrape completed" \

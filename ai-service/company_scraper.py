@@ -374,7 +374,7 @@ async def scrape_company(company: dict) -> list[dict]:
         'comeet': scrape_comeet,
     }
 
-    if ats == 'html':
+    if ats in ('html', 'ashby'):
         from playwright_scraper import scrape_jobs_with_playwright
         handler = scrape_jobs_with_playwright
     else:
