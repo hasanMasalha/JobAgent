@@ -441,20 +441,18 @@ async def scrape_company(company: dict) -> list[dict]:
     if len(jobs) < before:
         print(f"  {company.get('name')}: filtered {before - len(jobs)} garbage jobs")
 
-    # For html/ashby companies without a .co.il domain, drop any job that
-    # has an explicit non-Israeli location (empty location is fine — many
-    # Israeli-office jobs don't populate location in the scraped HTML).
+    # For all html/ashby companies, drop any job with an explicit non-Israeli
+    # location. Empty location passes through — many Israeli-office jobs don't
+    # populate location in scraped HTML.
     if ats in ('html', 'ashby'):
-        is_co_il = '.co.il' in company.get('careers_url', '').lower()
-        if not is_co_il:
-            before_loc = len(jobs)
-            jobs = [
-                j for j in jobs
-                if not (j.get('location') or '')
-                or any(kw in (j.get('location') or '').lower() for kw in _ISRAELI_KEYWORDS)
-            ]
-            if len(jobs) < before_loc:
-                print(f"  {company.get('name')}: location filter removed {before_loc - len(jobs)} non-Israeli jobs")
+        before_loc = len(jobs)
+        jobs = [
+            j for j in jobs
+            if not (j.get('location') or '')
+            or any(kw in (j.get('location') or '').lower() for kw in _ISRAELI_KEYWORDS)
+        ]
+        if len(jobs) < before_loc:
+            print(f"  {company.get('name')}: location filter removed {before_loc - len(jobs)} non-Israeli jobs")
 
     for job in jobs:
         job['known_israeli_company'] = True
