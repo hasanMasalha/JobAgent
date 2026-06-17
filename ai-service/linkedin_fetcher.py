@@ -192,6 +192,73 @@ async def _fetch_full_description(page, job_url: str) -> str | None:
         return None
 
 
+_ATS_DOMAINS = [
+    "greenhouse.io", "lever.co", "comeet.com",
+    "ashbyhq.com", "workable.com", "bamboohr.com",
+    "jobvite.com", "smartrecruiters.com", "taleo.net",
+    "icims.com", "myworkdayjobs.com", "successfactors",
+]
+
+
+async def extract_ats_url(page) -> str | None:
+    """
+    Extract the actual ATS apply URL from a LinkedIn job detail page.
+    Works for external apply jobs (not Easy Apply).
+    Returns None if job is Easy Apply or no ATS URL found.
+    """
+    try:
+        # Method 1: direct ATS anchor on the page
+        for domain in _ATS_DOMAINS:
+            link = await page.query_selector(f'a[href*="{domain}"]')
+            if link:
+                href = await link.get_attribute("href")
+                if href:
+                    print(f"[linkedin] Found ATS URL ({domain}): {href[:80]}")
+                    return href
+
+        # Method 2: apply button data attributes
+        apply_btn = await page.query_selector(
+            ".jobs-apply-button--top-card, "
+            "button[data-job-url], "
+            'a[data-tracking-control-name*="apply"]'
+        )
+        if apply_btn:
+            for attr in ["data-job-url", "href"]:
+                val = await apply_btn.get_attribute(attr)
+                if val and any(d in val for d in _ATS_DOMAINS):
+                    print(f"[linkedin] Found ATS URL (btn attr): {val[:80]}")
+                    return val
+
+        # Method 3: scan all anchors + JSON-LD in page source
+        ats_url = await page.evaluate(
+            """(domains) => {
+                for (const a of document.querySelectorAll('a[href]')) {
+                    const href = a.href;
+                    if (domains.some(d => href.includes(d))) return href;
+                }
+                for (const script of document.querySelectorAll(
+                    'script[type="application/ld+json"]'
+                )) {
+                    try {
+                        const data = JSON.parse(script.textContent);
+                        const url = data.url || data.applyUrl || '';
+                        if (domains.some(d => url.includes(d))) return url;
+                    } catch(e) {}
+                }
+                return null;
+            }""",
+            _ATS_DOMAINS,
+        )
+        if ats_url:
+            print(f"[linkedin] Found ATS URL (JS scan): {ats_url[:80]}")
+            return ats_url
+
+    except Exception as e:
+        print(f"[linkedin] extract_ats_url error: {e}")
+
+    return None
+
+
 async def fetch_linkedin_jobs_for_term(
     search_term: str,
     browser_context,
@@ -296,10 +363,17 @@ async def fetch_linkedin_jobs_for_term(
                 print(f"  Page error for '{search_term}': {e}")
                 break
 
-        # ── Phase 2: navigate to each job page for the full description ────────
+        # ── Phase 2: navigate to each job page for full description + ATS URL ──
         jobs: list[dict] = []
         for meta in preliminary:
             desc = await _fetch_full_description(page, meta["url"])
+
+            # Page is already at the LinkedIn job detail URL after _fetch_full_description.
+            # Attempt to extract the real ATS apply URL before moving on.
+            ats_url = await extract_ats_url(page)
+            job_url = ats_url if ats_url else meta["url"]
+            if ats_url:
+                print(f"[linkedin] ATS URL replacing LinkedIn URL: {ats_url[:80]}")
 
             if desc and len(desc) >= 100:
                 description = desc
@@ -314,7 +388,7 @@ async def fetch_linkedin_jobs_for_term(
                     "company": meta["company"],
                     "description": description,
                     "location": meta["location"],
-                    "url": meta["url"],
+                    "url": job_url,
                     "source": "linkedin",
                     "salary_min": None,
                     "salary_max": None,
