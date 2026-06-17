@@ -123,6 +123,7 @@ async def ats_apply(req: ATSApplyRequest):
     with open(pdf_path, "rb") as f:
         cv_bytes = f.read()
     cv_base64 = base64.b64encode(cv_bytes).decode("ascii")
+    print(f"[ats-apply] PDF size={len(cv_bytes)} bytes, base64 length={len(cv_base64)}")
 
     name_part = f"{req.first_name}_{req.last_name}".strip("_").replace(" ", "_") or "applicant"
     cv_filename = f"{name_part}_cv.pdf"

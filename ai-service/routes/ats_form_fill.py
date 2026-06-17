@@ -59,6 +59,8 @@ async def fill_ats_form(
             await page.screenshot(path=screenshot_path, full_page=True)
             print(f"[ats-form] Screenshot saved: {screenshot_path}")
 
+            print(f"[ats-form] Current URL after load: {page.url}")
+
             # Dump all form fields so we know exactly what the form expects
             inputs = await page.query_selector_all("input, textarea, select")
             for inp in inputs:
@@ -71,6 +73,38 @@ async def fill_ats_form(
                     f"[ats-form] FIELD: name={name} id={id_} type={type_} "
                     f"placeholder={placeholder} required={required}"
                 )
+
+            # Greenhouse listing pages show a description + Apply button that leads
+            # to the actual form page. Detect this and navigate before filling.
+            if "greenhouse.io" in apply_url:
+                apply_btn = await page.query_selector(
+                    'a[href*="/apply"], '
+                    'button:has-text("Apply for this Job"), '
+                    'a:has-text("Apply for this Job"), '
+                    'button:has-text("Apply Now"), '
+                    'a:has-text("Apply Now")'
+                )
+                if apply_btn:
+                    href = await apply_btn.get_attribute("href") or ""
+                    print(f"[ats-form] Greenhouse: found Apply button (href={href!r}), navigating...")
+                    await apply_btn.click()
+                    await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                    await page.wait_for_timeout(2000)
+                    print(f"[ats-form] Greenhouse: after Apply click, URL={page.url}")
+                    # Re-dump fields now that we're on the actual form
+                    inputs2 = await page.query_selector_all("input, textarea, select")
+                    for inp in inputs2:
+                        name = await inp.get_attribute("name") or ""
+                        id_ = await inp.get_attribute("id") or ""
+                        type_ = await inp.get_attribute("type") or ""
+                        placeholder = await inp.get_attribute("placeholder") or ""
+                        required = await inp.get_attribute("required")
+                        print(
+                            f"[ats-form] FORM-FIELD: name={name} id={id_} type={type_} "
+                            f"placeholder={placeholder} required={required}"
+                        )
+                else:
+                    print("[ats-form] Greenhouse: no Apply button found — form should be on this page")
 
             if "lever.co" in apply_url:
                 result = await _fill_lever_form(
@@ -467,6 +501,30 @@ async def _fill_form_fields(
     except Exception as e:
         print(f"[ats-form] referral select: {e}")
 
+    # ── Pre-submit field value dump ───────────────────────────────────────────
+
+    print("[ats-form] ── PRE-SUBMIT FIELD VALUES ─────────────────────────────")
+    try:
+        pre_inputs = await page.query_selector_all(
+            'input:not([type="hidden"]), select, textarea'
+        )
+        for inp in pre_inputs:
+            name = await inp.get_attribute("name") or ""
+            id_ = await inp.get_attribute("id") or ""
+            type_ = await inp.get_attribute("type") or "text"
+            required = await inp.get_attribute("required")
+            try:
+                value = await inp.input_value() if type_ != "file" else "[file]"
+            except Exception:
+                value = "[unreadable]"
+            print(
+                f"[ats-form] FIELD: name={name} id={id_} type={type_} "
+                f"value={repr(value[:60])} required={required}"
+            )
+    except Exception as e:
+        print(f"[ats-form] Pre-submit dump error: {e}")
+    print("[ats-form] ────────────────────────────────────────────────────────")
+
     # ── Submit ────────────────────────────────────────────────────────────────
 
     try:
@@ -510,6 +568,27 @@ async def _fill_form_fields(
 
             error_signals = ["error", "required", "invalid"]
             if any(s in page_text_lower for s in error_signals):
+                # Screenshot + detailed error element dump on validation failure
+                try:
+                    err_screenshot_path = f"/tmp/form_error_{int(time.time())}.png"
+                    await page.screenshot(path=err_screenshot_path, full_page=True)
+                    print(f"[ats-form] Validation error screenshot: {err_screenshot_path}")
+                except Exception:
+                    pass
+                try:
+                    val_els = await page.query_selector_all(
+                        '.error, .field-error, [class*="error"], [class*="invalid"], '
+                        '.help-block, [class*="validation"], [aria-invalid="true"]'
+                    )
+                    for vel in val_els:
+                        try:
+                            text = await vel.inner_text()
+                            if text.strip():
+                                print(f"[ats-form] VALIDATION ERROR: {text.strip()[:200]}")
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 return {
                     "success": False,
                     "error": "Form validation error after submit",
