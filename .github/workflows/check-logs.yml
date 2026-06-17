@@ -1,0 +1,19 @@
+name: Check FastAPI Logs
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get FastAPI logs
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            cd /home/ubuntu/jobagent
+            echo "=== FASTAPI LOGS (last 200 lines) ==="
+            docker-compose logs fastapi --tail=200
