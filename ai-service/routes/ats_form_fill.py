@@ -737,19 +737,21 @@ async def _fill_form_fields(
         print("[ats-form] Clicking submit button...")
         await _human_click(page, submit_btn)
         print(f"[ats-form] Clicked. URL immediately: {page.url}")
-        await page.wait_for_timeout(5000)
+        await page.wait_for_timeout(10000)
         url_after = page.url
-        print(f"[ats-form] URL after 5s: {url_after}")
+        print(f"[ats-form] URL after 10s: {url_after}")
 
-        screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
+        screenshot_path = f"/tmp/post_submit_{int(time.time())}.png"
         await page.screenshot(path=screenshot_path, full_page=True)
-        print(f"[ats-form] Screenshot: {screenshot_path}")
+        print(f"[ats-form] Post-submit screenshot: {screenshot_path}")
 
         page_text = await page.inner_text("body")
-        print(f"[ats-form] Page text (first 500):\n{page_text[:500]}")
+        print(f"[ats-form] FULL page text length: {len(page_text)}")
+        print(f"[ats-form] Page text (first 1000):")
+        print(page_text[:1000])
         page_text_lower = page_text.lower()
 
-        # Greenhouse email verification challenge — appears instead of success page
+        # ── Greenhouse email verification challenge ───────────────────────────
         verification_signals = [
             "security code",
             "verification code",
@@ -767,7 +769,17 @@ async def _fill_form_fields(
                 "message": "Greenhouse sent a verification code to your email. Check your inbox and enter the code to complete your application.",
             }
 
-        # Explicit success signals — Greenhouse thank-you page or in-place message
+        # ── URL contains confirmation path ────────────────────────────────────
+        if any(k in url_after for k in ("confirmation", "thank", "success", "submitted")):
+            print(f"[ats-form] SUCCESS — URL indicates confirmation: {url_after}")
+            return {"success": True, "filled": filled, "message": "Application submitted (URL confirmation)"}
+
+        # ── URL changed to anything different ─────────────────────────────────
+        if url_after != url_before:
+            print(f"[ats-form] URL changed after submit: {url_before} → {url_after}")
+            return {"success": True, "filled": filled, "message": "Application submitted (URL changed)"}
+
+        # ── Explicit text success signals ─────────────────────────────────────
         success_signals = [
             "thank you", "application received", "successfully submitted",
             "we'll be in touch", "application has been submitted",
@@ -777,8 +789,20 @@ async def _fill_form_fields(
             print("[ats-form] SUCCESS confirmed via page text")
             return {"success": True, "filled": filled, "message": "Application submitted successfully"}
 
-        # Real field-level errors only — exclude form legend ("* indicates a required field")
-        # which is always present on the page regardless of validation state.
+        # ── Confirmation modal ────────────────────────────────────────────────
+        modal = await page.query_selector(
+            '.modal, .dialog, [role="dialog"], '
+            '[class*="confirmation"], [class*="Confirmation"], '
+            '[class*="success"], [class*="Success"]'
+        )
+        if modal:
+            modal_text = (await modal.inner_text()).strip()
+            print(f"[ats-form] Modal found: {modal_text[:200]}")
+            if any(p in modal_text.lower() for p in ["thank", "submitted", "received", "success"]):
+                print("[ats-form] SUCCESS confirmed via modal")
+                return {"success": True, "filled": filled, "message": "Application submitted (modal confirmation)"}
+
+        # ── Real field-level errors ───────────────────────────────────────────
         real_errors = await page.evaluate("""() => {
             const selectors = [
                 '.error:not(form)', '.field-error',
@@ -815,14 +839,14 @@ async def _fill_form_fields(
                 "errors": errors,
             }
 
-        # URL changed → likely navigated to a success/redirect page
-        if url_after != url_before:
-            print(f"[ats-form] URL changed after submit: {url_before} → {url_after}")
-            return {"success": True, "filled": filled, "message": "Application submitted (URL changed)"}
-
-        # No explicit success, no real errors, same URL — treat as submitted
-        print("[ats-form] No success/error signals — assuming submitted")
-        return {"success": True, "filled": filled, "message": "Form submitted (no explicit confirmation)"}
+        # ── Unknown state — no confirmation signals found ─────────────────────
+        print("[ats-form] No confirmation signals found — unknown state")
+        return {
+            "success": False,
+            "error": "unknown_state",
+            "filled": filled,
+            "message": "Could not confirm if application was submitted. Check your email or the job portal.",
+        }
 
     except Exception as e:
         return {"success": False, "error": f"Submit failed: {str(e)}", "filled": filled, "errors": errors}
