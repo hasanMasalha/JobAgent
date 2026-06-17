@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
@@ -49,6 +49,8 @@ interface PrepareResult {
 export default function ApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isDownloadMode = searchParams.get("mode") === "download";
 
   const [stage, setStage] = useState<Stage>("loading");
   const [data, setData] = useState<PrepareResult | null>(null);
@@ -598,6 +600,13 @@ export default function ApplyPage() {
         />
       </div>
 
+      {/* Download mode message */}
+      {isDownloadMode && (
+        <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl p-4 text-sm text-violet-800 dark:text-violet-300">
+          Your CV has been tailored for this role. Download it and apply directly on their website.
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-3 pb-8">
         <button
@@ -606,12 +615,32 @@ export default function ApplyPage() {
         >
           Cancel
         </button>
-        <button
-          onClick={handleConfirm}
-          className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
-        >
-          Confirm &amp; Apply
-        </button>
+        {isDownloadMode ? (
+          <>
+            <button
+              onClick={handleDownloadCv}
+              disabled={downloadingCv}
+              className="px-5 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-60"
+            >
+              {downloadingCv ? "Generating…" : "⬇ Download CV"}
+            </button>
+            <a
+              href={data!.job_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Job →
+            </a>
+          </>
+        ) : (
+          <button
+            onClick={handleConfirm}
+            className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            Confirm &amp; Apply
+          </button>
+        )}
       </div>
     </div>
   );

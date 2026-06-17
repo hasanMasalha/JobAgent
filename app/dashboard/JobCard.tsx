@@ -57,6 +57,16 @@ function isATSJob(url?: string): boolean {
   return ATS_URL_PATTERNS.some((p) => (url ?? "").toLowerCase().includes(p));
 }
 
+const ATS_DOMAINS = [
+  "greenhouse.io", "lever.co", "workable.com",
+  "ashbyhq.com", "comeet.com", "bamboohr.com",
+];
+function isAutoApplicable(job: Job): boolean {
+  if (job.apply_type === "external") return false;
+  const url = (job.url || "").toLowerCase();
+  return ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
+}
+
 function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
   if (type === "auto" && isATSJob(url))
     return (
@@ -132,8 +142,7 @@ export default function JobCard({
   const [quickApplying, setQuickApplying] = useState(false);
   const [quickApplied, setQuickApplied] = useState(false);
   const router = useRouter();
-  const extensionInstalled = useExtensionInstalled();
-  const isExtension = job.apply_type === "extension";
+  useExtensionInstalled();
 
   const score =
     (job.claude_score ?? 0) > 0
@@ -192,7 +201,8 @@ export default function JobCard({
     e.stopPropagation();
     e.preventDefault();
     onApply?.(job.id);
-    router.push(`/dashboard/apply/${job.id}`);
+    const isExternal = !isAutoApplicable(job);
+    router.push(`/dashboard/apply/${job.id}${isExternal ? "?mode=download" : ""}`);
   };
 
   async function handleDismiss() {
@@ -299,7 +309,11 @@ export default function JobCard({
           href={job.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+            !isAutoApplicable(job)
+              ? "bg-violet-600 text-white hover:bg-violet-700"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
           onClick={() => {
             fetch("/api/jobs/check-status", {
               method: "POST",
@@ -311,36 +325,42 @@ export default function JobCard({
           View job
         </a>
         {/* Quick Apply */}
-        <button
-          onClick={handleQuickApply}
-          disabled={quickApplying || quickApplied}
-          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
-            quickApplied
-              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-              : isExtension && extensionInstalled
-              ? "bg-[#1a2e5e] text-white hover:opacity-90"
-              : "bg-emerald-600 text-white hover:bg-emerald-700"
-          }`}
-        >
-          {quickApplying ? (
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
-              Applying...
-            </span>
-          ) : quickApplied ? (
-            "✓ Applied"
-          ) : isExtension && extensionInstalled ? (
-            "⚡ Auto Apply"
-          ) : (
-            "Apply"
-          )}
-        </button>
-        {/* Tailor CV & Apply */}
+        {isAutoApplicable(job) ? (
+          <button
+            onClick={handleQuickApply}
+            disabled={quickApplying || quickApplied}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
+              quickApplied
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-violet-600 text-white hover:bg-violet-700"
+            }`}
+          >
+            {quickApplying ? (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                Applying...
+              </span>
+            ) : quickApplied ? (
+              "✓ Applied"
+            ) : (
+              "Apply"
+            )}
+          </button>
+        ) : (
+          <button
+            disabled
+            title="Apply manually on their website"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600 cursor-not-allowed opacity-60"
+          >
+            Apply
+          </button>
+        )}
+        {/* Tailor CV & Apply / Tailor & Download */}
         <button
           onClick={handleTailorApply}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200"
         >
-          ✨ Tailor CV
+          ✨ {isAutoApplicable(job) ? "Tailor CV" : "Tailor & Download"}
         </button>
         <button
           disabled={saving}

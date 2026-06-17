@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 
 export const maxDuration = 60;
 
-type ATSPlatform = "greenhouse" | "lever" | "workable";
-
-function detectATS(url: string): ATSPlatform | null {
-  const u = (url ?? "").toLowerCase();
+function detectATS(url: string): string | null {
+  const u = (url || "").toLowerCase();
   if (u.includes("greenhouse.io")) return "greenhouse";
   if (u.includes("lever.co")) return "lever";
   if (u.includes("workable.com")) return "workable";
+  if (u.includes("comeet.com")) return "comeet";
+  if (u.includes("ashbyhq.com")) return "ashby";
+  if (u.includes("bamboohr.com")) return "bamboohr";
   return null;
 }
 
@@ -25,11 +26,26 @@ export async function POST(req: NextRequest) {
     const { jobId } = (await req.json()) as { jobId: string };
     if (!jobId) return NextResponse.json({ error: "jobId required" }, { status: 400 });
 
-    const jobRows = await db.$queryRaw<{ url: string; title: string; company: string }[]>`
-      SELECT url, title, company FROM "Job" WHERE id = ${jobId} LIMIT 1
+    const jobRows = await db.$queryRaw<{ url: string; title: string; company: string; apply_type: string | null }[]>`
+      SELECT url, title, company, apply_type FROM "Job" WHERE id = ${jobId} LIMIT 1
     `;
     if (!jobRows.length) return NextResponse.json({ error: "Job not found" }, { status: 404 });
     const job = jobRows[0];
+
+    // External jobs have no automation — return early so the client opens the URL
+    if (job.apply_type === "external") {
+      await db.$executeRaw`
+        INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
+        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'manual', now())
+        ON CONFLICT DO NOTHING
+      `;
+      return NextResponse.json({
+        success: true,
+        status: "external",
+        external_url: job.url,
+        message: "External job — apply manually",
+      });
+    }
 
     const profile = await db.user.findFirst({
       where: { OR: [{ id: user.id }, { email: user.email! }] },
