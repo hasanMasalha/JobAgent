@@ -81,7 +81,18 @@ export async function POST(req: NextRequest) {
       `;
       const applicationId = appRows[0].id;
 
-      const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/ats-apply`, {
+      const pythonUrl = `${process.env.PYTHON_SERVICE_URL}/ats-apply`;
+      console.log("[apply/quick] calling Python:", {
+        url: pythonUrl,
+        ats: atsPlatform,
+        jobId,
+        applyUrl: applyUrl.slice(0, 80),
+        hasEmail: !!(profile.email ?? user.email),
+        hasPhone: !!profile.phone,
+        hasName: !!(profile.first_name || profile.last_name),
+      });
+
+      const pythonRes = await fetch(pythonUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,11 +110,13 @@ export async function POST(req: NextRequest) {
         signal: AbortSignal.timeout(110_000),
       });
 
+      console.log("[apply/quick] Python response status:", pythonRes.status);
+
       if (!pythonRes.ok) {
-        const text = await pythonRes.text();
-        console.error("[apply/quick] python error:", pythonRes.status, text.slice(0, 300));
+        const rawBody = await pythonRes.text();
+        console.error("[apply/quick] Python error body:", rawBody.slice(0, 500));
         await db.$executeRaw`
-          UPDATE "Application" SET status = 'manual' WHERE id = ${applicationId}
+          UPDATE "Application" SET status = 'failed', error_message = ${`Python service error (${pythonRes.status})`} WHERE id = ${applicationId}
         `;
         return NextResponse.json(
           { success: false, error: `ATS service error (${pythonRes.status})` },
@@ -111,7 +124,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const result = (await pythonRes.json()) as {
+      const rawBody = await pythonRes.text();
+      console.log("[apply/quick] Python response body:", rawBody.slice(0, 300));
+
+      const result = (JSON.parse(rawBody)) as {
         success: boolean;
         error?: string;
         status?: string;

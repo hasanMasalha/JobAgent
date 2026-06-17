@@ -51,13 +51,12 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             )
             print(f"[ats-apply-bg] submit_via_ats returned: {result}")
 
-            if result.get("recaptcha") or result.get("captcha"):
-                status = "manual"
-            elif result.get("success"):
+            if result.get("success"):
                 status = "applied"
             else:
                 status = "failed"
-                print(f"[ats-apply-bg] form fill failed: {result.get('error')}")
+                reason = "captcha" if (result.get("captcha") or result.get("recaptcha")) else result.get("error", "unknown")
+                print(f"[ats-apply-bg] form fill failed: {reason}")
 
             print(f"[ats-apply-bg] Updating DB: {request_dict['application_id']} -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
@@ -95,25 +94,25 @@ async def ats_apply(req: ATSApplyRequest):
             req.application_id,
             req.user_id,
         )
+
+        if not row:
+            return {"success": False, "error": "Application not found"}
+
+        tailored_cv = row["tailored_cv"] or ""
+        cover_letter = row["cover_letter"] or ""
+
+        if not tailored_cv:
+            # Quick-apply path: no tailored CV yet — fall back to the user's raw uploaded CV
+            cv_row = await conn.fetchrow(
+                'SELECT raw_text FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                req.user_id,
+            )
+            if not cv_row or not cv_row["raw_text"]:
+                return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
+            tailored_cv = cv_row["raw_text"]
+            print(f"[ats-apply] Quick-apply: using raw CV ({len(tailored_cv)} chars)")
     finally:
         await conn.close()
-
-    if not row:
-        return {"success": False, "error": "Application not found"}
-
-    tailored_cv = row["tailored_cv"] or ""
-    cover_letter = row["cover_letter"] or ""
-
-    if not tailored_cv:
-        # Quick-apply path: no tailored CV yet — fall back to the user's raw uploaded CV
-        cv_row = await conn.fetchrow(
-            'SELECT raw_text FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
-            req.user_id,
-        )
-        if not cv_row or not cv_row["raw_text"]:
-            return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
-        tailored_cv = cv_row["raw_text"]
-        print(f"[ats-apply] Quick-apply: using raw CV ({len(tailored_cv)} chars)")
 
     pdf_path = os.path.join(tempfile.gettempdir(), f"ats_{req.application_id}.pdf")
     try:
