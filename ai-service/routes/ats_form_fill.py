@@ -629,78 +629,114 @@ async def _fill_form_fields(
 
     # ── Submit ────────────────────────────────────────────────────────────────
 
+    # Prefer type=submit over has-text("Apply") — the listing page also has
+    # an "Apply" anchor in the header, which would be the wrong button.
+    submit_btn = None
+    for sel, label in [
+        ('button[type="submit"]', "type=submit"),
+        ('input[type="submit"]', "input[type=submit]"),
+        ('#submit_app', "#submit_app"),
+        ('.submit-app', ".submit-app"),
+        ('button:has-text("Submit Application")', "Submit Application"),
+        ('button:has-text("Submit")', "Submit"),
+    ]:
+        try:
+            btn = await page.query_selector(sel)
+            if btn:
+                is_visible = await btn.is_visible()
+                btn_text = ""
+                try:
+                    btn_text = (await btn.inner_text()).strip()[:60]
+                except Exception:
+                    pass
+                print(f"[ats-form] Submit candidate: {label!r} text={btn_text!r} visible={is_visible}")
+                if is_visible:
+                    submit_btn = btn
+                    break
+        except Exception:
+            continue
+
+    if not submit_btn:
+        print("[ats-form] ERROR: No visible submit button found")
+        await page.screenshot(path=f"/tmp/no_submit_{int(time.time())}.png", full_page=True)
+        return {"success": False, "error": "No submit button found", "filled": filled, "errors": errors}
+
     try:
-        submit = await page.wait_for_selector(
-            'button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")',
-            timeout=5000,
-        )
-        if submit:
-            await submit.click()
-            await page.wait_for_timeout(3000)
+        await submit_btn.scroll_into_view_if_needed()
+        await page.wait_for_timeout(500)
+        url_before = page.url
+        print(f"[ats-form] URL before submit: {url_before}")
+        print("[ats-form] Clicking submit button...")
+        await submit_btn.click()
+        print(f"[ats-form] Clicked. URL immediately: {page.url}")
+        await page.wait_for_timeout(3000)
+        url_after = page.url
+        print(f"[ats-form] URL after 3s: {url_after}")
 
-            screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
-            await page.screenshot(path=screenshot_path, full_page=True)
-            print(f"[ats-form] Screenshot saved: {screenshot_path}")
+        screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
+        await page.screenshot(path=screenshot_path, full_page=True)
+        print(f"[ats-form] Screenshot: {screenshot_path}")
 
-            page_text = await page.inner_text("body")
-            print(f"[ats-form] Page text after submit:\n{page_text[:3000]}")
+        page_text = await page.inner_text("body")
+        print(f"[ats-form] Page text (first 500):\n{page_text[:500]}")
+        page_text_lower = page_text.lower()
 
-            error_els = await page.query_selector_all(
-                '.error, .alert, [class*="error"], [class*="invalid"], [class*="required"]'
-            )
-            for el in error_els:
-                try:
-                    text = await el.inner_text()
-                    if text.strip():
-                        print(f"[ats-form] Error element: {text.strip()}")
-                except Exception:
-                    pass
+        # Explicit success signals — Greenhouse thank-you page or in-place message
+        success_signals = [
+            "thank you", "application received", "successfully submitted",
+            "we'll be in touch", "application has been submitted",
+            "your application has been", "תודה",
+        ]
+        if any(s in page_text_lower for s in success_signals):
+            print("[ats-form] SUCCESS confirmed via page text")
+            return {"success": True, "filled": filled, "message": "Application submitted successfully"}
 
-            page_text_lower = page_text.lower()
-            success_signals = [
-                "thank you",
-                "application received",
-                "successfully submitted",
-                "we'll be in touch",
-                "application has been submitted",
-                "תודה",
-            ]
-            if any(s in page_text_lower for s in success_signals):
-                return {"success": True, "filled": filled, "message": "Application submitted successfully"}
+        # Real field-level errors only — exclude form legend ("* indicates a required field")
+        # which is always present on the page regardless of validation state.
+        real_errors = await page.evaluate("""() => {
+            const selectors = [
+                '.error:not(form)', '.field-error',
+                '[class*="error--"]', '.greenhouse-field-error',
+                '[data-error]', '.invalid-feedback',
+                '.sc-error', '[class*="FieldError"]'
+            ];
+            const seen = new Set();
+            const result = [];
+            for (const sel of selectors) {
+                document.querySelectorAll(sel).forEach(el => {
+                    const text = (el.innerText || '').trim();
+                    if (text && text !== '*' &&
+                        !text.includes('indicates a required field') &&
+                        !text.includes('* =') &&
+                        text.length > 2 && !seen.has(text)) {
+                        seen.add(text);
+                        result.push(text);
+                    }
+                });
+            }
+            return result;
+        }""")
 
-            error_signals = ["error", "required", "invalid"]
-            if any(s in page_text_lower for s in error_signals):
-                # Screenshot + detailed error element dump on validation failure
-                try:
-                    err_screenshot_path = f"/tmp/form_error_{int(time.time())}.png"
-                    await page.screenshot(path=err_screenshot_path, full_page=True)
-                    print(f"[ats-form] Validation error screenshot: {err_screenshot_path}")
-                except Exception:
-                    pass
-                try:
-                    val_els = await page.query_selector_all(
-                        '.error, .field-error, [class*="error"], [class*="invalid"], '
-                        '.help-block, [class*="validation"], [aria-invalid="true"]'
-                    )
-                    for vel in val_els:
-                        try:
-                            text = await vel.inner_text()
-                            if text.strip():
-                                print(f"[ats-form] VALIDATION ERROR: {text.strip()[:200]}")
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                return {
-                    "success": False,
-                    "error": "Form validation error after submit",
-                    "filled": filled,
-                    "errors": errors,
-                }
+        if real_errors:
+            print(f"[ats-form] Real field errors detected: {real_errors}")
+            err_screenshot_path = f"/tmp/form_error_{int(time.time())}.png"
+            await page.screenshot(path=err_screenshot_path, full_page=True)
+            print(f"[ats-form] Error screenshot: {err_screenshot_path}")
+            return {
+                "success": False,
+                "error": f"Form errors: {'; '.join(real_errors[:3])}",
+                "filled": filled,
+                "errors": errors,
+            }
 
-            return {"success": True, "filled": filled, "message": "Form submitted (no explicit confirmation)"}
+        # URL changed → likely navigated to a success/redirect page
+        if url_after != url_before:
+            print(f"[ats-form] URL changed after submit: {url_before} → {url_after}")
+            return {"success": True, "filled": filled, "message": "Application submitted (URL changed)"}
+
+        # No explicit success, no real errors, same URL — treat as submitted
+        print("[ats-form] No success/error signals — assuming submitted")
+        return {"success": True, "filled": filled, "message": "Form submitted (no explicit confirmation)"}
 
     except Exception as e:
-        return {"success": False, "error": f"Could not submit form: {str(e)}", "filled": filled, "errors": errors}
-
-    return {"success": False, "error": "Submit button not found", "filled": filled}
+        return {"success": False, "error": f"Submit failed: {str(e)}", "filled": filled, "errors": errors}
