@@ -186,10 +186,14 @@ export default function JobCard({
       }
       if (data.status === "applying") {
         setQuickApplied(true);
-        showToast("Applying in background...", "success");
+        showToast(
+          `Submitting to ${job.company}… check the Applications page for status.`,
+          "success"
+        );
         return;
       }
-      showToast((data.error as string) || "Apply failed", "error");
+      const errMsg = (data.error as string) || "Apply failed";
+      showToast(`${errMsg} — use Tailor & Download to apply manually.`, "error");
     } catch {
       showToast("Apply failed", "error");
     } finally {
@@ -341,7 +345,7 @@ export default function JobCard({
                 Applying...
               </span>
             ) : quickApplied ? (
-              "✓ Applied"
+              "✓ Submitted"
             ) : (
               "Apply"
             )}

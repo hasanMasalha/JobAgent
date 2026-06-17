@@ -117,10 +117,11 @@ model Application {
   id           String   @id @default(uuid())
   user_id      String
   job_id       String
-  status       String   @default("draft")
-  tailored_cv  String?
-  cover_letter String?
-  applied_at   DateTime @default(now())
+  status        String   @default("draft")
+  tailored_cv   String?
+  cover_letter  String?
+  error_message String?
+  applied_at    DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
@@ -138,6 +139,14 @@ model SavedSearch {
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, category])
+}
+
+model MatchCache {
+  user_id      String   @id
+  results_json String
+  computed_at  DateTime @default(now())
+
+  @@map("match_cache")
 }
 
 model UserJobInteraction {

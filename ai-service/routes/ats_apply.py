@@ -62,9 +62,11 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Updating DB: {request_dict['application_id']} -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
+                error_msg = result.get("error") if status == "failed" else None
                 await conn.execute(
-                    'UPDATE "Application" SET status = $1, applied_at = NOW() WHERE id = $2',
+                    'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
                     status,
+                    error_msg,
                     request_dict["application_id"],
                 )
                 print(f"[ats-apply-bg] DB updated: {request_dict['application_id']} -> {status}")
@@ -103,7 +105,15 @@ async def ats_apply(req: ATSApplyRequest):
     cover_letter = row["cover_letter"] or ""
 
     if not tailored_cv:
-        return {"success": False, "error": "No tailored CV found — run /api/apply/prepare first"}
+        # Quick-apply path: no tailored CV yet — fall back to the user's raw uploaded CV
+        cv_row = await conn.fetchrow(
+            'SELECT raw_text FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            req.user_id,
+        )
+        if not cv_row or not cv_row["raw_text"]:
+            return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
+        tailored_cv = cv_row["raw_text"]
+        print(f"[ats-apply] Quick-apply: using raw CV ({len(tailored_cv)} chars)")
 
     pdf_path = os.path.join(tempfile.gettempdir(), f"ats_{req.application_id}.pdf")
     try:

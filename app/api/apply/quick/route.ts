@@ -133,6 +133,16 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      if (!result.success) {
+        await db.$executeRaw`
+          UPDATE "Application" SET status = 'failed', error_message = ${result.error ?? "ATS apply failed"} WHERE id = ${applicationId}
+        `;
+        return NextResponse.json(
+          { success: false, error: result.error ?? "ATS apply failed" },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
         status: "applying",
