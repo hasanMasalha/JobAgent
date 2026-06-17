@@ -405,10 +405,14 @@ async def _fill_form_fields(
             except Exception as e:
                 print(f"[ats-form] Could not fill custom question {q_id}: {e}")
 
-    # ── CAPTCHA check (reCAPTCHA + hCaptcha) — bail before submit ───────────
+    # ── CAPTCHA check (visible challenges only) — bail before submit ─────────
+    # Only block on user-visible challenges. reCAPTCHA v3 (invisible) runs silently
+    # in the background and does NOT require user interaction — Greenhouse uses it on
+    # all forms. Matching `iframe[src*="recaptcha"]` or `input[name="g-recaptcha-response"]`
+    # catches v3 and produces false positives that block every Greenhouse submission.
 
     captcha_el = await page.query_selector(
-        'iframe[src*="recaptcha"], .g-recaptcha, input[name="g-recaptcha-response"], '
+        '.g-recaptcha[data-sitekey]:not([data-size="invisible"]), '
         'input[name="h-captcha-response"], .h-captcha, iframe[src*="hcaptcha"]'
     )
     if captcha_el:
