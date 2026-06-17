@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
     const { jobId } = (await req.json()) as { jobId: string };
     if (!jobId) return NextResponse.json({ error: "jobId required" }, { status: 400 });
 
-    const jobRows = await db.$queryRaw<{ url: string; title: string; company: string; apply_type: string | null }[]>`
-      SELECT url, title, company, apply_type FROM "Job" WHERE id = ${jobId} LIMIT 1
+    const jobRows = await db.$queryRaw<{ url: string; apply_url: string | null; title: string; company: string; apply_type: string | null }[]>`
+      SELECT url, apply_url, title, company, apply_type FROM "Job" WHERE id = ${jobId} LIMIT 1
     `;
     if (!jobRows.length) return NextResponse.json({ error: "Job not found" }, { status: 404 });
     const job = jobRows[0];
@@ -59,10 +59,12 @@ export async function POST(req: NextRequest) {
     });
     if (!profile) return NextResponse.json({ error: "User profile not found" }, { status: 404 });
 
-    const applyUrl = job.url ?? "";
+    // apply_url is the confirmed ATS URL (scraped from LinkedIn page).
+    // Fall back to url only if apply_url is not set.
+    const applyUrl = job.apply_url ?? job.url ?? "";
 
-    // LinkedIn — requires extension, redirect to full flow
-    if (applyUrl.includes("linkedin.com")) {
+    // LinkedIn listing URL with no ATS apply_url — cannot auto-apply
+    if (!job.apply_url && applyUrl.includes("linkedin.com")) {
       return NextResponse.json({
         success: false,
         needs_extension: true,

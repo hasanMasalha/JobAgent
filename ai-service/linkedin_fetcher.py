@@ -369,11 +369,10 @@ async def fetch_linkedin_jobs_for_term(
             desc = await _fetch_full_description(page, meta["url"])
 
             # Page is already at the LinkedIn job detail URL after _fetch_full_description.
-            # Attempt to extract the real ATS apply URL before moving on.
+            # Attempt to extract the real ATS apply URL while still on this page.
             ats_url = await extract_ats_url(page)
-            job_url = ats_url if ats_url else meta["url"]
             if ats_url:
-                print(f"[linkedin] ATS URL replacing LinkedIn URL: {ats_url[:80]}")
+                print(f"[linkedin] Found ATS apply URL: {ats_url[:80]}")
 
             if desc and len(desc) >= 100:
                 description = desc
@@ -388,7 +387,8 @@ async def fetch_linkedin_jobs_for_term(
                     "company": meta["company"],
                     "description": description,
                     "location": meta["location"],
-                    "url": job_url,
+                    "url": meta["url"],      # LinkedIn URL — used for viewing the job
+                    "apply_url": ats_url,    # ATS URL — used for auto-applying (None if Easy Apply / not found)
                     "source": "linkedin",
                     "salary_min": None,
                     "salary_max": None,

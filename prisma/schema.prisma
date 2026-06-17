@@ -81,6 +81,7 @@ model Job {
   description String
   location    String?
   url         String
+  apply_url   String?
   source      String
   salary_min  Int?
   salary_max  Int?

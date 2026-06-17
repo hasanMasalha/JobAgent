@@ -37,25 +37,27 @@ _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 
 def _detect_apply_type(job: dict) -> str:
     url = (job.get("url") or "").lower()
+    apply_url = (job.get("apply_url") or "").lower()
     desc = job.get("description") or ""
-    if any(ats in url for ats in _AUTO_ATS):
+    # apply_url is the confirmed ATS URL; prefer it over the listing URL
+    check = apply_url or url
+    if any(ats in check for ats in _AUTO_ATS):
         return "auto"
     if _EMAIL_RE.search(desc):
         return "auto"
     if "linkedin.com" in url and "/jobs/view/" in url:
-        # Only "extension" when the scraper explicitly confirmed Easy Apply.
-        # linkedin_fetcher.py doesn't return is_easy_apply, so these stay external.
         if job.get("is_easy_apply") is True:
             return "extension"
         return "external"
     return "external"
 
 
-def _detect_ats(url: str) -> str | None:
-    """Detect ATS platform from job URL for API-submission routing."""
-    if not url:
+def _detect_ats(url: str, apply_url: str = "") -> str | None:
+    """Detect ATS platform — checks apply_url first (more reliable), then url."""
+    check = apply_url or url
+    if not check:
         return None
-    u = url.lower()
+    u = check.lower()
     if "greenhouse.io" in u:
         return "greenhouse"
     if "lever.co" in u:
@@ -105,13 +107,14 @@ async def scrape_and_store():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
+            apply_url = job.get("apply_url") or None
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
-                                   url, source, salary_min, salary_max,
+                                   url, apply_url, source, salary_min, salary_max,
                                    embedding, apply_type, ats_platform, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $6, $7, $8,
+                        $5, $12, $6, $7, $8,
                         $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
                     SET description   = CASE
@@ -124,6 +127,7 @@ async def scrape_and_store():
                                           THEN EXCLUDED.embedding
                                           ELSE "Job".embedding
                                         END,
+                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
                         is_active     = true,
@@ -140,7 +144,8 @@ async def scrape_and_store():
                 job["salary_max"],
                 embedding_str,
                 _detect_apply_type(job),
-                _detect_ats(job.get("url", "")),
+                _detect_ats(job.get("url", ""), apply_url or ""),
+                apply_url,
             )
             if row is None:
                 pass  # conflict but description was already long enough — skip
@@ -291,13 +296,14 @@ async def scrape_and_store_company_careers():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
+            apply_url = job.get("apply_url") or None
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
-                                   url, source, salary_min, salary_max,
+                                   url, apply_url, source, salary_min, salary_max,
                                    embedding, apply_type, ats_platform, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $6, $7, $8,
+                        $5, $12, $6, $7, $8,
                         $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
                     SET description   = CASE
@@ -310,6 +316,7 @@ async def scrape_and_store_company_careers():
                                           THEN EXCLUDED.embedding
                                           ELSE "Job".embedding
                                         END,
+                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
                         is_active     = true,
@@ -326,7 +333,8 @@ async def scrape_and_store_company_careers():
                 job.get("salary_max"),
                 embedding_str,
                 _detect_apply_type(job),
-                _detect_ats(job.get("url", "")),
+                _detect_ats(job.get("url", ""), apply_url or ""),
+                apply_url,
             )
             if row is None:
                 pass
@@ -397,13 +405,14 @@ async def scrape_api_companies_only():
             embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
+            apply_url = job.get("apply_url") or None
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
-                                   url, source, salary_min, salary_max,
+                                   url, apply_url, source, salary_min, salary_max,
                                    embedding, apply_type, ats_platform, scraped_at)
                 VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $6, $7, $8,
+                        $5, $12, $6, $7, $8,
                         $9::vector, $10, $11, now())
                 ON CONFLICT (url) DO UPDATE
                     SET description   = CASE
@@ -416,6 +425,7 @@ async def scrape_api_companies_only():
                                           THEN EXCLUDED.embedding
                                           ELSE "Job".embedding
                                         END,
+                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
                         is_active     = true,
@@ -432,7 +442,8 @@ async def scrape_api_companies_only():
                 job.get("salary_max"),
                 embedding_str,
                 _detect_apply_type(job),
-                _detect_ats(job.get("url", "")),
+                _detect_ats(job.get("url", ""), apply_url or ""),
+                apply_url,
             )
             if row is None:
                 pass
