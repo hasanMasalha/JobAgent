@@ -618,7 +618,7 @@ async def _fill_form_fields(
         print(f"[ats-form] CAPTCHA detected: {captcha_type} — attempting 2captcha solve")
         solved = await detect_and_solve_captcha(page)
         if not solved:
-            print(f"[ats-form] CAPTCHA could not be solved automatically")
+            print("[ats-form] CAPTCHA could not be solved automatically")
             return {
                 "success": False,
                 "error": "captcha_detected",
@@ -747,7 +747,7 @@ async def _fill_form_fields(
 
         page_text = await page.inner_text("body")
         print(f"[ats-form] FULL page text length: {len(page_text)}")
-        print(f"[ats-form] Page text (first 1000):")
+        print("[ats-form] Page text (first 1000):")
         print(page_text[:1000])
         page_text_lower = page_text.lower()
 
