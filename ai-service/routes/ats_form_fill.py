@@ -1,8 +1,29 @@
 import os
+import random
 import tempfile
 import time
 
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
+
+
+async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
+    await page.wait_for_timeout(random.randint(min_ms, max_ms))
+
+
+async def _human_click(page, element) -> None:
+    """Move mouse to element with slight randomness, then click."""
+    try:
+        box = await element.bounding_box()
+        if box:
+            await page.mouse.move(
+                box["x"] + box["width"] / 2 + random.randint(-5, 5),
+                box["y"] + box["height"] / 2 + random.randint(-5, 5),
+            )
+            await _human_delay(page, 100, 300)
+    except Exception:
+        pass
+    await element.click()
 
 
 async def fill_ats_form(
@@ -37,14 +58,33 @@ async def fill_ats_form(
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled",
+                    "--disable-accelerated-2d-canvas",
+                    "--no-first-run",
+                    "--no-zygote",
+                    "--disable-gpu",
+                    "--window-size=1920,1080",
                 ],
             )
 
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                timezone_id="America/New_York",
+                device_scale_factor=1,
+                has_touch=False,
+                color_scheme="light",
             )
             page = await context.new_page()
+
+            # Apply stealth patches BEFORE any navigation so fingerprint checks
+            # during page load see a clean browser environment.
+            await stealth_async(page)
+            print("[ats-form] Stealth mode enabled")
 
             # Lever job listing URLs need /apply appended to reach the form
             if "lever.co" in apply_url and not apply_url.rstrip("/").endswith("/apply"):
@@ -98,7 +138,7 @@ async def fill_ats_form(
                         continue
 
                 if apply_btn:
-                    await apply_btn.click()
+                    await _human_click(page, apply_btn)
                     print("[ats-form] Greenhouse: clicked Apply — waiting for form to reveal...")
                     await page.wait_for_timeout(1000)
                     try:
@@ -339,6 +379,7 @@ async def _fill_form_fields(
 
     # ── Standard fields ──────────────────────────────────────────────────────
 
+    await _human_delay(page, 300, 600)
     await fill_field([
         "#first_name",
         'input[id="first_name"]',
@@ -348,6 +389,7 @@ async def _fill_form_fields(
         'input[id*="first_name"]',
     ], first_name, "first_name")
 
+    await _human_delay(page)
     await fill_field([
         "#last_name",
         'input[id="last_name"]',
@@ -357,6 +399,7 @@ async def _fill_form_fields(
         'input[id*="last_name"]',
     ], last_name, "last_name")
 
+    await _human_delay(page)
     await fill_field([
         "#email",
         'input[id="email"]',
@@ -679,11 +722,13 @@ async def _fill_form_fields(
 
     try:
         await submit_btn.scroll_into_view_if_needed()
-        await page.wait_for_timeout(500)
+        # Scroll to bottom so the whole form is "seen" before submitting
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await _human_delay(page, 500, 1000)
         url_before = page.url
         print(f"[ats-form] URL before submit: {url_before}")
         print("[ats-form] Clicking submit button...")
-        await submit_btn.click()
+        await _human_click(page, submit_btn)
         print(f"[ats-form] Clicked. URL immediately: {page.url}")
         await page.wait_for_timeout(5000)
         url_after = page.url
