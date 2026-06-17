@@ -349,7 +349,32 @@ async def _fill_form_fields(
         'input[id*="email"]',
     ], email, "email")
 
-    # Greenhouse uses a country-code dropdown + bare number input
+    # Greenhouse new form: country is an autocomplete text input (#country)
+    try:
+        country_el = await page.query_selector('#country, input[id="country"]')
+        if country_el:
+            await country_el.click()
+            await country_el.fill("Israel")
+            await page.wait_for_timeout(800)
+            # Select the first dropdown option that appears
+            option = await page.query_selector(
+                '[role="option"]:first-child, '
+                'li[data-value*="Israel"]:first-child, '
+                'li:has-text("Israel"):first-child'
+            )
+            if option:
+                await option.click()
+                filled.append("country")
+                print("[ats-form] Filled country: Israel (via autocomplete)")
+            else:
+                # Fallback: press Enter to accept first suggestion
+                await country_el.press("Enter")
+                filled.append("country")
+                print("[ats-form] Filled country: Israel (Enter fallback)")
+    except Exception as e:
+        print(f"[ats-form] Country field error: {e}")
+
+    # Greenhouse old form: country-code dropdown + bare number input
     try:
         country_select = await page.query_selector('select[name="phone_country_code"]')
         if country_select:
@@ -432,10 +457,21 @@ async def _fill_form_fields(
         print(f"[ats-form] Custom question: {q_id} — {label_text}")
 
         if q_type not in ("file", "checkbox", "radio", "hidden"):
+            label_lower = label_text.lower()
+            if any(k in label_lower for k in ("linkedin", "linkedin profile", "linkedin url")):
+                answer = linkedin_url or "N/A"
+            elif any(k in label_lower for k in ("github", "portfolio", "website", "url")):
+                answer = "N/A"
+            elif any(k in label_lower for k in ("salary", "expected", "compensation")):
+                answer = "Negotiable"
+            elif any(k in label_lower for k in ("years", "experience")):
+                answer = "2"
+            else:
+                answer = "Yes"
             try:
-                await q.fill("Yes")
+                await q.fill(answer)
                 filled.append(f"custom_{q_id}")
-                print(f"[ats-form] Filled custom question {q_id}")
+                print(f"[ats-form] Filled custom question {q_id} ({label_text!r}): {answer!r}")
             except Exception as e:
                 print(f"[ats-form] Could not fill custom question {q_id}: {e}")
 

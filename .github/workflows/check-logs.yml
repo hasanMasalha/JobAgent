@@ -6,7 +6,7 @@ jobs:
   logs:
     runs-on: ubuntu-latest
     steps:
-      - name: Get FastAPI logs
+      - name: Deploy latest code and get FastAPI logs
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -15,5 +15,8 @@ jobs:
           command_timeout: 5m
           script: |
             cd /home/ubuntu/jobagent
+            git pull origin master
+            docker-compose up -d --build fastapi
+            sleep 5
             echo "=== FASTAPI LOGS (last 200 lines) ==="
             docker-compose logs fastapi --tail=200
