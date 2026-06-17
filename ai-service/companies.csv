@@ -14,7 +14,7 @@ Lightricks, https://careers.lightricks.com/,greenhouse,lightricks,2026-04-25,tru
 Outbrain, https://www.outbrain.com/careers/,html,,2026-04-26,true
 Taboola, https://www.taboola.com/careers,greenhouse,taboola,2026-04-25,true
 Kaltura, https://corp.kaltura.com/company/careers/,html,,2026-04-26,true
-Unity, https://careers.unity.com/,html,,2026-04-26,true
+Unity, https://careers.unity.com/,html,,2026-04-26,false
 Rapyd, https://www.rapyd.net/careers/,html,,2026-04-26,true
 Riskified, https://www.riskified.com/careers/,greenhouse,riskified,2026-04-25,true
 SimilarWeb, https://www.similarweb.com/corp/careers/,greenhouse,similarweb,2026-04-25,true
@@ -27,7 +27,7 @@ WalkMe, https://www.walkme.com/company/careers/,lever,walkme,2026-04-25,true
 Playtika, https://www.playtika.com/careers/,greenhouse,playtikaltd,2026-04-26,true
 Moon Active, https://www.comeet.com/jobs/moonactive/A2.00C,comeet,moonactive:A2.00C,2026-06-16,true
 Viber, https://careers.viber.com/,html,,2026-04-26,true
-Gett, https://gett.com/careers/,html,,2026-04-26,true
+Gett, https://gett.com/careers/,html,,2026-04-26,false
 Mobileye, https://careers.mobileye.com/,html,,2026-04-26,true
 Innoviz, https://innoviz.tech/careers/,html,,2026-04-26,true
 Cato Networks, https://www.catonetworks.com/careers/,greenhouse,catonetworks,2026-04-25,true
@@ -86,35 +86,35 @@ Silverfort, https://www.silverfort.com/careers/,html,,2026-04-26,true
 Transmit Security, https://transmitsecurity.com/careers/,html,,2026-04-26,true
 OwnBackup, https://www.ownbackup.com/careers/,html,,2026-04-26,true
 Salt Security, https://salt.security/careers/,greenhouse,saltsecurity,2026-04-25,true
-Noname Security, https://nonamesecurity.com/careers/,html,,2026-04-26,true
-Laminar, https://laminarsecurity.com/careers/,html,,2026-04-26,true
-Dig Security, https://dig.security/careers/,html,,2026-04-26,true
-Adaptive Shield, https://adaptiveshield.com/careers/,html,,2026-04-26,true
+Noname Security, https://nonamesecurity.com/careers/,html,,2026-04-26,false
+Laminar, https://laminarsecurity.com/careers/,html,,2026-04-26,false
+Dig Security, https://dig.security/careers/,html,,2026-04-26,false
+Adaptive Shield, https://adaptiveshield.com/careers/,html,,2026-04-26,false
 Grip Security, https://www.grip.security/careers/,html,,2026-04-26,true
 Google, https://careers.google.com/locations/israel/,html,,2026-04-26,true
-Microsoft, https://careers.microsoft.com/,html,,2026-04-26,true
+Microsoft, https://careers.microsoft.com/v2/global/en/search?lc=Israel,html,,2026-04-26,true
 Amazon, https://www.amazon.jobs/en/locations/israel,html,,2026-04-26,true
-Apple, https://jobs.apple.com/,html,,2026-04-26,true
-Meta, https://www.metacareers.com/,html,,2026-04-26,true
-Intel, https://jobs.intel.com/,html,,2026-04-26,true
-NVIDIA, https://www.nvidia.com/en-us/about-nvidia/careers/,html,,2026-04-26,true
-IBM, https://www.ibm.com/careers,html,,2026-04-26,true
-Oracle, https://careers.oracle.com/,html,,2026-04-26,true
-Cisco, https://jobs.cisco.com/,html,,2026-04-26,true
-SAP, https://jobs.sap.com/,html,,2026-04-26,true
-Salesforce, https://careers.salesforce.com/,html,,2026-04-26,true
-HP, https://jobs.hp.com/,html,,2026-04-26,true
-Dell, https://jobs.dell.com/,html,,2026-04-26,true
-ServiceNow, https://careers.servicenow.com/,html,,2026-04-26,true
-Snowflake, https://careers.snowflake.com/,html,,2026-04-26,true
-Datadog, https://www.datadoghq.com/careers/,html,,2026-04-26,true
-Elastic, https://www.elastic.co/careers/,html,,2026-04-26,true
+Apple, https://jobs.apple.com/en-us/search?location=israel-ISR,html,,2026-04-26,true
+Meta, https://www.metacareers.com/jobs?offices[0]=Israel,html,,2026-04-26,true
+Intel, https://jobs.intel.com/en/search#q=&t=Jobs&l=Israel,html,,2026-04-26,true
+NVIDIA, https://www.nvidia.com/en-us/about-nvidia/careers/?search=israel,html,,2026-04-26,true
+IBM, https://www.ibm.com/careers/search?field_keyword_18[0]=Israel,html,,2026-04-26,true
+Oracle, https://careers.oracle.com/jobs/#en/sites/jobsearch/jobs?location=Israel,html,,2026-04-26,true
+Cisco, https://jobs.cisco.com/jobs/SearchJobs/Israel,html,,2026-04-26,true
+SAP, https://jobs.sap.com/search/?q=&locationsearch=Israel,html,,2026-04-26,true
+Salesforce, https://careers.salesforce.com/en/jobs/?search=&location=Israel,html,,2026-04-26,true
+HP, https://apply.hp.com/careers?location=Israel,html,,2026-04-26,true
+Dell, https://jobs.dell.com/search-jobs/Israel,html,,2026-04-26,true
+ServiceNow, https://careers.servicenow.com/jobs/?location=Israel,html,,2026-04-26,true
+Snowflake, https://careers.snowflake.com/us/en/search-results?keywords=&location=Israel,html,,2026-04-26,true
+Datadog, https://careers.datadoghq.com/all-jobs/?search=&location=Israel,html,,2026-04-26,true
+Elastic, https://www.elastic.co/careers/open-roles?location=Israel,html,,2026-04-26,true
 Cloudflare, https://www.cloudflare.com/careers/,greenhouse,cloudflare,2026-04-25,true
-Atlassian, https://www.atlassian.com/company/careers,html,,2026-04-26,true
-Dropbox, https://jobs.dropbox.com/,html,,2026-04-26,true
-Booking.com, https://careers.booking.com/,html,,2026-04-26,true
-PayPal, https://www.paypal.com/jobs,html,,2026-04-26,true
-Stripe, https://stripe.com/jobs,html,,2026-04-26,true
+Atlassian, https://www.atlassian.com/company/careers,html,,2026-04-26,false
+Dropbox, https://jobs.dropbox.com/,html,,2026-04-26,false
+Booking.com, https://careers.booking.com/jobs/?city=Tel+Aviv,html,,2026-04-26,true
+PayPal, https://careers.pypl.com/jobs/search/?q=&location=Israel,html,,2026-04-26,true
+Stripe, https://stripe.com/jobs,html,,2026-04-26,false
 Spotify, https://www.lifeatspotify.com/jobs,html,,2026-04-26,false
 TikTok, https://careers.tiktok.com/,html,,2026-04-26,false
 Snap, https://careers.snap.com/,html,,2026-04-26,false
@@ -128,9 +128,9 @@ GitHub, https://github.careers/,html,,2026-04-26,false
 GitLab, https://about.gitlab.com/jobs/,html,,2026-04-26,false
 Docker, https://www.docker.com/careers/,html,,2026-04-26,false
 Notion, https://www.notion.so/careers,ashby,notion,2026-04-25,false
-Canva, https://www.canva.com/careers/,html,,2026-04-26,true
+Canva, https://www.canva.com/careers/,html,,2026-04-26,false
 Shopify, https://www.shopify.com/careers,html,,2026-04-26,false
-Zillow, https://www.zillow.com/careers/,html,,2026-04-26,true
+Zillow, https://www.zillow.com/careers/,html,,2026-04-26,false
 Coinbase, https://www.coinbase.com/careers,html,,2026-04-26,false
 Kraken, https://www.kraken.com/careers,ashby,kraken,2026-04-25,false
 Binance, https://www.binance.com/en/careers,html,,2026-04-26,false
@@ -149,14 +149,14 @@ Abra, https://www.abra-it.com/careers/,html,,2026-04-26,true
 Commit, https://www.commit.co.il/careers/,html,,2026-04-26,true
 Axonius, https://www.axonius.com/company/careers/,greenhouse,axonius,2026-06-16,true
 Cymulate, https://cymulate.com/careers/,greenhouse,cymulate,2026-06-16,true
-Lusha, https://jobs.ashbyhq.com/lusha,html,,2026-06-16,true
-Sentra, https://jobs.ashbyhq.com/sentra,html,,2026-06-16,true
-Classiq, https://jobs.ashbyhq.com/classiq,html,,2026-06-16,true
-Incredibuild, https://jobs.ashbyhq.com/incredibuild,html,,2026-06-16,true
-Cloudinary, https://jobs.ashbyhq.com/cloudinary,html,,2026-06-16,true
-Varonis, https://jobs.ashbyhq.com/varonis,html,,2026-06-16,true
-Nuvei, https://jobs.ashbyhq.com/nuvei,html,,2026-06-16,true
-Overwolf, https://jobs.ashbyhq.com/overwolf,html,,2026-06-16,true
-Illusive Networks, https://jobs.ashbyhq.com/illusive,html,,2026-06-16,true
+Lusha, https://jobs.ashbyhq.com/lusha,ashby,lusha,2026-06-16,true
+Sentra, https://jobs.ashbyhq.com/sentra,ashby,sentra,2026-06-16,true
+Classiq, https://jobs.ashbyhq.com/classiq,ashby,classiq,2026-06-16,true
+Incredibuild, https://jobs.ashbyhq.com/incredibuild,ashby,incredibuild,2026-06-16,true
+Cloudinary, https://jobs.ashbyhq.com/cloudinary,ashby,cloudinary,2026-06-16,true
+Varonis, https://jobs.ashbyhq.com/varonis,ashby,varonis,2026-06-16,true
+Nuvei, https://jobs.ashbyhq.com/nuvei,ashby,nuvei,2026-06-16,true
+Overwolf, https://jobs.ashbyhq.com/overwolf,ashby,overwolf,2026-06-16,true
+Illusive Networks, https://jobs.ashbyhq.com/illusive,ashby,illusive,2026-06-16,true
 Samsara, https://boards.greenhouse.io/samsara,greenhouse,samsara,2026-06-16,true
 Empathy, https://www.comeet.com/jobs/empathy/F8.007,comeet,empathy:F8.007,2026-06-16,true
