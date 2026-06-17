@@ -349,14 +349,16 @@ async def _fill_form_fields(
         'input[id*="email"]',
     ], email, "email")
 
-    # Greenhouse new form: country is an autocomplete text input (#country)
+    # Greenhouse new form: country is a React-controlled autocomplete.
+    # fill() sets raw DOM value but React overwrites it — must type char-by-char
+    # so React's synthetic onInput/onChange fires and the dropdown appears.
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
             await country_el.click()
-            await country_el.fill("Israel")
-            await page.wait_for_timeout(800)
-            # Select the first dropdown option that appears
+            await country_el.press("Control+a")
+            await page.keyboard.type("Israel", delay=80)
+            await page.wait_for_timeout(1200)
             option = await page.query_selector(
                 '[role="option"]:first-child, '
                 'li[data-value*="Israel"]:first-child, '
@@ -364,32 +366,59 @@ async def _fill_form_fields(
             )
             if option:
                 await option.click()
+                await page.wait_for_timeout(300)
                 filled.append("country")
-                print("[ats-form] Filled country: Israel (via autocomplete)")
+                print("[ats-form] Filled country: Israel (dropdown click)")
             else:
-                # Fallback: press Enter to accept first suggestion
+                # Fallback: first suggestion via keyboard
+                await country_el.press("ArrowDown")
                 await country_el.press("Enter")
+                await page.wait_for_timeout(300)
                 filled.append("country")
-                print("[ats-form] Filled country: Israel (Enter fallback)")
+                print("[ats-form] Filled country: Israel (ArrowDown+Enter)")
     except Exception as e:
         print(f"[ats-form] Country field error: {e}")
 
-    # Greenhouse old form: country-code dropdown + bare number input
+    # Greenhouse old form: country-code select dropdown
     try:
         country_select = await page.query_selector('select[name="phone_country_code"]')
         if country_select:
             await country_select.select_option(value="IL")
-            print("[ats-form] Set phone country code to IL")
+            print("[ats-form] Set phone country code to IL (select dropdown)")
     except Exception:
         pass
 
+    # Phone: International Telephone Input (ITI) library intercepts the input.
+    # Step 1 — set ITI country to Israel via JS API so the country code is correct.
+    # Step 2 — type number char-by-char (fires real key events ITI/React listen to).
     bare_phone = phone.replace("+972", "").replace("972", "").strip().lstrip("0")
-    await fill_field([
-        'input[name="phone"]',
-        'input[id="phone"]',
-        'input[type="tel"]',
-        'input[id*="phone"]',
-    ], bare_phone or phone, "phone")
+    phone_value = bare_phone or phone
+    try:
+        await page.evaluate("""() => {
+            const phoneEl = document.querySelector('#phone, input[type="tel"]');
+            if (!phoneEl) return;
+            const iti = window.intlTelInputGlobals
+                && window.intlTelInputGlobals.getInstance(phoneEl);
+            if (iti) { iti.setCountry('il'); }
+        }""")
+        print("[ats-form] Set ITI phone country to IL")
+    except Exception as e:
+        print(f"[ats-form] ITI country set error: {e}")
+
+    try:
+        phone_el = await page.query_selector(
+            'input[id="phone"], input[type="tel"], input[id*="phone"]'
+        )
+        if phone_el and phone_value:
+            await phone_el.click()
+            await phone_el.press("Control+a")
+            await page.keyboard.type(phone_value, delay=60)
+            filled.append("phone")
+            print(f"[ats-form] Typed phone: {phone_value}")
+        elif not phone_value:
+            print("[ats-form] No phone value provided — skipping")
+    except Exception as e:
+        print(f"[ats-form] Phone type error: {e}")
 
     # Try clicking the upload trigger button first (Greenhouse hides the real input)
     try:
