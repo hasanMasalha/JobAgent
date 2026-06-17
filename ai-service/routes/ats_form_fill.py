@@ -74,24 +74,40 @@ async def fill_ats_form(
                     f"placeholder={placeholder} required={required}"
                 )
 
-            # Greenhouse listing pages show a description + Apply button that leads
-            # to the actual form page. Detect this and navigate before filling.
+            # Modern Greenhouse listing pages (job-boards.greenhouse.io) embed the
+            # form but hide it behind an 'Apply' button (type=button, class='btn btn--pill').
+            # Clicking it reveals the form INLINE — there is no page navigation.
+            # Ignore 'Quick Apply with MyGreenhouse' — it requires a Greenhouse account.
             if "greenhouse.io" in apply_url:
-                apply_btn = await page.query_selector(
-                    'a[href*="/apply"], '
-                    'button:has-text("Apply for this Job"), '
-                    'a:has-text("Apply for this Job"), '
-                    'button:has-text("Apply Now"), '
-                    'a:has-text("Apply Now")'
-                )
+                apply_btn = None
+                candidates = await page.query_selector_all("button:not([type='submit'])")
+                for candidate in candidates:
+                    try:
+                        text = (await candidate.inner_text()).strip()
+                        text_lower = text.lower()
+                        if text_lower == "apply" or (
+                            "apply" in text_lower
+                            and "quick" not in text_lower
+                            and "greenhouse" not in text_lower
+                            and "job" not in text_lower
+                        ):
+                            apply_btn = candidate
+                            print(f"[ats-form] Greenhouse: found Apply button (text={text!r})")
+                            break
+                    except Exception:
+                        continue
+
                 if apply_btn:
-                    href = await apply_btn.get_attribute("href") or ""
-                    print(f"[ats-form] Greenhouse: found Apply button (href={href!r}), navigating...")
                     await apply_btn.click()
-                    await page.wait_for_load_state("domcontentloaded", timeout=15000)
-                    await page.wait_for_timeout(2000)
-                    print(f"[ats-form] Greenhouse: after Apply click, URL={page.url}")
-                    # Re-dump fields now that we're on the actual form
+                    print("[ats-form] Greenhouse: clicked Apply — waiting for form to reveal...")
+                    await page.wait_for_timeout(1000)
+                    try:
+                        await page.wait_for_selector("#first_name", timeout=10000)
+                        print("[ats-form] Greenhouse: form revealed (#first_name visible)")
+                    except Exception:
+                        print("[ats-form] Greenhouse: WARNING — #first_name not found after Apply click")
+                    print(f"[ats-form] Greenhouse: URL after Apply click: {page.url}")
+                    # Re-dump fields now that the form is visible
                     inputs2 = await page.query_selector_all("input, textarea, select")
                     for inp in inputs2:
                         name = await inp.get_attribute("name") or ""
@@ -104,7 +120,7 @@ async def fill_ats_form(
                             f"placeholder={placeholder} required={required}"
                         )
                 else:
-                    print("[ats-form] Greenhouse: no Apply button found — form should be on this page")
+                    print("[ats-form] Greenhouse: no Apply button found — form should already be visible")
 
             if "lever.co" in apply_url:
                 result = await _fill_lever_form(
