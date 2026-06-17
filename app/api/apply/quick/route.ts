@@ -159,6 +159,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (result.status === "pending_verification") {
+        return NextResponse.json({
+          success: true,
+          status: "pending_verification",
+          application_id: applicationId,
+          message: "Check your email for a verification code from Greenhouse to complete your application.",
+        });
+      }
+
       return NextResponse.json({
         success: true,
         status: "applying",

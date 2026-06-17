@@ -19,14 +19,15 @@ const ALLOWED_STATUSES = ["applied", "interviewing", "offer", "rejected"] as con
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 
 const STATUS_STYLES: Record<string, string> = {
-  applied:      "bg-blue-100 text-blue-700",
-  interviewing: "bg-purple-100 text-purple-700",
-  offer:        "bg-green-100 text-green-800",
-  rejected:     "bg-red-100 text-red-600",
-  draft:        "bg-gray-100 text-gray-500",
-  manual:       "bg-yellow-100 text-yellow-700",
-  cancelled:    "bg-gray-100 text-gray-400",
-  failed:       "bg-orange-100 text-orange-600",
+  applied:              "bg-blue-100 text-blue-700",
+  interviewing:         "bg-purple-100 text-purple-700",
+  offer:                "bg-green-100 text-green-800",
+  rejected:             "bg-red-100 text-red-600",
+  draft:                "bg-gray-100 text-gray-500",
+  manual:               "bg-yellow-100 text-yellow-700",
+  cancelled:            "bg-gray-100 text-gray-400",
+  failed:               "bg-orange-100 text-orange-600",
+  pending_verification: "bg-amber-100 text-amber-700",
 };
 
 interface CalendarModalProps {
@@ -348,6 +349,9 @@ export default function ApplicationsPage() {
                     {app.status === "failed" && (
                       <option value="" disabled className="bg-white text-gray-400 font-normal">Manual apply needed</option>
                     )}
+                    {app.status === "pending_verification" && (
+                      <option value="" disabled className="bg-white text-amber-600 font-normal">Verify Email</option>
+                    )}
                     {ALLOWED_STATUSES.map((s) => (
                       <option key={s} value={s} className="bg-white text-gray-800 font-normal">
                         {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -355,13 +359,27 @@ export default function ApplicationsPage() {
                     ))}
                   </select>
                 </div>
+                {app.status === "pending_verification" && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                    Check your email for a verification code from Greenhouse to complete this application.
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                   {new Date(app.applied_at).toLocaleDateString("en-GB", {
                     day: "numeric", month: "short", year: "numeric",
                   })}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {app.status === "manual" || app.status === "failed" ? (
+                  {app.status === "pending_verification" ? (
+                    <a
+                      href={app.job_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Verify Email →
+                    </a>
+                  ) : app.status === "manual" || app.status === "failed" ? (
                     <a
                       href={app.job_url}
                       target="_blank"
@@ -450,6 +468,11 @@ export default function ApplicationsPage() {
                             Manual apply needed
                           </option>
                         )}
+                        {app.status === "pending_verification" && (
+                          <option value="" disabled className="bg-white text-amber-600 font-normal">
+                            Verify Email — check inbox
+                          </option>
+                        )}
                         {ALLOWED_STATUSES.map((s) => (
                           <option key={s} value={s} className="bg-white text-gray-800 font-normal">
                             {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -459,7 +482,17 @@ export default function ApplicationsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {app.status === "manual" || app.status === "failed" ? (
+                        {app.status === "pending_verification" ? (
+                          <a
+                            href={app.job_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
+                            title="Check your email for a verification code from Greenhouse"
+                          >
+                            Verify Email →
+                          </a>
+                        ) : app.status === "manual" || app.status === "failed" ? (
                           <a
                             href={app.job_url}
                             target="_blank"

@@ -685,9 +685,9 @@ async def _fill_form_fields(
         print("[ats-form] Clicking submit button...")
         await submit_btn.click()
         print(f"[ats-form] Clicked. URL immediately: {page.url}")
-        await page.wait_for_timeout(3000)
+        await page.wait_for_timeout(5000)
         url_after = page.url
-        print(f"[ats-form] URL after 3s: {url_after}")
+        print(f"[ats-form] URL after 5s: {url_after}")
 
         screenshot_path = f"/tmp/ats_debug_{int(time.time())}.png"
         await page.screenshot(path=screenshot_path, full_page=True)
@@ -696,6 +696,24 @@ async def _fill_form_fields(
         page_text = await page.inner_text("body")
         print(f"[ats-form] Page text (first 500):\n{page_text[:500]}")
         page_text_lower = page_text.lower()
+
+        # Greenhouse email verification challenge — appears instead of success page
+        verification_signals = [
+            "security code",
+            "verification code",
+            "enter the code",
+            "copy and paste this code",
+            "check your email",
+            "sent you a code",
+        ]
+        if any(s in page_text_lower for s in verification_signals):
+            print("[ats-form] Greenhouse email verification step detected")
+            return {
+                "success": True,
+                "status": "pending_verification",
+                "filled": filled,
+                "message": "Greenhouse sent a verification code to your email. Check your inbox and enter the code to complete your application.",
+            }
 
         # Explicit success signals — Greenhouse thank-you page or in-place message
         success_signals = [

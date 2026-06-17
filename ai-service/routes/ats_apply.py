@@ -51,7 +51,10 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             )
             print(f"[ats-apply-bg] submit_via_ats returned: {result}")
 
-            if result.get("success"):
+            if result.get("success") and result.get("status") == "pending_verification":
+                status = "pending_verification"
+                print("[ats-apply-bg] Greenhouse email verification required")
+            elif result.get("success"):
                 status = "applied"
             else:
                 status = "failed"
@@ -61,7 +64,12 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Updating DB: {request_dict['application_id']} -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
-                error_msg = result.get("error") if status == "failed" else None
+                if status == "failed":
+                    error_msg = result.get("error")
+                elif status == "pending_verification":
+                    error_msg = "Check your email for a verification code from Greenhouse to complete your application."
+                else:
+                    error_msg = None
                 await conn.execute(
                     'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
                     status,
