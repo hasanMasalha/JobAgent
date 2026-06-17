@@ -349,33 +349,59 @@ async def _fill_form_fields(
         'input[id*="email"]',
     ], email, "email")
 
-    # Greenhouse new form: country is a React-controlled autocomplete.
-    # fill() sets raw DOM value but React overwrites it — must type char-by-char
-    # so React's synthetic onInput/onChange fires and the dropdown appears.
+    # Country: React-controlled autocomplete — must use keyboard events so React
+    # registers state changes. fill() bypasses synthetic events and gets overwritten.
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
             await country_el.click()
-            await country_el.press("Control+a")
-            await page.keyboard.type("Israel", delay=80)
-            await page.wait_for_timeout(1200)
+            await page.wait_for_timeout(300)
+            await page.keyboard.press("Control+a")
+            await page.keyboard.press("Backspace")
+            await page.wait_for_timeout(200)
+            for char in "Israel":
+                await page.keyboard.type(char, delay=80)
+            await page.wait_for_timeout(1500)
+
             option = await page.query_selector(
-                '[role="option"]:first-child, '
-                'li[data-value*="Israel"]:first-child, '
-                'li:has-text("Israel"):first-child'
+                'li.select-option:has-text("Israel"), '
+                '[role="option"]:has-text("Israel"), '
+                'li:has-text("Israel"), '
+                '.dropdown-item:has-text("Israel")'
             )
             if option:
                 await option.click()
-                await page.wait_for_timeout(300)
-                filled.append("country")
-                print("[ats-form] Filled country: Israel (dropdown click)")
+                await page.wait_for_timeout(400)
+                val = await page.input_value("#country")
+                print(f"[ats-form] Country after dropdown click: '{val}'")
             else:
-                # Fallback: first suggestion via keyboard
-                await country_el.press("ArrowDown")
-                await country_el.press("Enter")
-                await page.wait_for_timeout(300)
-                filled.append("country")
-                print("[ats-form] Filled country: Israel (ArrowDown+Enter)")
+                await page.keyboard.press("ArrowDown")
+                await page.wait_for_timeout(200)
+                await page.keyboard.press("Enter")
+                await page.wait_for_timeout(400)
+                val = await page.input_value("#country")
+                print(f"[ats-form] Country after ArrowDown+Enter: '{val}'")
+
+            final_val = await page.input_value("#country")
+            if not final_val:
+                # Last resort: fire React's native value setter + synthetic events
+                await page.evaluate("""() => {
+                    const input = document.getElementById('country');
+                    if (!input) return;
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value'
+                    ).set;
+                    setter.call(input, 'Israel');
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
+                    input.dispatchEvent(new Event('blur', {bubbles: true}));
+                }""")
+                await page.wait_for_timeout(400)
+                final_val = await page.input_value("#country")
+                print(f"[ats-form] Country after React event injection: '{final_val}'")
+
+            print(f"[ats-form] FINAL country value: '{final_val}'")
+            filled.append("country")
     except Exception as e:
         print(f"[ats-form] Country field error: {e}")
 
@@ -388,37 +414,48 @@ async def _fill_form_fields(
     except Exception:
         pass
 
-    # Phone: International Telephone Input (ITI) library intercepts the input.
-    # Step 1 — set ITI country to Israel via JS API so the country code is correct.
-    # Step 2 — type number char-by-char (fires real key events ITI/React listen to).
-    bare_phone = phone.replace("+972", "").replace("972", "").strip().lstrip("0")
-    phone_value = bare_phone or phone
-    try:
-        await page.evaluate("""() => {
-            const phoneEl = document.querySelector('#phone, input[type="tel"]');
-            if (!phoneEl) return;
-            const iti = window.intlTelInputGlobals
-                && window.intlTelInputGlobals.getInstance(phoneEl);
-            if (iti) { iti.setCountry('il'); }
-        }""")
-        print("[ats-form] Set ITI phone country to IL")
-    except Exception as e:
-        print(f"[ats-form] ITI country set error: {e}")
+    # Phone: ITI library wraps the tel input with a country-flag picker.
+    # Only interact if we actually have a phone number — touching ITI with no
+    # number can leave the field in a broken state.
+    if not phone:
+        print("[ats-form] No phone value — leaving phone field untouched")
+    else:
+        # Normalize to local format: ITI manages the country code separately
+        clean_phone = phone
+        if clean_phone.startswith("+972"):
+            clean_phone = "0" + clean_phone[4:]
+        elif clean_phone.startswith("972"):
+            clean_phone = "0" + clean_phone[3:]
 
-    try:
-        phone_el = await page.query_selector(
-            'input[id="phone"], input[type="tel"], input[id*="phone"]'
-        )
-        if phone_el and phone_value:
-            await phone_el.click()
-            await phone_el.press("Control+a")
-            await page.keyboard.type(phone_value, delay=60)
-            filled.append("phone")
-            print(f"[ats-form] Typed phone: {phone_value}")
-        elif not phone_value:
-            print("[ats-form] No phone value provided — skipping")
-    except Exception as e:
-        print(f"[ats-form] Phone type error: {e}")
+        try:
+            await page.evaluate("""() => {
+                const phoneEl = document.querySelector('#phone, input[type="tel"]');
+                if (!phoneEl) return;
+                const iti = window.intlTelInputGlobals
+                    && window.intlTelInputGlobals.getInstance(phoneEl);
+                if (iti) { iti.setCountry('il'); }
+            }""")
+            await page.wait_for_timeout(300)
+            print("[ats-form] Set ITI country to IL")
+        except Exception as e:
+            print(f"[ats-form] ITI country set error: {e}")
+
+        try:
+            phone_el = await page.query_selector(
+                'input[id="phone"], input[type="tel"], input[id*="phone"]'
+            )
+            if phone_el:
+                await phone_el.click()
+                await page.wait_for_timeout(200)
+                await page.keyboard.type(clean_phone, delay=50)
+                await page.wait_for_timeout(200)
+                val = await page.input_value(
+                    'input[id="phone"], input[type="tel"], input[id*="phone"]'
+                )
+                filled.append("phone")
+                print(f"[ats-form] Typed phone: {clean_phone!r} → field value: '{val}'")
+        except Exception as e:
+            print(f"[ats-form] Phone type error: {e}")
 
     # Try clicking the upload trigger button first (Greenhouse hides the real input)
     try:
