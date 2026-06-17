@@ -12,11 +12,28 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 5m
+          command_timeout: 10m
           script: |
             cd /home/ubuntu/jobagent
             git pull origin master
             docker-compose up -d --build fastapi
             sleep 5
-            echo "=== FASTAPI LOGS (last 200 lines) ==="
-            docker-compose logs fastapi --tail=200
+
+            echo "=== FASTAPI LOGS (last 500 lines) ==="
+            docker-compose logs fastapi --tail=500
+
+            echo "=== VALIDATION ERRORS FROM LOGS ==="
+            docker-compose logs fastapi --tail=500 | grep -E "VALIDATION|FIELD|PRE-SUBMIT|error|Error|WARNING|filled|submit|Submit"
+
+            echo "=== SCREENSHOTS ==="
+            docker-compose exec -T fastapi ls /tmp/form_error_*.png 2>/dev/null || echo "No error screenshots found"
+            docker-compose exec -T fastapi ls /tmp/ats_debug_*.png 2>/dev/null || echo "No debug screenshots found"
+
+            LATEST=$(docker-compose exec -T fastapi sh -c 'ls -t /tmp/form_error_*.png /tmp/ats_debug_*.png 2>/dev/null | head -1' | tr -d '\r')
+            if [ -n "$LATEST" ]; then
+              echo "=== SCREENSHOT BASE64 ($LATEST) ==="
+              docker-compose exec -T fastapi base64 "$LATEST"
+              echo "=== END SCREENSHOT BASE64 ==="
+            else
+              echo "No screenshots available"
+            fi
