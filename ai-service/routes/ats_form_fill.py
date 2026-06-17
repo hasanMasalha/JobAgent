@@ -6,6 +6,8 @@ import time
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
+from captcha_solver import detect_and_solve_captcha
+
 
 async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
     await page.wait_for_timeout(random.randint(min_ms, max_ms))
@@ -600,11 +602,9 @@ async def _fill_form_fields(
             except Exception as e:
                 print(f"[ats-form] Could not fill custom question {q_id}: {e}")
 
-    # ── CAPTCHA check (visible challenges only) — bail before submit ─────────
-    # Only block on user-visible challenges. reCAPTCHA v3 (invisible) runs silently
-    # in the background and does NOT require user interaction — Greenhouse uses it on
-    # all forms. Matching `iframe[src*="recaptcha"]` or `input[name="g-recaptcha-response"]`
-    # catches v3 and produces false positives that block every Greenhouse submission.
+    # ── CAPTCHA check — attempt to solve with 2captcha, bail only if unsolvable ──
+    # Only targets visible user challenges. reCAPTCHA v3 (invisible) runs silently
+    # in the background — matching `iframe[src*="recaptcha"]` is a false positive.
 
     captcha_el = await page.query_selector(
         '.g-recaptcha[data-sitekey]:not([data-size="invisible"]), '
@@ -615,15 +615,19 @@ async def _fill_form_fields(
         src_attr = await captcha_el.get_attribute("src") or ""
         class_attr = await captcha_el.get_attribute("class") or ""
         captcha_type = "hcaptcha" if "hcaptcha" in (name_attr + src_attr + class_attr) else "recaptcha"
-        print(f"[ats-form] CAPTCHA detected: {captcha_type}")
-        return {
-            "success": False,
-            "error": "captcha_detected",
-            "captcha": True,
-            "captcha_type": captcha_type,
-            "filled": filled,
-            "message": f"Form has {captcha_type} — requires manual submission",
-        }
+        print(f"[ats-form] CAPTCHA detected: {captcha_type} — attempting 2captcha solve")
+        solved = await detect_and_solve_captcha(page)
+        if not solved:
+            print(f"[ats-form] CAPTCHA could not be solved automatically")
+            return {
+                "success": False,
+                "error": "captcha_detected",
+                "captcha": True,
+                "captcha_type": captcha_type,
+                "filled": filled,
+                "message": f"Form has {captcha_type} — could not solve automatically",
+            }
+        print("[ats-form] CAPTCHA solved, continuing to submit")
 
     # ── GDPR / consent checkbox ───────────────────────────────────────────────
 
@@ -725,6 +729,9 @@ async def _fill_form_fields(
         # Scroll to bottom so the whole form is "seen" before submitting
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await _human_delay(page, 500, 1000)
+        # Solve any captcha that appeared dynamically after field fill
+        print("[ats-form] Checking for captcha before submit...")
+        await detect_and_solve_captcha(page)
         url_before = page.url
         print(f"[ats-form] URL before submit: {url_before}")
         print("[ats-form] Clicking submit button...")

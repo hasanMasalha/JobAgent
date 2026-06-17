@@ -185,7 +185,8 @@ jobs:
             for entry in \
               "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
-              "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}"; do
+              "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" \
+              "TWOCAPTCHA_API_KEY=${{ secrets.TWOCAPTCHA_API_KEY }}"; do
               key="${entry%%=*}"
               if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
                 sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env
