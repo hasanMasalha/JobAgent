@@ -275,15 +275,18 @@ async def _fill_lever_form(
         'input[name="h-captcha-response"], .h-captcha, iframe[src*="hcaptcha"]'
     )
     if hcaptcha:
-        print("[ats-form] hCaptcha detected — cannot auto-submit")
-        return {
-            "success": False,
-            "error": "captcha_detected",
-            "captcha": True,
-            "captcha_type": "hcaptcha",
-            "filled": filled,
-            "message": "Form has hCaptcha — requires manual submission",
-        }
+        print("[ats-form] hCaptcha detected — attempting 2captcha solve")
+        solved = await detect_and_solve_captcha(page)
+        if not solved:
+            print("[ats-form] Could not solve hCaptcha")
+            return {
+                "success": False,
+                "error": "captcha_unsolvable",
+                "captcha": True,
+                "captcha_type": "hcaptcha",
+                "message": "Could not solve hCaptcha automatically",
+            }
+        print("[ats-form] hCaptcha solved — proceeding to submit")
 
     async def _check_success() -> dict | None:
         page_text = await page.inner_text("body")
