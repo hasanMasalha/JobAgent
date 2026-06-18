@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import re
 
 from bs4 import BeautifulSoup
@@ -55,6 +57,34 @@ _DESC_SELECTORS = [
     ".description__text",
     '[class*="show-more-less-html"]',
 ]
+
+
+def get_linkedin_session_path() -> str | None:
+    """Get path to a saved LinkedIn browser session."""
+    profile_dir = "/app/browser_profile"
+    if not os.path.exists(profile_dir):
+        return None
+
+    for user_id in os.listdir(profile_dir):
+        session_path = os.path.join(profile_dir, user_id)
+        if os.path.isdir(session_path):
+            storage_file = os.path.join(session_path, "storage_state.json")
+            if os.path.exists(storage_file):
+                try:
+                    with open(storage_file) as f:
+                        data = json.load(f)
+                    cookies = data.get("cookies", [])
+                    li_cookies = [
+                        c for c in cookies
+                        if "linkedin.com" in c.get("domain", "")
+                        and c.get("name") in ["li_at", "JSESSIONID"]
+                    ]
+                    if li_cookies:
+                        print(f"[linkedin] Found session for user {user_id}")
+                        return storage_file
+                except Exception:
+                    pass
+    return None
 
 
 async def _fetch_full_description(page, job_url: str) -> str | None:
@@ -259,6 +289,113 @@ async def extract_ats_url(page) -> str | None:
     return None
 
 
+async def extract_apply_url_with_session(
+    job_url: str,
+    session_path: str,
+) -> str | None:
+    """
+    Visit a LinkedIn job page with a logged-in session, click the external
+    Apply button, and capture the resulting ATS redirect URL.
+    Returns None for Easy Apply jobs or when no ATS URL is found.
+    """
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+
+            context = await browser.new_context(
+                storage_state=session_path,
+                viewport={"width": 1280, "height": 800},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+
+            page = await context.new_page()
+            await page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(3000)
+
+            current_url = page.url
+            if "login" in current_url or "authwall" in current_url:
+                print(f"[linkedin] Session expired for {session_path}")
+                await browser.close()
+                return None
+
+            print("[linkedin] Logged in, looking for Apply button...")
+
+            apply_btn = None
+            selectors = [
+                "button.jobs-apply-button",
+                ".jobs-apply-button",
+                'button[aria-label*="Apply"]',
+                'a[href*="apply"]',
+            ]
+            for sel in selectors:
+                btn = await page.query_selector(sel)
+                if btn:
+                    text = await btn.inner_text()
+                    print(f"[linkedin] Found button: '{text}' ({sel})")
+                    if "easy apply" not in text.lower():
+                        apply_btn = btn
+                        break
+
+            if not apply_btn:
+                print("[linkedin] No external Apply button found")
+                await browser.close()
+                return None
+
+            ats_url = None
+
+            async def handle_new_page(new_page):
+                nonlocal ats_url
+                try:
+                    await new_page.wait_for_load_state("domcontentloaded", timeout=10000)
+                    url = new_page.url
+                    print(f"[linkedin] New page opened: {url}")
+                    if any(d in url for d in _ATS_DOMAINS):
+                        ats_url = url
+                except Exception:
+                    pass
+
+            context.on("page", handle_new_page)
+
+            await apply_btn.click()
+            await page.wait_for_timeout(5000)
+
+            if not ats_url:
+                current = page.url
+                if any(d in current for d in _ATS_DOMAINS):
+                    ats_url = current
+                    print(f"[linkedin] Redirected to ATS: {ats_url}")
+
+            if not ats_url:
+                for domain in _ATS_DOMAINS:
+                    link = await page.query_selector(f'a[href*="{domain}"]')
+                    if link:
+                        href = await link.get_attribute("href")
+                        if href:
+                            ats_url = href
+                            print(f"[linkedin] Found ATS link: {href}")
+                            break
+
+            await browser.close()
+
+            if ats_url:
+                print(f"[linkedin] Extracted ATS URL: {ats_url}")
+            else:
+                print("[linkedin] Could not extract ATS URL")
+
+            return ats_url
+
+    except Exception as e:
+        print(f"[linkedin] extract_apply_url_with_session error: {e}")
+        return None
+
+
 async def fetch_linkedin_jobs_for_term(
     search_term: str,
     browser_context,
@@ -365,6 +502,7 @@ async def fetch_linkedin_jobs_for_term(
 
         # ── Phase 2: navigate to each job page for full description + ATS URL ──
         jobs: list[dict] = []
+        session_path = get_linkedin_session_path()
         for meta in preliminary:
             desc = await _fetch_full_description(page, meta["url"])
 
@@ -373,6 +511,8 @@ async def fetch_linkedin_jobs_for_term(
             ats_url = await extract_ats_url(page)
             if ats_url:
                 print(f"[linkedin] Found ATS apply URL: {ats_url[:80]}")
+            elif session_path:
+                ats_url = await extract_apply_url_with_session(meta["url"], session_path)
 
             if desc and len(desc) >= 100:
                 description = desc
