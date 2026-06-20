@@ -23,9 +23,15 @@ ATS_MAP = {
 async def fetch_active_jobs(limit=100, offset=0) -> list:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
-            'https://active-jobs-db.p.rapidapi.com/active-ats-7d',
+            'https://active-jobs-db.p.rapidapi.com/active-ats',
             headers=HEADERS,
-            params={'limit': limit, 'offset': offset}
+            params={
+                'time_frame': '24h',
+                'limit': limit,
+                'offset': offset,
+                'description_format': 'text',
+                'location': '"Israel"',
+            }
         )
         if resp.status_code != 200:
             print(f'[active-jobs] Error: {resp.status_code}')
