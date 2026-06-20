@@ -37,3 +37,10 @@ app.include_router(cleanup_router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/fetch-active-jobs")
+async def fetch_active_jobs_route():
+    from active_jobs_fetcher import fetch_and_save_jobs
+    result = await fetch_and_save_jobs()
+    return result

@@ -7,6 +7,7 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from active_jobs_fetcher import fetch_and_save_jobs as _fetch_active_jobs
 from routes.jobs import scrape_and_store, scrape_and_store_company_careers
 from routes.matching import MatchRequest, match_jobs
 
@@ -43,6 +44,15 @@ async def _notify_user_if_matches(user_id: str, match_count: int):
             logger.info("[scheduler] Email notify user %s: %s", user_id, resp.text)
     except Exception:
         logger.exception("[scheduler] Email notify failed for user %s", user_id)
+
+
+async def _run_active_jobs_fetch():
+    logger.info("[scheduler] Starting Active Jobs DB fetch…")
+    try:
+        result = await _fetch_active_jobs()
+        logger.info("[scheduler] Active Jobs DB fetch done: %s", result)
+    except Exception:
+        logger.exception("[scheduler] Active Jobs DB fetch failed")
 
 
 async def _run_company_scrape():
@@ -98,6 +108,7 @@ async def _recovery_scrape_if_stale():
 
 def start_scheduler():
     scheduler.add_job(_run_scrape, CronTrigger(hour=5, minute=0, timezone="UTC"), id="daily_scrape")
+    scheduler.add_job(_run_active_jobs_fetch, CronTrigger(hour=5, minute=15, timezone="UTC"), id="active_jobs_fetch")
     scheduler.add_job(_run_company_scrape, CronTrigger(hour=5, minute=30, timezone="UTC"), id="company_scrape")
     scheduler.add_job(_run_match_all, CronTrigger(hour=6, minute=0, timezone="UTC"), id="daily_match")
     # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
@@ -106,7 +117,7 @@ def start_scheduler():
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — scrape@05:00 UTC, company_scrape@05:30 UTC, match@06:00 UTC, recovery check in 5s")
+    logger.info("[scheduler] Started — scrape@05:00 UTC, active_jobs@05:15 UTC, company_scrape@05:30 UTC, match@06:00 UTC, recovery check in 5s")
 
 
 def stop_scheduler():

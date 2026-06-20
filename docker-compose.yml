@@ -19,6 +19,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
     volumes:
       - ./ai-service/companies.csv:/app/companies.csv
       - ./ai-service/browser_profile:/app/browser_profile
