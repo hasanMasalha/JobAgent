@@ -1,0 +1,26 @@
+name: Fetch Active Jobs DB
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6am UTC
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install httpx asyncpg
+
+      - name: Fetch and save jobs
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ai-service/active_jobs_fetcher.py

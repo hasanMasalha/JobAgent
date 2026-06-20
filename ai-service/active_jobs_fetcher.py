@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import asyncpg
@@ -112,3 +113,7 @@ async def fetch_and_save_jobs():
         return {'saved': saved, 'skipped': skipped}
     finally:
         await conn.close()
+
+
+if __name__ == '__main__':
+    asyncio.run(fetch_and_save_jobs())
