@@ -1,7 +1,5 @@
 import asyncio
 import os
-import uuid
-from datetime import datetime, timezone
 
 import httpx
 
@@ -92,7 +90,6 @@ async def save_jobs_to_supabase(jobs: list) -> dict:
 
 async def fetch_and_save_jobs():
     raw_jobs = await fetch_active_jobs(limit=100)
-    now = datetime.now(timezone.utc).isoformat()
 
     records = []
     skipped = 0
@@ -113,7 +110,6 @@ async def fetch_and_save_jobs():
                 break
 
         records.append({
-            'id': str(uuid.uuid4()),
             'url': url,
             'apply_url': url,
             'title': raw.get('title', ''),
@@ -124,8 +120,6 @@ async def fetch_and_save_jobs():
             'ats_platform': ats_platform,
             'apply_type': apply_type,
             'is_active': True,
-            'created_at': now,
-            'updated_at': now,
         })
 
     result = await save_jobs_to_supabase(records)
