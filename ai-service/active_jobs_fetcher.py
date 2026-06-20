@@ -1,11 +1,15 @@
 import asyncio
 import os
+import uuid
+from datetime import datetime, timezone
 
-import asyncpg
 import httpx
 
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '')
-HEADERS = {
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+RAPIDAPI_HEADERS = {
     'X-RapidAPI-Key': RAPIDAPI_KEY,
     'X-RapidAPI-Host': 'active-jobs-db.p.rapidapi.com'
 }
@@ -25,7 +29,7 @@ async def fetch_active_jobs(limit=100, offset=0) -> list:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
             'https://active-jobs-db.p.rapidapi.com/active-ats',
-            headers=HEADERS,
+            headers=RAPIDAPI_HEADERS,
             params={
                 'time_frame': '24h',
                 'limit': limit,
@@ -35,7 +39,7 @@ async def fetch_active_jobs(limit=100, offset=0) -> list:
             }
         )
         if resp.status_code != 200:
-            print(f'[active-jobs] Error: {resp.status_code}')
+            print(f'[active-jobs] API error {resp.status_code}: {resp.text[:200]}')
             return []
         data = resp.json()
         jobs = data if isinstance(data, list) else data.get('data', [])
@@ -43,76 +47,80 @@ async def fetch_active_jobs(limit=100, offset=0) -> list:
         return jobs
 
 
-async def fetch_and_save_jobs():
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    conn = await asyncpg.connect(DATABASE_URL)
+async def save_jobs_to_supabase(jobs: list) -> dict:
+    if not jobs:
+        return {'saved': 0, 'skipped': 0}
+
     saved = skipped = 0
+    headers = {
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+    }
 
-    try:
-        raw_jobs = await fetch_active_jobs(limit=100)
-
-        for raw in raw_jobs:
+    async with httpx.AsyncClient(timeout=30) as client:
+        for job in jobs:
             try:
-                url = raw.get('url', '')
-                if not url:
-                    skipped += 1
-                    continue
-
-                source = raw.get('source', '').lower()
-                ats_platform = None
-                apply_type = 'external'
-                for key, platform in ATS_MAP.items():
-                    if key in source or key in url.lower():
-                        ats_platform = platform
-                        apply_type = 'auto'
-                        break
-
-                title = raw.get('title', '')
-                company = raw.get('organization', '')
-                locations = raw.get('locations_derived', [])
-                location = locations[0] if locations else ''
-                description = raw.get('description_text', '')
-
-                salary_min = raw.get('ai_salary_min_value')
-                salary_max = raw.get('ai_salary_max_value')
-                salary = None  # noqa: F841
-                if salary_min and salary_max:
-                    currency = raw.get('ai_salary_currency', 'USD')
-                    salary = f"{currency} {salary_min:,} - {salary_max:,}"  # noqa: F841
-
-                await conn.execute("""
-                    INSERT INTO "Job" (
-                        id, url, apply_url, title, company,
-                        location, description, source,
-                        ats_platform, apply_type, is_active,
-                        created_at, updated_at
-                    ) VALUES (
-                        gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $6, 'active_jobs_db', $7, $8,
-                        true, NOW(), NOW()
-                    )
-                    ON CONFLICT (url) DO UPDATE SET
-                        title = EXCLUDED.title,
-                        description = EXCLUDED.description,
-                        apply_url = EXCLUDED.apply_url,
-                        ats_platform = EXCLUDED.ats_platform,
-                        apply_type = EXCLUDED.apply_type,
-                        is_active = true,
-                        updated_at = NOW()
-                """,
-                    url, url, title, company,
-                    location, description,
-                    ats_platform, apply_type
+                resp = await client.post(
+                    f'{SUPABASE_URL}/rest/v1/Job?on_conflict=url',
+                    headers=headers,
+                    json=job,
                 )
-                saved += 1
+                if resp.status_code in (200, 201):
+                    saved += 1
+                else:
+                    print(f'[active-jobs] Save error {resp.status_code}: {resp.text[:100]}')
+                    skipped += 1
             except Exception as e:
                 print(f'[active-jobs] Error: {e}')
                 skipped += 1
 
-        print(f'[active-jobs] Done: {saved} saved, {skipped} skipped')
-        return {'saved': saved, 'skipped': skipped}
-    finally:
-        await conn.close()
+    return {'saved': saved, 'skipped': skipped}
+
+
+async def fetch_and_save_jobs():
+    raw_jobs = await fetch_active_jobs(limit=100)
+    now = datetime.now(timezone.utc).isoformat()
+
+    records = []
+    skipped = 0
+
+    for raw in raw_jobs:
+        url = raw.get('url', '')
+        if not url:
+            skipped += 1
+            continue
+
+        source = raw.get('source', '').lower()
+        ats_platform = None
+        apply_type = 'external'
+        for key, platform in ATS_MAP.items():
+            if key in source or key in url.lower():
+                ats_platform = platform
+                apply_type = 'auto'
+                break
+
+        records.append({
+            'id': str(uuid.uuid4()),
+            'url': url,
+            'apply_url': url,
+            'title': raw.get('title', ''),
+            'company': raw.get('organization', ''),
+            'location': (raw.get('locations_derived') or [''])[0],
+            'description': raw.get('description_text', ''),
+            'source': 'active_jobs_db',
+            'ats_platform': ats_platform,
+            'apply_type': apply_type,
+            'is_active': True,
+            'created_at': now,
+            'updated_at': now,
+        })
+
+    result = await save_jobs_to_supabase(records)
+    result['skipped'] = result.get('skipped', 0) + skipped
+    print(f'[active-jobs] Done: {result["saved"]} saved, {result["skipped"]} skipped')
+    return result
 
 
 if __name__ == '__main__':

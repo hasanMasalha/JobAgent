@@ -17,10 +17,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install httpx asyncpg
+        run: pip install httpx
 
       - name: Fetch and save jobs
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python ai-service/active_jobs_fetcher.py
