@@ -6,8 +6,19 @@ from datetime import datetime, timezone
 import httpx
 
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '')
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+_raw_supabase_url = os.environ.get('SUPABASE_URL', '')
+if _raw_supabase_url and not _raw_supabase_url.startswith('https://'):
+    # Seen when SUPABASE_URL secret holds the postgresql:// DB connection string
+    # instead of the project URL (https://<ref>.supabase.co).
+    raise ValueError(
+        f'SUPABASE_URL must start with https:// — got {_raw_supabase_url.split("://")[0]}://...\n'
+        'Set the SUPABASE_URL secret to your Supabase project URL, e.g.\n'
+        '  https://abcdefghijkl.supabase.co\n'
+        'NOT the database connection string.'
+    )
+SUPABASE_URL = _raw_supabase_url
 
 RAPIDAPI_HEADERS = {
     'X-RapidAPI-Key': RAPIDAPI_KEY,
