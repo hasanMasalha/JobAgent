@@ -1,5 +1,6 @@
 import asyncio
 import os
+import uuid
 
 import httpx
 
@@ -110,6 +111,7 @@ async def fetch_and_save_jobs():
                 break
 
         records.append({
+            'id': str(uuid.uuid4()),
             'url': url,
             'apply_url': url,
             'title': raw.get('title', ''),
