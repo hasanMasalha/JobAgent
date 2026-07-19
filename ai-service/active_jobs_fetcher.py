@@ -35,18 +35,21 @@ ATS_MAP = {
 }
 
 
-async def fetch_active_jobs(limit=100, offset=0) -> list:
+async def fetch_active_jobs(limit=100, offset=0, location: str = None) -> list:
+    params = {
+        'time_frame': '24h',
+        'limit': limit,
+        'offset': offset,
+        'description_format': 'text',
+    }
+    if location:
+        params['location'] = location
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
             'https://active-jobs-db.p.rapidapi.com/active-ats',
             headers=RAPIDAPI_HEADERS,
-            params={
-                'time_frame': '24h',
-                'limit': limit,
-                'offset': offset,
-                'description_format': 'text',
-                'location': '"Israel"',
-            }
+            params=params,
         )
         if resp.status_code != 200:
             print(f'[active-jobs] API error {resp.status_code}: {resp.text[:200]}')
@@ -89,8 +92,8 @@ async def save_jobs_to_supabase(jobs: list) -> dict:
     return {'saved': saved, 'skipped': skipped}
 
 
-async def fetch_and_save_jobs():
-    raw_jobs = await fetch_active_jobs(limit=100)
+async def fetch_and_save_jobs(location: str = None):
+    raw_jobs = await fetch_active_jobs(limit=100, location=location)
 
     records = []
     skipped = 0
