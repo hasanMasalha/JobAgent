@@ -14,11 +14,11 @@ SEARCH_TERMS = [
     "software engineer",
     "backend developer",
     "frontend developer",
-    "full stack developer",
+    "product manager",
     "data engineer",
     "devops engineer",
-    "product manager",
-    "QA engineer",
+    "fullstack developer",
+    "mobile developer",
 ]
 
 
@@ -32,8 +32,6 @@ async def scrape_israel_jobs() -> list[dict]:
                 scrape_jobs,
                 site_name=["indeed"],
                 search_term=term,
-                location="Israel",
-                country_indeed="Israel",
                 results_wanted=50,
                 hours_old=168,
             )
