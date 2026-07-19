@@ -10,33 +10,12 @@ LINKEDIN_SEARCH_TERMS = [
     "software engineer",
     "backend developer",
     "frontend developer",
-    "full stack developer",
+    "product manager",
     "data engineer",
     "devops engineer",
-    "data scientist",
-    "product manager",
-    "QA engineer",
+    "fullstack developer",
     "mobile developer",
     "machine learning engineer",
-    "cybersecurity engineer",
-]
-
-_ISRAELI_KEYWORDS = [
-    "israel",
-    "tel aviv",
-    "herzliya",
-    "ramat gan",
-    "haifa",
-    "jerusalem",
-    "netanya",
-    "petah tikva",
-    "rehovot",
-    "rishon",
-    "beer sheva",
-    "tlv",
-    "remote - il",
-    "תל אביב",
-    "ישראל",
 ]
 
 _EXPAND_SELECTORS = [
@@ -415,7 +394,6 @@ async def fetch_linkedin_jobs_for_term(
             url = (
                 "https://www.linkedin.com/jobs/search"
                 f"?keywords={search_term.replace(' ', '%20')}"
-                "&location=Israel"
                 "&f_TPR=r86400"
                 f"&start={start}"
             )
@@ -463,10 +441,6 @@ async def fetch_linkedin_jobs_for_term(
                                 job_url = "https://www.linkedin.com" + job_url
 
                         if not title or not job_url or job_url in seen_urls:
-                            continue
-
-                        location_lower = location.lower()
-                        if location and not any(kw in location_lower for kw in _ISRAELI_KEYWORDS):
                             continue
 
                         # Keep snippet as fallback in case detail-page fetch fails
