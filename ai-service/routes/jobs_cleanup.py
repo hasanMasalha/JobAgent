@@ -61,8 +61,8 @@ async def check_linkedin_job_closed(
         ) as resp:
             print(f"[check_job] {url[:60]} → status: {resp.status}")
 
-            if resp.status == 404:
-                return True  # Job deleted
+            if resp.status in (404, 410):
+                return True  # Job deleted / permanently gone
             if resp.status != 200:
                 print(f"[check_job] non-200: {resp.status}")
                 return False  # Can't tell — assume open
