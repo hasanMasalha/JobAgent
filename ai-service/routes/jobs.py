@@ -86,12 +86,15 @@ async def scrape_and_store():
     # Drop jobs whose descriptions are still too short to be useful for matching
     jobs = [j for j in jobs if len((j.get("description") or "").strip()) >= 50]
     print(f"[scrape] {len(jobs)} jobs after filtering short descriptions")
+    print(f"[jobs] Attempting to save {len(jobs)} jobs")
+    print(f"[jobs] Sample job keys: {list(jobs[0].keys()) if jobs else 'empty'}")
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)
 
     new_jobs = 0
     updated_jobs = 0
+    saved_by_source: dict[str, int] = {}
     try:
         for job in jobs:
             if not (job.get("description") or "").strip():
@@ -143,12 +146,19 @@ async def scrape_and_store():
             )
             if row is None:
                 pass  # conflict but description was already long enough — skip
-            elif row["is_insert"]:
-                new_jobs += 1
             else:
-                updated_jobs += 1
+                if row["is_insert"]:
+                    new_jobs += 1
+                else:
+                    updated_jobs += 1
+                saved_by_source[job["source"]] = saved_by_source.get(job["source"], 0) + 1
     finally:
         await conn.close()
+
+    linkedin_saved = saved_by_source.get("linkedin", 0)
+    indeed_saved = saved_by_source.get("indeed", 0)
+    print(f"[scraper] Saved {linkedin_saved} LinkedIn jobs, {indeed_saved} Indeed jobs")
+    print(f"[jobs] Saved by source: {saved_by_source}")
 
     return {"new_jobs": new_jobs, "updated_jobs": updated_jobs, "total_processed": len(jobs)}
 

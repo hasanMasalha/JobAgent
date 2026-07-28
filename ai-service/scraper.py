@@ -73,6 +73,9 @@ async def scrape_israel_jobs() -> list[dict]:
     print("Starting LinkedIn feed scrape...")
     try:
         linkedin_jobs = await fetch_all_linkedin_jobs()
+        print(f"[scraper] LinkedIn returned {len(linkedin_jobs)} jobs")
+        for job in linkedin_jobs[:3]:
+            print(f"[scraper] Sample job: {job.get('title')} | {job.get('url', '')[:60]} | source={job.get('source')}")
         if not linkedin_jobs:
             print("[scraper] WARNING: LinkedIn feed scrape returned 0 jobs")
         added = 0
