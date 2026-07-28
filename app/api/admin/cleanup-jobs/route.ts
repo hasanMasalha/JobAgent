@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
-// POST — run cleanup (soft delete 30d, hard delete 90d, deactivate broken URLs)
+// POST — run cleanup (soft delete 14d, deactivate 90d+ orphans, deactivate broken URLs)
 // GET  — preview what would be cleaned without making changes
 // Both protected by INTERNAL_API_KEY header.
 //
@@ -47,17 +47,19 @@ export async function POST(req: NextRequest) {
     })
     console.log(`[cleanup] soft deleted: ${softDeleted.count}`)
 
-    // Step 2 — Hard delete: remove jobs older than 90 days with no applications.
-    const hardDeleted = await db.$executeRaw`
-      DELETE FROM "Job"
+    // Step 2 — Soft delete: deactivate jobs older than 90 days with no applications.
+    const oldJobsDeactivated = await db.$executeRaw`
+      UPDATE "Job"
+      SET is_active = false
       WHERE scraped_at < ${ninetyDaysAgo}
+        AND is_active IS NOT false
         AND id NOT IN (
           SELECT DISTINCT job_id
           FROM "Application"
           WHERE job_id IS NOT NULL
         )
     `
-    console.log(`[cleanup] hard deleted: ${hardDeleted}`)
+    console.log(`[cleanup] old jobs deactivated: ${oldJobsDeactivated}`)
 
     // Step 3 — Deactivate jobs with known broken URL patterns.
     const brokenUrls = await db.job.updateMany({
@@ -127,7 +129,7 @@ export async function POST(req: NextRequest) {
       timestamp: now.toISOString(),
       fastSourcesDeactivated: fastSourcesDeactivated.count,
       softDeleted: softDeleted.count,
-      hardDeleted: Number(hardDeleted),
+      oldJobsDeactivated: Number(oldJobsDeactivated),
       brokenUrlsDeactivated: brokenUrls.count,
       linkedinCheck,
       recentClosedCheck,
@@ -163,7 +165,7 @@ export async function GET(req: NextRequest) {
       db.job.count({ where: { is_active: false } }),
       db.job.count(),
       db.job.count({ where: { scraped_at: { lt: fourteenDaysAgo }, is_active: true } }),
-      db.job.count({ where: { scraped_at: { lt: ninetyDaysAgo } } }),
+      db.job.count({ where: { scraped_at: { lt: ninetyDaysAgo }, is_active: { not: false } } }),
       db.job.count({
         where: {
           OR: [
@@ -182,7 +184,7 @@ export async function GET(req: NextRequest) {
     },
     wouldCleanup: {
       softDelete: olderThan14,
-      eligibleForHardDelete: olderThan90,
+      eligibleForDeactivation: olderThan90,
       brokenUrls,
     },
   })
