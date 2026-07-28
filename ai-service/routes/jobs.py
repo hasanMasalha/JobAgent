@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from ats_discovery import auto_discover_israeli_companies
 from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
-from company_scraper import is_israeli_job
 from embedder import embed
 from scraper import enrich_short_descriptions, scrape_israel_jobs
 
@@ -80,11 +79,6 @@ async def scrape_and_store():
     jobs = await scrape_israel_jobs()
     if not jobs:
         return {"new_jobs": 0, "total_processed": 0}
-
-    jobs = [
-        j for j in jobs
-        if is_israeli_job({'location': j.get('location', '') or j.get('job_location', '')})
-    ]
 
     # Enrich Indeed jobs that have short descriptions
     jobs = await enrich_short_descriptions(jobs)
@@ -276,10 +270,6 @@ async def scrape_and_store_company_careers():
     if not jobs:
         return {"new_jobs": 0, "updated_jobs": 0, "total_processed": 0}
 
-    jobs_before = len(jobs)
-    jobs = [j for j in jobs if is_israeli_job(j)]
-    print(f"Israel filter (route): {jobs_before} -> {len(jobs)} jobs")
-
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)
 
@@ -384,10 +374,6 @@ async def scrape_api_companies_only():
 
     if not all_jobs:
         return {"new_jobs": 0, "updated_jobs": 0, "total_processed": 0, "failed": failed, "companies": summary}
-
-    jobs_before = len(all_jobs)
-    all_jobs = [j for j in all_jobs if is_israeli_job(j)]
-    print(f"[company-api] Israel filter: {jobs_before} -> {len(all_jobs)} jobs")
 
     database_url = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(database_url)

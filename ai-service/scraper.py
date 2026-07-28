@@ -73,11 +73,16 @@ async def scrape_israel_jobs() -> list[dict]:
     print("Starting LinkedIn feed scrape...")
     try:
         linkedin_jobs = await fetch_all_linkedin_jobs()
+        if not linkedin_jobs:
+            print("[scraper] WARNING: LinkedIn feed scrape returned 0 jobs")
+        added = 0
         for job in linkedin_jobs:
             url = job.get("url", "").strip()
             if url and url not in seen_urls:
                 seen_urls.add(url)
                 results.append(job)
+                added += 1
+        print(f"[scraper] LinkedIn feed scrape: {len(linkedin_jobs)} fetched, {added} new after dedup")
     except Exception as e:
         print(f"[scraper] LinkedIn feed scrape failed: {e}")
 
