@@ -14,7 +14,7 @@ def test_is_israeli_job_known_company():
     }) is True
 
 def test_embed_returns_list():
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     mock_model = MagicMock()
     mock_model.encode.return_value.tolist.return_value = [0.1] * 384

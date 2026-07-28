@@ -35,7 +35,7 @@ ATS_MAP = {
 }
 
 
-async def fetch_active_jobs(limit=100, offset=0, location: str = None) -> list:
+async def fetch_active_jobs(limit=100, offset=0, location: str | None = None) -> list:
     params = {
         'time_frame': '24h',
         'limit': limit,
@@ -92,7 +92,7 @@ async def save_jobs_to_supabase(jobs: list) -> dict:
     return {'saved': saved, 'skipped': skipped}
 
 
-async def fetch_and_save_jobs(location: str = None):
+async def fetch_and_save_jobs(location: str | None = None):
     raw_jobs = await fetch_active_jobs(limit=100, location=location)
 
     records = []
