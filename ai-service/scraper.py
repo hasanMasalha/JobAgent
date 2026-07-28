@@ -33,7 +33,7 @@ async def scrape_israel_jobs() -> list[dict]:
                 site_name=["indeed"],
                 search_term=term,
                 results_wanted=50,
-                hours_old=168,
+                hours_old=24,
             )
         except Exception as e:
             print(f"[scraper] error scraping '{term}': {e}")
