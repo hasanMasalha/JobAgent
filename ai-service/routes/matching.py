@@ -212,9 +212,75 @@ async def _ensure_cache_table(conn) -> None:
     )
 
 
+# ── location helpers ──────────────────────────────────────────────────────────
+
+_CITY_COUNTRY_SYNONYMS = {
+    "tel aviv": "israel",
+    "jerusalem": "israel",
+    "haifa": "israel",
+    "new york": "united states",
+    "san francisco": "united states",
+    "los angeles": "united states",
+    "chicago": "united states",
+    "austin": "united states",
+    "seattle": "united states",
+    "boston": "united states",
+    "london": "united kingdom",
+    "manchester": "united kingdom",
+    "berlin": "germany",
+    "munich": "germany",
+    "paris": "france",
+    "amsterdam": "netherlands",
+    "dublin": "ireland",
+    "toronto": "canada",
+    "vancouver": "canada",
+    "sydney": "australia",
+    "melbourne": "australia",
+    "singapore": "singapore",
+    "dubai": "united arab emirates",
+    "bangalore": "india",
+    "bengaluru": "india",
+    "mumbai": "india",
+}
+
+
+def _expand_location_terms(locations: list[str]) -> list[str]:
+    """Turn user location preferences into ILIKE patterns, expanding well-known
+    cities to also match jobs tagged only with the country."""
+    patterns: set[str] = set()
+    for loc in locations:
+        term = (loc or "").strip().lower()
+        if not term:
+            continue
+        patterns.add(f"%{term}%")
+        country = _CITY_COUNTRY_SYNONYMS.get(term)
+        if country:
+            patterns.add(f"%{country}%")
+    return sorted(patterns)
+
+
+def _location_bonus(job_location: str | None, location_patterns: list[str], remote_ok: bool) -> int:
+    if not job_location:
+        return 0
+    loc_lower = job_location.lower()
+    if remote_ok and "remote" in loc_lower:
+        return 5
+    for pattern in location_patterns:
+        term = pattern.strip("%")
+        if term and term in loc_lower:
+            return 10
+    return 0
+
+
 # ── vector search (fast, no LLM) ──────────────────────────────────────────────
 
-async def _vector_search(conn, user_id: str, seniority: dict | None = None) -> list:
+async def _vector_search(
+    conn,
+    user_id: str,
+    seniority: dict | None = None,
+    location_patterns: list[str] | None = None,
+    remote_ok: bool = False,
+) -> list:
     # Build seniority-aware ORDER BY — terms are hardcoded, no injection risk
     if seniority:
         boost_terms = seniority["ideal_titles"]
@@ -249,10 +315,18 @@ async def _vector_search(conn, user_id: str, seniority: dict | None = None) -> l
             SELECT job_id FROM "Application" WHERE user_id = $1
           )
           AND 1 - (j.embedding <=> cv.embedding::vector) > 0.50
+          AND (
+            $2::text[] = '{{}}'::text[]
+            OR j.location IS NULL
+            OR j.location ILIKE ANY($2::text[])
+            OR ($3::boolean AND j.location ILIKE '%remote%')
+          )
         ORDER BY {order_expr}
         LIMIT 200
         """,
         user_id,
+        location_patterns or [],
+        remote_ok,
     )
 
     result = []
@@ -361,11 +435,17 @@ Return ONLY a JSON array. Each object must have:
     return []
 
 
-def _merge_scores(jobs: list, scores: list) -> list:
+def _merge_scores(
+    jobs: list,
+    scores: list,
+    location_patterns: list[str] | None = None,
+    remote_ok: bool = False,
+) -> list:
     score_map = {s["job_id"]: s for s in scores}
     for job in jobs:
         scored = score_map.get(job["id"], {})
-        job["claude_score"] = scored.get("score", 0)
+        bonus = _location_bonus(job.get("location"), location_patterns or [], remote_ok)
+        job["claude_score"] = min(100, scored.get("score", 0) + bonus)
         job["reasons"] = scored.get("reasons", [])
         job["gaps"] = scored.get("gaps", [])
         job["experience_match"] = scored.get("experience_match", "")
@@ -374,10 +454,15 @@ def _merge_scores(jobs: list, scores: list) -> list:
     return jobs
 
 
-def _vector_only(jobs: list) -> list:
+def _vector_only(
+    jobs: list,
+    location_patterns: list[str] | None = None,
+    remote_ok: bool = False,
+) -> list:
     """Return jobs ranked by vector similarity only (no Claude)."""
     for job in jobs:
-        job["claude_score"] = 0
+        bonus = _location_bonus(job.get("location"), location_patterns or [], remote_ok)
+        job["claude_score"] = bonus
         job["reasons"] = []
         job["gaps"] = []
         job["similarity"] = float(job["similarity"])
@@ -466,8 +551,18 @@ async def match_jobs(req: MatchRequest):
         }
         seniority = _get_candidate_seniority(cv_data)
 
-        # 3. Vector search with seniority-aware title boosting/penalising
-        jobs = await _vector_search(conn, req.user_id, seniority)
+        # 2b. Fetch location preference — filters/boosts, never hard-required
+        pref_row = await conn.fetchrow(
+            'SELECT locations, remote_ok FROM "JobPreference" WHERE user_id = $1',
+            req.user_id,
+        )
+        locations = list(pref_row["locations"]) if pref_row and pref_row["locations"] else []
+        remote_ok = bool(pref_row["remote_ok"]) if pref_row else False
+        location_patterns = _expand_location_terms(locations)
+
+        # 3. Vector search with seniority-aware title boosting/penalising,
+        #    filtered by the user's location preference (if any)
+        jobs = await _vector_search(conn, req.user_id, seniority, location_patterns, remote_ok)
         if not jobs:
             return []
 
@@ -476,11 +571,11 @@ async def match_jobs(req: MatchRequest):
         remaining = jobs[20:]
         scores = _run_claude_scoring(jobs_to_score, cv_data)
         if scores:
-            scored_results = _merge_scores(jobs_to_score, scores)
+            scored_results = _merge_scores(jobs_to_score, scores, location_patterns, remote_ok)
         else:
-            scored_results = _vector_only(jobs_to_score)
+            scored_results = _vector_only(jobs_to_score, location_patterns, remote_ok)
 
-        vector_tail = _vector_only(remaining)
+        vector_tail = _vector_only(remaining, location_patterns, remote_ok)
         results = scored_results + vector_tail
 
         # 5. Persist to DB cache (all jobs, so pagination works)
