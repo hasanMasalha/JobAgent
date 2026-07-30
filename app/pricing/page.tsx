@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { openPaddleCheckout } from "@/lib/paddle-client";
 
 const NAVY = "#1a2e5e";
 
@@ -111,10 +112,21 @@ export default function PricingPage() {
       }
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Failed to start checkout");
-      window.location.href = data.url;
+      if (!res.ok || !data.priceId) throw new Error(data.error ?? "Failed to start checkout");
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      await openPaddleCheckout({
+        priceId: data.priceId,
+        customerId: data.customerId,
+        customerEmail: data.customerEmail,
+        userId: data.userId,
+        plan: data.plan,
+        interval: data.interval,
+        successUrl: `${appUrl}/dashboard?upgraded=true`,
+      });
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setCheckoutLoading(null);
     }
   }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JOB_CATEGORIES, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
+import { openPaddleCheckout } from "@/lib/paddle-client";
 
 interface ExistingCV {
   clean_summary: string;
@@ -325,8 +326,19 @@ export default function OnboardingPage() {
           body: JSON.stringify({ plan: tier.key, interval: "monthly" }),
         });
         const data = await checkoutRes.json().catch(() => ({}));
-        if (!checkoutRes.ok || !data.url) throw new Error(data.error ?? "Failed to start checkout");
-        window.location.href = data.url;
+        if (!checkoutRes.ok || !data.priceId) throw new Error(data.error ?? "Failed to start checkout");
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+        await openPaddleCheckout({
+          priceId: data.priceId,
+          customerId: data.customerId,
+          customerEmail: data.customerEmail,
+          userId: data.userId,
+          plan: data.plan,
+          interval: data.interval,
+          successUrl: `${appUrl}/dashboard?upgraded=true`,
+        });
+        setPlanActionLoading(null);
         return;
       }
 
