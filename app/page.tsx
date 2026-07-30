@@ -9,7 +9,7 @@ const FEATURES = [
       "We scrape thousands of jobs daily from company career pages, LinkedIn, Indeed and more — ranked against your CV using AI.",
   },
   {
-    title: "Auto-apply while you sleep",
+    title: "Auto-apply at scale",
     body:
       "JobAgent automatically applies to matching jobs on Greenhouse, Lever, Comeet, Ashby and more — hands free, 24/7.",
   },
