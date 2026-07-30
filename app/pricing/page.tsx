@@ -14,6 +14,7 @@ interface Tier {
   annual: number;
   ctaLabel: string;
   ctaHref: string;
+  planKey?: "pro" | "unlimited";
   features: string[];
   highlighted?: boolean;
 }
@@ -39,6 +40,7 @@ const TIERS: Tier[] = [
     annual: 19,
     ctaLabel: "Start Pro",
     ctaHref: "/register?plan=pro",
+    planKey: "pro",
     features: [
       "100 auto-applies per month",
       "AI CV tailoring per job",
@@ -54,6 +56,7 @@ const TIERS: Tier[] = [
     annual: 49,
     ctaLabel: "Go Unlimited",
     ctaHref: "/register?plan=unlimited",
+    planKey: "unlimited",
     features: [
       "Unlimited auto-applies",
       "Priority matching",
@@ -87,6 +90,34 @@ function savingsPercent(monthly: number, annual: number) {
 
 export default function PricingPage() {
   const [billing, setBilling] = useState<Billing>("monthly");
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  async function handleUpgrade(tier: Tier) {
+    if (!tier.planKey) return;
+    setCheckoutError("");
+    setCheckoutLoading(tier.planKey);
+    try {
+      const res = await fetch("/api/paddle/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: tier.planKey, interval: billing }),
+      });
+
+      if (res.status === 401) {
+        // Not signed in — send them through registration instead of a raw checkout error.
+        window.location.href = tier.ctaHref;
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Failed to start checkout");
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setCheckoutLoading(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -217,21 +248,41 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link
-                  href={tier.ctaHref}
-                  className={`mt-8 block text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 ${
-                    tier.highlighted
-                      ? "text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  }`}
-                  style={tier.highlighted ? { background: NAVY } : undefined}
-                >
-                  {tier.ctaLabel}
-                </Link>
+                {tier.planKey ? (
+                  <button
+                    type="button"
+                    disabled={checkoutLoading !== null}
+                    onClick={() => handleUpgrade(tier)}
+                    className={`mt-8 w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
+                      tier.highlighted
+                        ? "text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    }`}
+                    style={tier.highlighted ? { background: NAVY } : undefined}
+                  >
+                    {checkoutLoading === tier.planKey ? "Redirecting…" : tier.ctaLabel}
+                  </button>
+                ) : (
+                  <Link
+                    href={tier.ctaHref}
+                    className={`mt-8 block text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 ${
+                      tier.highlighted
+                        ? "text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    }`}
+                    style={tier.highlighted ? { background: NAVY } : undefined}
+                  >
+                    {tier.ctaLabel}
+                  </Link>
+                )}
               </div>
             );
           })}
         </div>
+
+        {checkoutError && (
+          <p className="text-center text-sm text-red-600 dark:text-red-400 mt-6">{checkoutError}</p>
+        )}
       </main>
     </div>
   );

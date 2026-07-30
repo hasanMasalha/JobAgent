@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import SavedSearchCard from "./components/SavedSearchCard"
 import EditSearchModal from "./components/EditSearchModal"
 
@@ -14,6 +15,48 @@ interface SavedSearch {
   created_at: string
 }
 
+interface Usage {
+  plan: string
+  used: number
+  limit: number | null
+}
+
+function UsageBanner({ usage }: { usage: Usage }) {
+  const { used, limit } = usage
+  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 100
+  const barColor =
+    limit === null
+      ? "bg-green-500"
+      : pct >= 80
+      ? "bg-red-500"
+      : pct >= 50
+      ? "bg-yellow-500"
+      : "bg-green-500"
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 mb-6">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-applies this month</p>
+        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+          {used} / {limit === null ? "∞" : limit}
+        </p>
+      </div>
+      <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {limit !== null && pct >= 80 && (
+        <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+          You&apos;re close to your monthly limit.{" "}
+          <Link href="/pricing" className="underline font-medium">Upgrade your plan</Link>
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [searches, setSearches] = useState<SavedSearch[]>([])
@@ -21,6 +64,7 @@ export default function DashboardPage() {
   const [editingSearch, setEditingSearch] = useState<SavedSearch | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [usage, setUsage] = useState<Usage | null>(null)
 
   useEffect(() => {
     fetch("/api/profile")
@@ -33,6 +77,11 @@ export default function DashboardPage() {
       .then((d) => setSearches(d.searches ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.used === "number") setUsage(d) })
+      .catch(() => {})
   }, [router])
 
   const handleNewSearch = () => {
@@ -74,6 +123,8 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-2xl mx-auto w-full">
+      {usage && <UsageBanner usage={usage} />}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Saved Searches</h1>

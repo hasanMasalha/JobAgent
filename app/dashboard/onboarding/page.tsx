@@ -315,8 +315,21 @@ export default function OnboardingPage() {
     setPlanError("");
     setPlanActionLoading(tier.key);
     try {
-      const res = await fetch("/api/onboarding/complete", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to complete onboarding");
+      const completeRes = await fetch("/api/onboarding/complete", { method: "POST" });
+      if (!completeRes.ok) throw new Error("Failed to complete onboarding");
+
+      if (tier.key === "pro" || tier.key === "unlimited") {
+        const checkoutRes = await fetch("/api/paddle/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan: tier.key, interval: "monthly" }),
+        });
+        const data = await checkoutRes.json().catch(() => ({}));
+        if (!checkoutRes.ok || !data.url) throw new Error(data.error ?? "Failed to start checkout");
+        window.location.href = data.url;
+        return;
+      }
+
       router.push(tier.destination);
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : "Something went wrong. Please try again.");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
+import { getMonthlyAutoApplyLimit, startOfCurrentMonth } from "@/lib/plan-limits";
 
 function generateEmailHtml(params: {
   userName: string;
@@ -27,6 +28,24 @@ export async function POST(req: NextRequest) {
     const supabase = createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+    const limit = getMonthlyAutoApplyLimit(dbUser?.plan ?? "free");
+    if (limit !== null) {
+      const usedThisMonth = await db.application.count({
+        where: { user_id: user.id, applied_at: { gte: startOfCurrentMonth() } },
+      });
+      if (usedThisMonth >= limit) {
+        return NextResponse.json(
+          {
+            error: "limit_reached",
+            message: "You've reached your monthly auto-apply limit.",
+            upgrade_url: "/pricing",
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     const { jobIds } = await req.json() as { jobIds: string[] };
     if (!Array.isArray(jobIds) || jobIds.length === 0) {

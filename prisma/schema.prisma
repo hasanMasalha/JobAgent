@@ -26,6 +26,12 @@ model User {
   onboarded             Boolean  @default(false)
   created_at            DateTime @default(now())
 
+  // Paddle billing
+  plan                 String    @default("free")
+  paddleCustomerId     String?
+  paddleSubscriptionId String?
+  planExpiresAt        DateTime?
+
   // Easy Apply default answers
   notice_period        String?  @default("30")
   work_authorized      Boolean? @default(true)

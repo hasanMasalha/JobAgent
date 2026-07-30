@@ -78,6 +78,8 @@ jobs:
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           NEXT_PUBLIC_EXTENSION_ID: ${{ secrets.NEXT_PUBLIC_EXTENSION_ID }}
+          NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: ${{ secrets.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN }}
+          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
 
   # ── JOB 2: BUILD AND PUSH (master only) ──
   build:
@@ -108,6 +110,7 @@ jobs:
             --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
             --build-arg NEXT_PUBLIC_EXTENSION_ID=${{ secrets.NEXT_PUBLIC_EXTENSION_ID }} \
+            --build-arg NEXT_PUBLIC_PADDLE_CLIENT_TOKEN=${{ secrets.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN }} \
             -t $ECR_NEXTJS:latest \
             -t $ECR_NEXTJS:${{ github.sha }} \
             .
@@ -182,13 +185,20 @@ jobs:
               screenshots:
             COMPOSE
 
-            # Inject Google Calendar secrets into .env
+            # Inject Google Calendar + Paddle secrets into .env
             for entry in \
               "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" \
               "TWOCAPTCHA_API_KEY=${{ secrets.TWOCAPTCHA_API_KEY }}" \
-              "RAPIDAPI_KEY=${{ secrets.RAPIDAPI_KEY }}"; do
+              "RAPIDAPI_KEY=${{ secrets.RAPIDAPI_KEY }}" \
+              "PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY }}" \
+              "PADDLE_CLIENT_TOKEN=${{ secrets.PADDLE_CLIENT_TOKEN }}" \
+              "PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET }}" \
+              "PADDLE_PRO_MONTHLY_PRICE_ID=${{ secrets.PADDLE_PRO_MONTHLY_PRICE_ID }}" \
+              "PADDLE_PRO_ANNUAL_PRICE_ID=${{ secrets.PADDLE_PRO_ANNUAL_PRICE_ID }}" \
+              "PADDLE_UNLIMITED_MONTHLY_PRICE_ID=${{ secrets.PADDLE_UNLIMITED_MONTHLY_PRICE_ID }}" \
+              "PADDLE_UNLIMITED_ANNUAL_PRICE_ID=${{ secrets.PADDLE_UNLIMITED_ANNUAL_PRICE_ID }}"; do
               key="${entry%%=*}"
               if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
                 sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env
