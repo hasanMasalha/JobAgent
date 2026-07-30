@@ -23,6 +23,72 @@ interface Profile {
   google_connected?: boolean;
 }
 
+interface PlanTier {
+  key: string;
+  name: string;
+  price: string;
+  features: string[];
+  ctaLabel: string;
+  destination: string;
+  highlighted?: boolean;
+}
+
+const PLAN_TIERS: PlanTier[] = [
+  {
+    key: "free",
+    name: "Free",
+    price: "$0",
+    features: ["10 AI job matches per day", "5 auto-applies per month"],
+    ctaLabel: "Start Free",
+    destination: "/dashboard",
+  },
+  {
+    key: "pro",
+    name: "Pro",
+    price: "$24",
+    features: [
+      "100 auto-applies per month",
+      "AI CV tailoring per job",
+      "All ATS platforms (Greenhouse, Lever, Comeet, Ashby)",
+      "Chrome extension access",
+    ],
+    ctaLabel: "Upgrade to Pro",
+    destination: "/pricing",
+    highlighted: true,
+  },
+  {
+    key: "unlimited",
+    name: "Unlimited",
+    price: "$69",
+    features: [
+      "Unlimited auto-applies",
+      "Priority matching",
+      "Multiple CV versions",
+      "Analytics dashboard",
+    ],
+    ctaLabel: "Go Unlimited",
+    destination: "/pricing",
+  },
+];
+
+const WELCOME_BULLETS = [
+  "AI matches you to the best jobs globally",
+  "Auto-applies to Greenhouse, Lever, Comeet & more",
+  "Tailors your CV for every application",
+];
+
+function CheckIcon() {
+  return (
+    <svg className="w-4 h-4 shrink-0 mt-0.5 text-[#1a2e5e] dark:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 111.415-1.415L8.5 12.086l6.79-6.796a1 1 0 011.414 0z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -30,11 +96,11 @@ export default function OnboardingPage() {
   const [existingCV, setExistingCV] = useState<ExistingCV | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // Step 1 — cv path choice
+  // CV step — path choice
   const [cvPath, setCvPath] = useState<"upload" | null>(null);
   const [file, setFile] = useState<File | null>(null);
 
-  // Step 2
+  // Preferences step
   const [titleInput, setTitleInput] = useState("");
   const [titles, setTitles] = useState<string[]>([]);
   const [location, setLocation] = useState("");
@@ -42,10 +108,10 @@ export default function OnboardingPage() {
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
 
-  // Step 3 — categories
+  // Categories step
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  // Step 4 — seniority + location preferences
+  // Seniority + location step
   const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
@@ -58,6 +124,10 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
+
+  // Plan step
+  const [planActionLoading, setPlanActionLoading] = useState<string | null>(null);
+  const [planError, setPlanError] = useState("");
 
   useEffect(() => {
     fetch("/api/profile")
@@ -113,6 +183,22 @@ export default function OnboardingPage() {
     setSelectedLocations((prev) =>
       prev.includes(val) ? prev.filter((l) => l !== val) : [...prev, val]
     );
+  }
+
+  // Fresh onboarding gets the full Welcome → CV → Preferences → Categories → Seniority → Plan flow.
+  // Returning users editing an existing profile keep the original 4-step flow untouched.
+  const stepKeys = isUpdate
+    ? ["cv", "preferences", "categories", "seniority"]
+    : ["welcome", "cv", "preferences", "categories", "seniority", "plan"];
+  const TOTAL_STEPS = stepKeys.length;
+  const currentKey = stepKeys[step - 1];
+
+  function goNext() {
+    setStep((s) => Math.min(s + 1, stepKeys.length));
+  }
+
+  function goBack() {
+    setStep((s) => Math.max(s - 1, 1));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -197,7 +283,12 @@ export default function OnboardingPage() {
         );
       }
 
-      router.push("/dashboard");
+      if (isUpdate) {
+        router.push("/dashboard");
+      } else {
+        // Fresh onboarding continues to the plan-selection step instead of the dashboard.
+        goNext();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -205,7 +296,18 @@ export default function OnboardingPage() {
     }
   }
 
-  const TOTAL_STEPS = 4;
+  async function handlePlanChoice(tier: PlanTier) {
+    setPlanError("");
+    setPlanActionLoading(tier.key);
+    try {
+      const res = await fetch("/api/onboarding/complete", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to complete onboarding");
+      router.push(tier.destination);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setPlanActionLoading(null);
+    }
+  }
 
   if (profileLoading) {
     return (
@@ -217,12 +319,14 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">
-          {isUpdate ? "Update your profile" : "Set up your profile"}
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
-      </div>
+      {currentKey !== "welcome" && (
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold">
+            {isUpdate ? "Update your profile" : "Set up your profile"}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex gap-2 mb-8">
@@ -236,9 +340,50 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      {/* ── Step 1: CV ── */}
-      {step === 1 && (
+      {/* ── Welcome ── */}
+      {currentKey === "welcome" && (
+        <div className="flex flex-col items-center text-center space-y-6 py-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="JobAgent" className="block dark:hidden" style={{ height: 56 }} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/whiteLogo.png" alt="JobAgent" className="hidden dark:block" style={{ height: 56 }} />
+
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white leading-snug">
+            Apply to hundreds of jobs automatically
+          </h2>
+
+          <ul className="space-y-3 text-left w-full max-w-sm">
+            {WELCOME_BULLETS.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
+                <CheckIcon />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            type="button"
+            onClick={goNext}
+            className="w-full bg-[#1a2e5e] text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Get Started →
+          </button>
+        </div>
+      )}
+
+      {/* ── CV ── */}
+      {currentKey === "cv" && (
         <div className="space-y-4">
+          {!isUpdate && (
+            <button
+              type="button"
+              onClick={goBack}
+              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+            >
+              ← Back
+            </button>
+          )}
+
           {isUpdate && existingCV && (
             <div className="bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current CV</p>
@@ -261,6 +406,12 @@ export default function OnboardingPage() {
                 Last updated {new Date(existingCV.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
               </p>
             </div>
+          )}
+
+          {!isUpdate && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Upload your CV to get personalized matches
+            </p>
           )}
 
           {cvPath === null && (
@@ -333,7 +484,7 @@ export default function OnboardingPage() {
               {error && <p className="text-red-600 text-sm">{error}</p>}
               <button
                 disabled={!isUpdate && !file}
-                onClick={() => setStep(2)}
+                onClick={goNext}
                 className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40"
               >
                 Continue
@@ -343,7 +494,7 @@ export default function OnboardingPage() {
 
           {isUpdate && cvPath === null && (
             <button
-              onClick={() => setStep(2)}
+              onClick={goNext}
               className="w-full border dark:border-gray-600 py-2 rounded text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Keep current CV, update preferences only →
@@ -352,8 +503,8 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* ── Step 2: Preferences ── */}
-      {step === 2 && (
+      {/* ── Preferences ── */}
+      {currentKey === "preferences" && (
         <div className="space-y-5">
           {/* Job titles */}
           <div>
@@ -455,13 +606,13 @@ export default function OnboardingPage() {
           </div>
 
           <div className="flex gap-3">
-            <button type="button" onClick={() => setStep(1)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
               Back
             </button>
             <button
               type="button"
               disabled={titles.length === 0}
-              onClick={() => setStep(3)}
+              onClick={goNext}
               className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
             >
               Continue
@@ -470,8 +621,8 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* ── Step 3: Categories ── */}
-      {step === 3 && (
+      {/* ── Categories ── */}
+      {currentKey === "categories" && (
         <div className="space-y-5">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">What job are you looking for?</h2>
@@ -508,26 +659,26 @@ export default function OnboardingPage() {
           </div>
 
           <div className="flex gap-3">
-            <button type="button" onClick={() => setStep(2)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
               Back
             </button>
             <button
               type="button"
               disabled={selectedCategories.length === 0}
-              onClick={() => setStep(4)}
+              onClick={goNext}
               className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
             >
               Continue
             </button>
           </div>
-          <button type="button" onClick={() => setStep(4)} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">
+          <button type="button" onClick={goNext} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">
             Skip for now →
           </button>
         </div>
       )}
 
-      {/* ── Step 4: Seniority & Location ── */}
-      {step === 4 && (
+      {/* ── Seniority & Location ── */}
+      {currentKey === "seniority" && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your preferences</h2>
@@ -579,7 +730,7 @@ export default function OnboardingPage() {
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={() => setStep(3)} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
               Back
             </button>
             <button
@@ -587,7 +738,7 @@ export default function OnboardingPage() {
               disabled={loading}
               className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
             >
-              {loading ? "Saving…" : isUpdate ? "Save changes" : "Finish setup"}
+              {loading ? "Saving…" : isUpdate ? "Save changes" : "Continue"}
             </button>
           </div>
           {loading && file && (
@@ -596,6 +747,78 @@ export default function OnboardingPage() {
             </p>
           )}
         </form>
+      )}
+
+      {/* ── Plan ── */}
+      {currentKey === "plan" && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">You&apos;re all set!</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Choose a plan to start applying</p>
+          </div>
+
+          <div className="space-y-4">
+            {PLAN_TIERS.map((tier) => (
+              <div
+                key={tier.key}
+                className={`relative rounded-xl p-5 ${
+                  tier.highlighted
+                    ? "bg-blue-50/60 dark:bg-gray-800 border-2 border-[#1a2e5e] dark:border-blue-400 shadow-md"
+                    : "bg-white dark:bg-gray-800 border dark:border-gray-700"
+                }`}
+              >
+                {tier.highlighted && (
+                  <span
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold text-white px-3 py-1 rounded-full whitespace-nowrap"
+                    style={{ background: "#1a2e5e" }}
+                  >
+                    Most Popular
+                  </span>
+                )}
+
+                <div className="flex items-baseline justify-between">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">{tier.name}</h3>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                    {tier.price}
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">/month</span>
+                  </p>
+                </div>
+
+                <ul className="mt-3 space-y-1.5">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <CheckIcon />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  type="button"
+                  disabled={planActionLoading !== null}
+                  onClick={() => handlePlanChoice(tier)}
+                  className={`mt-4 w-full py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
+                    tier.highlighted ? "text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  }`}
+                  style={tier.highlighted ? { background: "#1a2e5e" } : undefined}
+                >
+                  {planActionLoading === tier.key ? "…" : tier.ctaLabel}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {planError && <p className="text-red-600 text-sm">{planError}</p>}
+
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={planActionLoading !== null}
+            className="w-full border dark:border-gray-600 py-2 rounded text-sm hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Back
+          </button>
+        </div>
       )}
     </div>
   );

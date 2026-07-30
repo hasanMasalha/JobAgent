@@ -23,6 +23,7 @@ model User {
   google_refresh_token  String?
   google_connected      Boolean  @default(false)
   email_notifications   Boolean  @default(true)
+  onboarded             Boolean  @default(false)
   created_at            DateTime @default(now())
 
   // Easy Apply default answers
