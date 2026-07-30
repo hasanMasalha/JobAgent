@@ -50,6 +50,7 @@ const NAV_LINKS = [
   { href: "/dashboard/saved", label: "Saved" },
   { href: "/dashboard/my-cv", label: "My CV" },
   { href: "/dashboard/profile", label: "Profile" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 export default function NavBarClient({ userEmail }: { userEmail: string }) {
