@@ -590,7 +590,8 @@ function ProfileContent() {
         </div>
       </form>
 
-      {/* LinkedIn Connection */}
+      {/* LinkedIn Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
+      {false && (
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -668,8 +669,10 @@ function ProfileContent() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Google Calendar Connection */}
+      {/* Google Calendar Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
+      {false && (
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -762,6 +765,7 @@ function ProfileContent() {
           </div>
         )}
       </div>
+      )}
 
       {/* Auto Apply Defaults */}
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 space-y-4">
