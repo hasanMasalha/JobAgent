@@ -113,7 +113,6 @@ export default function OnboardingPage() {
   const [location, setLocation] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
-  const [workModes, setWorkModes] = useState<string[]>(["Hybrid"]);
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
 
@@ -123,12 +122,6 @@ export default function OnboardingPage() {
   // Seniority + work arrangement step
   const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([]);
   const [selectedWorkArrangements, setSelectedWorkArrangements] = useState<string[]>([]);
-
-  function toggleWorkMode(mode: string) {
-    setWorkModes((prev) =>
-      prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]
-    );
-  }
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -153,9 +146,9 @@ export default function OnboardingPage() {
             setLocationQuery(prefs.locations[0]);
           }
           if (prefs.work_modes?.length) {
-            setWorkModes(prefs.work_modes);
-          } else {
-            setWorkModes(prefs.remote_ok ? ["Remote"] : ["Hybrid"]);
+            setSelectedWorkArrangements(prefs.work_modes);
+          } else if (prefs.remote_ok) {
+            setSelectedWorkArrangements(["Remote"]);
           }
           if (prefs.min_salary) setMinSalary(String(prefs.min_salary));
           else setSkipSalary(true);
@@ -199,6 +192,11 @@ export default function OnboardingPage() {
     c.toLowerCase().includes(locationQuery.toLowerCase())
   );
 
+  // "Open to all" isn't a real work mode — it means no restriction, i.e. all three.
+  const resolvedWorkModes = selectedWorkArrangements.includes("Open to all")
+    ? ["Remote", "Hybrid", "On-site"]
+    : selectedWorkArrangements;
+
   // Fresh onboarding gets the full Welcome → CV → Preferences → Categories → Seniority → Plan flow.
   // Returning users editing an existing profile keep the original 4-step flow untouched.
   const stepKeys = isUpdate
@@ -226,8 +224,8 @@ export default function OnboardingPage() {
         form.append("cv", file);
         form.append("titles", JSON.stringify(titles));
         form.append("location", location);
-        form.append("remote_ok", String(workModes.includes("Remote")));
-        form.append("work_modes", JSON.stringify(workModes));
+        form.append("remote_ok", String(resolvedWorkModes.includes("Remote")));
+        form.append("work_modes", JSON.stringify(resolvedWorkModes));
         form.append("min_salary", skipSalary ? "" : minSalary);
 
         console.log("[onboarding] uploading CV...");
@@ -251,8 +249,8 @@ export default function OnboardingPage() {
         const payload = {
           titles,
           locations: location ? [location] : [],
-          remote_ok: workModes.includes("Remote"),
-          work_modes: workModes,
+          remote_ok: resolvedWorkModes.includes("Remote"),
+          work_modes: resolvedWorkModes,
           min_salary: skipSalary ? null : (minSalary ? parseInt(minSalary) : null),
         };
         console.log("[onboarding] saving preferences:", payload);
@@ -590,27 +588,6 @@ export default function OnboardingPage() {
                 ))}
               </ul>
             )}
-          </div>
-
-          {/* Work mode */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Work mode</label>
-            <div className="flex flex-wrap gap-2">
-              {["Remote", "Hybrid", "On-site"].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => toggleWorkMode(mode)}
-                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                    workModes.includes(mode)
-                      ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Min salary */}
