@@ -27,7 +27,7 @@ const TIERS: Tier[] = [
     monthly: 0,
     annual: 0,
     ctaLabel: "Get Started Free",
-    ctaHref: "/register",
+    ctaHref: "/signup",
     features: [
       "10 AI job matches per day",
       "5 auto-applies per month",
@@ -40,7 +40,7 @@ const TIERS: Tier[] = [
     monthly: 24,
     annual: 19,
     ctaLabel: "Start Pro",
-    ctaHref: "/register?plan=pro",
+    ctaHref: "/signup?plan=pro",
     planKey: "pro",
     features: [
       "100 auto-applies per month",
@@ -56,7 +56,7 @@ const TIERS: Tier[] = [
     monthly: 69,
     annual: 49,
     ctaLabel: "Go Unlimited",
-    ctaHref: "/register?plan=unlimited",
+    ctaHref: "/signup?plan=unlimited",
     planKey: "unlimited",
     features: [
       "Unlimited auto-applies",
@@ -150,7 +150,7 @@ export default function PricingPage() {
               Log in
             </Link>
             <Link
-              href="/register"
+              href="/signup"
               className="bg-[#1a2e5e] hover:opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-opacity"
             >
               Get Started
