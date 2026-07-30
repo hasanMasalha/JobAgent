@@ -4,19 +4,19 @@ const NAVY = "#1a2e5e";
 
 const FEATURES = [
   {
-    title: "AI-matched jobs",
+    title: "AI-matched jobs globally",
     body:
-      "We scrape Indeed Israel and LinkedIn daily and rank every listing against your CV using vector embeddings — no generic keyword search.",
+      "We scrape thousands of jobs daily from company career pages, LinkedIn, Indeed and more — ranked against your CV using AI.",
   },
   {
-    title: "Tailored on every apply",
+    title: "Auto-apply while you sleep",
     body:
-      "When you click Apply, we tailor your CV and draft a cover letter for that specific job. You review and edit before anything goes out.",
+      "JobAgent automatically applies to matching jobs on Greenhouse, Lever, Comeet, Ashby and more — hands free, 24/7.",
   },
   {
-    title: "You always confirm",
+    title: "AI CV tailoring",
     body:
-      "Nothing is ever submitted automatically. You approve the tailored application, then we handle LinkedIn Easy Apply for you.",
+      "Your CV and cover letter are tailored for every single application to beat ATS filters and get more interviews.",
   },
 ];
 
@@ -61,8 +61,8 @@ export default function Home() {
             Your AI job search assistant
           </h1>
           <p className="mt-5 text-base sm:text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-            JobAgent finds and ranks jobs from Indeed Israel and LinkedIn against your CV, tailors your
-            application for each one, and applies for you — but only after you say go.
+            JobAgent finds and ranks thousands of jobs worldwide against your CV, tailors your application
+            for each one, and auto-applies on your behalf — hands free, 24/7.
           </p>
           <div className="mt-8 flex items-center justify-center gap-4">
             <Link
