@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { JOB_CATEGORIES, LOCATIONS, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
+import { JOB_CATEGORIES, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
 
 interface ExistingCV {
   clean_summary: string;
@@ -20,7 +19,6 @@ interface Profile {
     work_modes?: string[];
     min_salary?: number;
   };
-  google_connected?: boolean;
 }
 
 interface PlanTier {
@@ -77,6 +75,15 @@ const WELCOME_BULLETS = [
   "Tailors your CV for every application",
 ];
 
+const COUNTRIES = [
+  "United States", "United Kingdom", "Canada", "Australia", "Germany",
+  "France", "Netherlands", "Israel", "Singapore", "UAE", "India",
+  "Sweden", "Switzerland", "Denmark", "Norway", "Finland", "Spain",
+  "Italy", "Poland", "Portugal", "Remote",
+];
+
+const WORK_ARRANGEMENTS = ["Remote", "Hybrid", "On-site", "Open to all"];
+
 function CheckIcon() {
   return (
     <svg className="w-4 h-4 shrink-0 mt-0.5 text-[#1a2e5e] dark:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
@@ -104,6 +111,8 @@ export default function OnboardingPage() {
   const [titleInput, setTitleInput] = useState("");
   const [titles, setTitles] = useState<string[]>([]);
   const [location, setLocation] = useState("");
+  const [locationQuery, setLocationQuery] = useState("");
+  const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
   const [workModes, setWorkModes] = useState<string[]>(["Hybrid"]);
   const [minSalary, setMinSalary] = useState("");
   const [skipSalary, setSkipSalary] = useState(false);
@@ -111,9 +120,9 @@ export default function OnboardingPage() {
   // Categories step
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  // Seniority + location step
+  // Seniority + work arrangement step
   const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([]);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [selectedWorkArrangements, setSelectedWorkArrangements] = useState<string[]>([]);
 
   function toggleWorkMode(mode: string) {
     setWorkModes((prev) =>
@@ -123,7 +132,6 @@ export default function OnboardingPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [googleConnected, setGoogleConnected] = useState(false);
 
   // Plan step
   const [planActionLoading, setPlanActionLoading] = useState<string | null>(null);
@@ -140,7 +148,10 @@ export default function OnboardingPage() {
         if (d.preferences) {
           const prefs = d.preferences;
           if (prefs.titles?.length) setTitles(prefs.titles);
-          if (prefs.locations?.[0]) setLocation(prefs.locations[0]);
+          if (prefs.locations?.[0]) {
+            setLocation(prefs.locations[0]);
+            setLocationQuery(prefs.locations[0]);
+          }
           if (prefs.work_modes?.length) {
             setWorkModes(prefs.work_modes);
           } else {
@@ -149,7 +160,6 @@ export default function OnboardingPage() {
           if (prefs.min_salary) setMinSalary(String(prefs.min_salary));
           else setSkipSalary(true);
         }
-        if (d.google_connected) setGoogleConnected(true);
       })
       .catch(() => {})
       .finally(() => setProfileLoading(false));
@@ -179,11 +189,15 @@ export default function OnboardingPage() {
     );
   }
 
-  function toggleLocation(val: string) {
-    setSelectedLocations((prev) =>
+  function toggleWorkArrangement(val: string) {
+    setSelectedWorkArrangements((prev) =>
       prev.includes(val) ? prev.filter((l) => l !== val) : [...prev, val]
     );
   }
+
+  const filteredCountries = COUNTRIES.filter((c) =>
+    c.toLowerCase().includes(locationQuery.toLowerCase())
+  );
 
   // Fresh onboarding gets the full Welcome → CV → Preferences → Categories → Seniority → Plan flow.
   // Returning users editing an existing profile keep the original 4-step flow untouched.
@@ -275,7 +289,10 @@ export default function OnboardingPage() {
               body: JSON.stringify({
                 category,
                 keywords: CATEGORY_KEYWORDS[category] ?? [],
-                locations: selectedLocations,
+                // Work arrangement (Remote/Hybrid/On-site) isn't the geographic
+                // taxonomy this endpoint's location filter expects — omit it
+                // rather than filtering job results against the wrong values.
+                locations: [],
                 seniorities: selectedSeniorities,
               }),
             })
@@ -318,7 +335,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto">
+    <div className={`mx-auto ${currentKey === "plan" ? "max-w-4xl" : "max-w-lg"}`}>
       {currentKey !== "welcome" && (
         <div className="mb-6">
           <h1 className="text-xl font-semibold">
@@ -535,15 +552,44 @@ export default function OnboardingPage() {
           </div>
 
           {/* Location */}
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium mb-1">Location</label>
             <input
               type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Tel Aviv"
+              value={locationQuery}
+              onChange={(e) => {
+                setLocationQuery(e.target.value);
+                setLocation("");
+                setLocationDropdownOpen(true);
+              }}
+              onFocus={() => setLocationDropdownOpen(true)}
+              onBlur={() => setTimeout(() => setLocationDropdownOpen(false), 150)}
+              placeholder="Search for a country…"
+              autoComplete="off"
               className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
             />
+            {locationDropdownOpen && filteredCountries.length > 0 && (
+              <ul className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg shadow-lg py-1">
+                {filteredCountries.map((c) => (
+                  <li key={c}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setLocation(c);
+                        setLocationQuery(c);
+                        setLocationDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 ${
+                        location === c ? "bg-gray-100 dark:bg-gray-600 font-medium text-gray-900 dark:text-white" : "text-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Work mode */}
@@ -585,24 +631,6 @@ export default function OnboardingPage() {
               />
             )}
             {skipSalary && <p className="text-sm text-gray-400 italic">No minimum salary set</p>}
-          </div>
-
-          {/* Google Calendar */}
-          <div className="border dark:border-gray-600 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Google Calendar</p>
-              <p className="text-xs text-gray-500 mt-0.5">Get interview reminders added automatically</p>
-            </div>
-            {googleConnected ? (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                Connected
-              </span>
-            ) : (
-              <Link href="/api/auth/google" className="text-xs font-semibold bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800">
-                Connect
-              </Link>
-            )}
           </div>
 
           <div className="flex gap-3">
@@ -677,7 +705,7 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* ── Seniority & Location ── */}
+      {/* ── Seniority & Work Arrangement ── */}
       {currentKey === "seniority" && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -706,22 +734,22 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* Location */}
+          {/* Work arrangement */}
           <div>
-            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">Where do you want to work?</p>
+            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">What work arrangement do you prefer?</p>
             <div className="flex flex-wrap gap-2">
-              {LOCATIONS.map((l) => (
+              {WORK_ARRANGEMENTS.map((w) => (
                 <button
-                  key={l.value}
+                  key={w}
                   type="button"
-                  onClick={() => toggleLocation(l.value)}
+                  onClick={() => toggleWorkArrangement(w)}
                   className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    selectedLocations.includes(l.value)
+                    selectedWorkArrangements.includes(w)
                       ? "bg-violet-600 text-white border-violet-600"
                       : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400"
                   }`}
                 >
-                  {l.label}
+                  {w}
                 </button>
               ))}
             </div>
@@ -751,20 +779,20 @@ export default function OnboardingPage() {
 
       {/* ── Plan ── */}
       {currentKey === "plan" && (
-        <div className="space-y-5">
-          <div>
+        <div className="space-y-6">
+          <div className="text-center">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">You&apos;re all set!</h2>
             <p className="text-sm text-gray-500 mt-0.5">Choose a plan to start applying</p>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-start">
             {PLAN_TIERS.map((tier) => (
               <div
                 key={tier.key}
-                className={`relative rounded-xl p-5 ${
+                className={`relative rounded-2xl p-6 flex flex-col h-full ${
                   tier.highlighted
-                    ? "bg-blue-50/60 dark:bg-gray-800 border-2 border-[#1a2e5e] dark:border-blue-400 shadow-md"
-                    : "bg-white dark:bg-gray-800 border dark:border-gray-700"
+                    ? "bg-blue-50/60 dark:bg-gray-800 border-2 border-[#1a2e5e] dark:border-blue-400 shadow-xl md:scale-105"
+                    : "bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-sm"
                 }`}
               >
                 {tier.highlighted && (
@@ -776,15 +804,13 @@ export default function OnboardingPage() {
                   </span>
                 )}
 
-                <div className="flex items-baseline justify-between">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">{tier.name}</h3>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {tier.price}
-                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">/month</span>
-                  </p>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{tier.name}</h3>
+                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+                  {tier.price}
+                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400">/month</span>
+                </p>
 
-                <ul className="mt-3 space-y-1.5">
+                <ul className="mt-5 space-y-2.5 flex-1">
                   {tier.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                       <CheckIcon />
@@ -797,7 +823,7 @@ export default function OnboardingPage() {
                   type="button"
                   disabled={planActionLoading !== null}
                   onClick={() => handlePlanChoice(tier)}
-                  className={`mt-4 w-full py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
+                  className={`mt-6 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
                     tier.highlighted ? "text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   }`}
                   style={tier.highlighted ? { background: "#1a2e5e" } : undefined}
@@ -808,13 +834,13 @@ export default function OnboardingPage() {
             ))}
           </div>
 
-          {planError && <p className="text-red-600 text-sm">{planError}</p>}
+          {planError && <p className="text-red-600 text-sm text-center">{planError}</p>}
 
           <button
             type="button"
             onClick={goBack}
             disabled={planActionLoading !== null}
-            className="w-full border dark:border-gray-600 py-2 rounded text-sm hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="w-full max-w-lg mx-auto block border dark:border-gray-600 py-2 rounded text-sm hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             Back
           </button>
