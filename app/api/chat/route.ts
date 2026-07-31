@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { createInterviewEvent } from "@/lib/google-calendar";
+import { normalizePlan } from "@/lib/plan-limits";
+import { checkAndIncrementMatches } from "@/lib/usage";
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -166,6 +168,15 @@ async function executeTool(
 ): Promise<unknown> {
   switch (name) {
     case "get_my_matches": {
+      const limit = (input.limit as number) ?? 10;
+
+      const dbUser = await db.user.findUnique({ where: { id: userId }, select: { plan: true } });
+      const plan = normalizePlan(dbUser?.plan);
+      const { allowed, granted } = await checkAndIncrementMatches(userId, plan, limit);
+      if (!allowed) {
+        return { error: "You've reached your daily match limit. Upgrade to Pro for more matches." };
+      }
+
       const pythonUrl = process.env.PYTHON_SERVICE_URL ?? "http://localhost:8000";
       const res = await fetch(`${pythonUrl}/match-jobs`, {
         method: "POST",
@@ -176,7 +187,6 @@ async function executeTool(
 
       const jobs = await res.json();
       const minScore = (input.min_score as number) ?? 0;
-      const limit = (input.limit as number) ?? 10;
 
       type MatchJob = {
         title: string; company: string; claude_score: number;
@@ -184,7 +194,7 @@ async function executeTool(
       };
       return (jobs as MatchJob[])
         .filter((j: MatchJob) => j.claude_score >= minScore)
-        .slice(0, limit)
+        .slice(0, granted)
         .map((j: MatchJob) => ({
           title: j.title,
           company: j.company,
