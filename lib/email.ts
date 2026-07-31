@@ -121,3 +121,92 @@ export async function sendDailyMatchEmail(params: {
     html,
   });
 }
+
+export async function sendApplicationConfirmationEmail(params: {
+  userEmail: string;
+  userName: string;
+  jobTitle: string;
+  company: string;
+  appliedAt: Date;
+  applicationId: string;
+}) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { userEmail, userName, jobTitle, company, appliedAt, applicationId } = params;
+  const firstName = userName?.split(" ")[0] || "there";
+  const submittedAt = appliedAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="margin:0; padding:0; background:#f9fafb; font-family:Arial,sans-serif;">
+      <div style="max-width:560px; margin:40px auto; background:white;
+                  border-radius:12px; overflow:hidden;
+                  box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+        <!-- Header -->
+        <div style="background:#1d4ed8; padding:28px 32px;">
+          <div style="color:white; font-size:20px; font-weight:700;">JobAgent</div>
+          <div style="color:#bfdbfe; font-size:13px; margin-top:4px;">Application submitted</div>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:32px;">
+          <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">
+            Hi ${firstName} 👋
+          </p>
+          <p style="margin:0 0 24px; color:#6b7280; font-size:14px; line-height:1.6;">
+            Your application for <strong style="color:#111827;">${jobTitle}</strong> at
+            <strong style="color:#111827;">${company}</strong> has been submitted.
+          </p>
+
+          <table style="width:100%; border-collapse:collapse; margin-bottom:24px;">
+            <tr>
+              <td style="padding:6px 0; color:#6b7280; font-size:13px;">Status</td>
+              <td style="padding:6px 0; text-align:right;">
+                <span style="background:#dcfce7; color:#166534; padding:2px 10px;
+                             border-radius:20px; font-size:12px; font-weight:600;">
+                  Submitted
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0; color:#6b7280; font-size:13px; border-top:1px solid #f3f4f6;">Submitted on</td>
+              <td style="padding:6px 0; text-align:right; color:#111827; font-size:13px; border-top:1px solid #f3f4f6;">
+                ${submittedAt}
+              </td>
+            </tr>
+          </table>
+
+          <div style="text-align:center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/applications"
+               style="display:inline-block; background:#1d4ed8; color:white;
+                      padding:12px 28px; border-radius:8px; text-decoration:none;
+                      font-weight:600; font-size:14px;">
+              View application →
+            </a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding:20px 32px; background:#f9fafb;
+                    border-top:1px solid #f3f4f6; text-align:center;">
+          <p style="margin:0; color:#9ca3af; font-size:12px;">
+            JobAgent · Application ID ${applicationId}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await resend.emails.send({
+    from: "JobAgent <onboarding@resend.dev>",
+    to: userEmail,
+    subject: `Application submitted — ${jobTitle} at ${company}`,
+    html,
+  });
+}

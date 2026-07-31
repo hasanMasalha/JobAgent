@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementAutoApply } from "@/lib/usage";
+import { sendApplicationConfirmationEmail } from "@/lib/email";
 
 function generateEmailHtml(params: {
   userName: string;
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
         where: { id: { in: jobIds } },
         select: { id: true, title: true, company: true, url: true, recruiter_email: true },
       }),
-      db.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } }),
+      db.user.findUnique({ where: { id: user.id }, select: { name: true, email: true, email_notifications: true } }),
       db.$queryRaw<{ clean_summary: string | null }[]>`
         SELECT clean_summary FROM "CV" WHERE user_id = ${user.id} LIMIT 1
       `,
@@ -81,12 +82,28 @@ export async function POST(req: NextRequest) {
           html: generateEmailHtml({ userName, jobTitle: job.title, company: job.company, cvSummary }),
         });
 
-        await db.application.create({
+        const application = await db.application.create({
           data: { user_id: user.id, job_id: job.id, status: "applied" },
+          select: { id: true, applied_at: true },
         });
 
         results.push({ jobId: job.id, status: "sent" });
         emailCount++;
+
+        if (profile?.email && profile.email_notifications !== false) {
+          try {
+            await sendApplicationConfirmationEmail({
+              userEmail: profile.email,
+              userName,
+              jobTitle: job.title,
+              company: job.company,
+              appliedAt: application.applied_at,
+              applicationId: application.id,
+            });
+          } catch (e) {
+            console.error("[batch-auto] confirmation email failed for job", job.id, e);
+          }
+        }
       } catch (e) {
         console.error("[batch-auto] email failed for job", job.id, e);
         results.push({ jobId: job.id, status: "failed" });

@@ -7,12 +7,31 @@ import traceback
 import threading
 
 import asyncpg
+import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from routes.apply import _build_cv_pdf
 
 router = APIRouter()
+
+NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+
+async def _send_application_confirmation_email(application_id: str) -> None:
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{NEXTJS_URL}/api/email/send-application-confirmation",
+                json={"application_id": application_id},
+                headers={"X-Internal-Key": INTERNAL_API_KEY},
+                timeout=30,
+            )
+            print(f"[ats-apply-bg] Confirmation email response: {resp.status_code} {resp.text[:200]}")
+    except Exception:
+        print("[ats-apply-bg] Confirmation email request failed (non-fatal)")
+        traceback.print_exc(file=sys.stdout)
 
 
 class ATSApplyRequest(BaseModel):
@@ -79,6 +98,9 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                 print(f"[ats-apply-bg] DB updated: {request_dict['application_id']} -> {status}")
             finally:
                 await conn.close()
+
+            if status == "applied":
+                await _send_application_confirmation_email(request_dict["application_id"])
 
         loop.run_until_complete(_run())
         loop.close()
