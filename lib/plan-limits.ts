@@ -9,6 +9,7 @@ export const PLAN_LIMITS = {
     cvTailoringPerMonth: 5, // CV tailoring requests
     savedJobsMax: 20, // saved/bookmarked jobs
     cvVersionsMax: 1, // number of CV versions
+    browseJobsPerDay: 0, // Browse All Jobs — not available on Free
   },
   pro: {
     jobMatchesPerDay: 100, // matches per day
@@ -16,6 +17,7 @@ export const PLAN_LIMITS = {
     cvTailoringPerMonth: 100, // CV tailoring per month
     savedJobsMax: 500, // saved jobs
     cvVersionsMax: 3, // CV versions
+    browseJobsPerDay: 100, // Browse All Jobs — same cap as matches
   },
   unlimited: {
     jobMatchesPerDay: 999999, // unlimited
@@ -23,6 +25,7 @@ export const PLAN_LIMITS = {
     cvTailoringPerMonth: 999999, // unlimited
     savedJobsMax: 999999, // unlimited
     cvVersionsMax: 10, // multiple CVs
+    browseJobsPerDay: 999999, // unlimited
   },
 } as const satisfies Record<PlanKey, Record<string, number>>;
 

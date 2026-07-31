@@ -35,7 +35,7 @@ export async function resetDailyCounters(userId: string): Promise<UserUsage> {
 
   return db.userUsage.update({
     where: { userId },
-    data: { jobMatchesToday: 0, matchesResetAt: now },
+    data: { jobMatchesToday: 0, browseJobsToday: 0, matchesResetAt: now },
   });
 }
 
@@ -80,6 +80,34 @@ export async function checkAndIncrementMatches(
   });
 
   return { allowed: true, remaining: Math.max(0, limit - updated.jobMatchesToday), granted };
+}
+
+// Same shape as checkAndIncrementMatches — Browse All Jobs shares the daily
+// reset marker (matchesResetAt) but has its own counter (browseJobsToday).
+// Free plan has a limit of 0, so it's naturally blocked without a special case.
+export async function checkAndIncrementBrowseJobs(
+  userId: string,
+  plan: PlanKey,
+  requestedCount = 1
+): Promise<{ allowed: boolean; remaining: number; granted: number }> {
+  const usage = await resetDailyCounters(userId);
+  const limit = PLAN_LIMITS[plan].browseJobsPerDay;
+  const remainingBefore = Math.max(0, limit - usage.browseJobsToday);
+
+  if (remainingBefore <= 0) {
+    return { allowed: false, remaining: 0, granted: 0 };
+  }
+  if (requestedCount <= 0) {
+    return { allowed: true, remaining: remainingBefore, granted: 0 };
+  }
+
+  const granted = Math.min(requestedCount, remainingBefore);
+  const updated = await db.userUsage.update({
+    where: { userId },
+    data: { browseJobsToday: { increment: granted } },
+  });
+
+  return { allowed: true, remaining: Math.max(0, limit - updated.browseJobsToday), granted };
 }
 
 export async function checkAndIncrementAutoApply(

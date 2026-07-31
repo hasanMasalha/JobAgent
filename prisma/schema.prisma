@@ -155,9 +155,10 @@ model UserUsage {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Daily counters (reset daily)
-  jobMatchesToday Int      @default(0)
-  matchesResetAt  DateTime @default(now())
+  // Daily counters (reset daily, both keyed off matchesResetAt)
+  jobMatchesToday  Int      @default(0)
+  browseJobsToday  Int      @default(0)
+  matchesResetAt   DateTime @default(now())
 
   // Monthly counters (reset monthly)
   autoAppliesThisMonth Int      @default(0)

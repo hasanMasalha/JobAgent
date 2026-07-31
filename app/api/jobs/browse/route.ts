@@ -1,11 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
+import { normalizePlan } from "@/lib/plan-limits";
+import { checkAndIncrementBrowseJobs } from "@/lib/usage";
 
 const LIMIT_DEFAULT = 20;
 const LIMIT_MAX = 50;
 
 export async function GET(req: NextRequest) {
+  const supabase = createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+  const plan = normalizePlan(dbUser?.plan);
+
+  if (plan === "free") {
+    return NextResponse.json(
+      {
+        error: "plan_restricted",
+        feature: "browseJobs",
+        message: "Browse All Jobs is available on Pro and Unlimited plans",
+        upgrade_url: "/pricing",
+      },
+      { status: 403 }
+    );
+  }
+
+  const precheck = await checkAndIncrementBrowseJobs(user.id, plan, 0);
+  if (!precheck.allowed) {
+    return NextResponse.json(
+      {
+        error: "limit_reached",
+        feature: "browseJobs",
+        message: "You've reached your daily Browse All Jobs limit. Upgrade for more.",
+        upgrade_url: "/pricing",
+      },
+      { status: 403 }
+    );
+  }
+
   const sp = req.nextUrl.searchParams;
   const search = sp.get("search")?.trim() ?? "";
   const location = sp.get("location")?.trim() ?? "";
@@ -36,9 +73,6 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const dbTotal = await db.job.count();
-    console.log("[browse] total jobs in DB:", dbTotal);
-
     const [jobs, total] = await Promise.all([
       db.job.findMany({
         where,
@@ -64,10 +98,22 @@ export async function GET(req: NextRequest) {
       db.job.count({ where }),
     ]);
 
-    console.log("[browse] filtered jobs:", total);
+    const { allowed, granted } = await checkAndIncrementBrowseJobs(user.id, plan, jobs.length);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "limit_reached",
+          feature: "browseJobs",
+          message: "You've reached your daily Browse All Jobs limit. Upgrade for more.",
+          upgrade_url: "/pricing",
+        },
+        { status: 403 }
+      );
+    }
+    const grantedJobs = jobs.slice(0, granted);
 
     return NextResponse.json({
-      jobs: jobs.map((j: (typeof jobs)[number]) => ({
+      jobs: grantedJobs.map((j: (typeof grantedJobs)[number]) => ({
         ...j,
         description: j.description ?? "",
         apply_type: j.apply_type ?? detectApplyType({ url: j.url, source: j.source, description: j.description ?? "" }),

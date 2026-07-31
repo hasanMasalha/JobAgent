@@ -102,8 +102,43 @@ function SkeletonCard() {
   );
 }
 
+function BrowseLockedState() {
+  return (
+    <div className="relative">
+      <div className="space-y-4 blur-sm select-none pointer-events-none" aria-hidden="true">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+      <div className="absolute inset-0 flex items-start justify-center pt-8">
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-lg p-8 max-w-sm text-center mx-4">
+          <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="4" y="10" width="16" height="10" rx="2" />
+              <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" />
+            </svg>
+          </div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+            Upgrade to unlock Browse All Jobs
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            Browse All Jobs is available on Pro and Unlimited plans.
+          </p>
+          <a
+            href="/pricing"
+            className="inline-block w-full bg-[#1a2e5e] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Upgrade to Pro - $24/month
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MatchesPage() {
   const [activeTab, setActiveTab] = useState<"matches" | "browse">("matches");
+  const [plan, setPlan] = useState<"free" | "pro" | "unlimited" | null>(null);
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
@@ -133,6 +168,7 @@ export default function MatchesPage() {
   const [browseTotalPages, setBrowseTotalPages] = useState(0);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseGoTo, setBrowseGoTo] = useState("");
+  const [browseError, setBrowseError] = useState<{ code: string; message: string } | null>(null);
   const browseListRef = useRef<HTMLDivElement>(null);
   const browseDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const browseFiltersRef = useRef({ search: "", location: "", company: "", source: "" });
@@ -140,6 +176,7 @@ export default function MatchesPage() {
 
   const fetchBrowse = useCallback(async (page: number) => {
     setBrowseLoading(true);
+    setBrowseError(null);
     try {
       const { search, location, company, source } = browseFiltersRef.current;
       const params = new URLSearchParams({ page: String(page) });
@@ -148,14 +185,19 @@ export default function MatchesPage() {
       if (company) params.set("company", company);
       if (source) params.set("source", source);
       const res = await fetch(`/api/jobs/browse?${params}`);
-      if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
+      if (!res.ok) {
+        setBrowseError({ code: data.error ?? "generic", message: data.message ?? "Failed to load jobs." });
+        setBrowseJobs([]);
+        return;
+      }
       setBrowseJobs(data.jobs);
       setBrowseTotal(data.total);
       setBrowseTotalPages(data.total_pages);
       setBrowsePage(data.page);
     } catch (err) {
       console.error("browse:", err);
+      setBrowseError({ code: "generic", message: "Failed to load jobs." });
     } finally {
       setBrowseLoading(false);
     }
@@ -178,8 +220,15 @@ export default function MatchesPage() {
   }
 
   useEffect(() => {
-    if (activeTab === "browse") fetchBrowse(1);
-  }, [activeTab, fetchBrowse]);
+    if (activeTab === "browse" && plan && plan !== "free") fetchBrowse(1);
+  }, [activeTab, plan, fetchBrowse]);
+
+  useEffect(() => {
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then((d) => { if (d.plan) setPlan(d.plan); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 60_000);
@@ -526,7 +575,15 @@ export default function MatchesPage() {
         </>
       )}
 
-      {activeTab === "browse" && (
+      {activeTab === "browse" && plan === null && (
+        <div className="space-y-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+      )}
+
+      {activeTab === "browse" && (plan === "free" || browseError?.code === "plan_restricted") && (
+        <BrowseLockedState />
+      )}
+
+      {activeTab === "browse" && (plan === "pro" || plan === "unlimited") && browseError?.code !== "plan_restricted" && (
         <div>
           <div className="relative mb-3">
             <input
@@ -566,6 +623,15 @@ export default function MatchesPage() {
           <div ref={browseListRef}>
             {browseLoading ? (
               <div className="space-y-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+            ) : browseError?.code === "limit_reached" ? (
+              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
+                <p className="text-gray-700 dark:text-gray-300 font-medium">
+                  You&apos;ve reached your daily Browse All Jobs limit.
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <a href="/pricing" className="text-blue-600 dark:text-blue-400 hover:underline">Upgrade for more</a>.
+                </p>
+              </div>
             ) : browseJobs.length === 0 ? (
               <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
                 <p className="text-gray-700 dark:text-gray-300 font-medium">No jobs found matching your filters.</p>
