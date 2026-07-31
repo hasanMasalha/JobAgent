@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { normalizePlan } from "@/lib/plan-limits";
+import { checkAndIncrementCvTailoring } from "@/lib/usage";
 
 export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ maxRetries: 5, timeout: 120_000 });
@@ -18,6 +20,21 @@ export async function POST(req: NextRequest) {
     const { job_id } = await req.json();
     if (!job_id) {
       return NextResponse.json({ error: "job_id required" }, { status: 400 });
+    }
+
+    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+    const plan = normalizePlan(dbUser?.plan);
+    const { allowed } = await checkAndIncrementCvTailoring(user.id, plan);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "limit_reached",
+          feature: "cvTailoring",
+          message: "You've reached your monthly CV tailoring limit.",
+          upgrade_url: "/pricing",
+        },
+        { status: 403 }
+      );
     }
 
     // Fetch CV

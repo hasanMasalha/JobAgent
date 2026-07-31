@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
 import { db } from "@/lib/db";
-import { getDailyMatchLimit, startOfTodayUTC } from "@/lib/plan-limits";
+import { normalizePlan } from "@/lib/plan-limits";
+import { checkAndIncrementMatches } from "@/lib/usage";
+
+function limitReachedResponse() {
+  return NextResponse.json(
+    {
+      error: "limit_reached",
+      feature: "matches",
+      message: "You've reached your daily match limit. Upgrade to see more.",
+      upgrade_url: "/pricing",
+    },
+    { status: 403 }
+  );
+}
 
 export async function GET(req: NextRequest) {
   const supabase = createServerClient();
@@ -15,27 +28,12 @@ export async function GET(req: NextRequest) {
   }
 
   const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
-  const plan = dbUser?.plan ?? "free";
-  const dailyLimit = getDailyMatchLimit(plan);
-  const today = startOfTodayUTC();
+  const plan = normalizePlan(dbUser?.plan);
 
-  let seenJobIds: string[] = [];
-  if (dailyLimit !== null) {
-    const usageRow = await db.dailyMatchUsage.findUnique({
-      where: { user_id_date: { user_id: user.id, date: today } },
-    });
-    seenJobIds = Array.isArray(usageRow?.job_ids) ? (usageRow!.job_ids as string[]) : [];
-
-    if (seenJobIds.length >= dailyLimit) {
-      return NextResponse.json(
-        {
-          error: "limit_reached",
-          message: "You've reached your daily match limit. Upgrade to see unlimited matches.",
-          upgrade_url: "/pricing",
-        },
-        { status: 403 }
-      );
-    }
+  // Peek at quota before calling the (comparatively expensive) matching service.
+  const precheck = await checkAndIncrementMatches(user.id, plan, 0);
+  if (!precheck.allowed) {
+    return limitReachedResponse();
   }
 
   try {
@@ -81,7 +79,7 @@ export async function GET(req: NextRequest) {
     }
 
     const rawJobs = await pythonRes.json();
-    let enriched = rawJobs.map((j: Record<string, unknown>) => ({
+    const enriched = rawJobs.map((j: Record<string, unknown>) => ({
       ...j,
       apply_type: (j.apply_type as string) ?? detectApplyType({
         url: j.url as string,
@@ -91,34 +89,26 @@ export async function GET(req: NextRequest) {
       recruiter_email: (j.recruiter_email as string) ?? extractRecruiterEmail(j.description as string ?? ""),
     }));
 
-    if (dailyLimit !== null) {
-      const newIds = enriched
-        .map((j: Record<string, unknown>) => j.id as string)
-        .filter((id: string) => !seenJobIds.includes(id));
-      const slotsLeft = dailyLimit - seenJobIds.length;
-      const allowedNewIds = newIds.slice(0, slotsLeft);
-      const allowedIds = new Set([...seenJobIds, ...allowedNewIds]);
-      enriched = enriched.filter((j: Record<string, unknown>) => allowedIds.has(j.id as string));
+    const start = (page - 1) * limit;
+    const pageSlice = enriched.slice(start, start + limit);
 
-      if (allowedNewIds.length > 0) {
-        const jobIds = [...seenJobIds, ...allowedNewIds];
-        await db.dailyMatchUsage.upsert({
-          where: { user_id_date: { user_id: user.id, date: today } },
-          create: { user_id: user.id, date: today, job_ids: jobIds },
-          update: { job_ids: jobIds },
-        });
-      }
+    // Consume quota for the page actually being served. If the daily limit runs
+    // out partway through a page, `granted` truncates it — the caller sees fewer
+    // jobs than requested rather than an error, and hasMore is forced to false.
+    const { allowed, granted } = await checkAndIncrementMatches(user.id, plan, pageSlice.length);
+    if (!allowed) {
+      return limitReachedResponse();
     }
 
-    const start = (page - 1) * limit;
-    const jobs = enriched.slice(start, start + limit);
+    const jobs = pageSlice.slice(0, granted);
+    const hasMore = granted === pageSlice.length && start + limit < enriched.length;
 
     return NextResponse.json({
       jobs,
       total: enriched.length,
       page,
       limit,
-      hasMore: start + limit < enriched.length,
+      hasMore,
     });
   } catch (err) {
     console.error("[match] Unexpected error:", err);

@@ -51,7 +51,7 @@ model User {
   interactions     UserJobInteraction[]
   easy_apply_answers EasyApplyAnswer[]
   saved_searches   SavedSearch[]
-  daily_match_usage DailyMatchUsage[]
+  usage            UserUsage?
 }
 
 model EasyApplyAnswer {
@@ -150,18 +150,26 @@ model SavedSearch {
   @@unique([user_id, category])
 }
 
-// Tracks which job IDs a free-plan user has already been shown "today" (UTC),
-// so repeated /api/match pagination/refresh calls don't double-count the same
-// job against the daily match quota.
-model DailyMatchUsage {
-  user_id String
-  date    DateTime
-  job_ids Json     @default("[]")
+model UserUsage {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  // Daily counters (reset daily)
+  jobMatchesToday Int      @default(0)
+  matchesResetAt  DateTime @default(now())
 
-  @@id([user_id, date])
-  @@map("daily_match_usage")
+  // Monthly counters (reset monthly)
+  autoAppliesThisMonth Int      @default(0)
+  cvTailoringThisMonth Int      @default(0)
+  appliancesResetAt    DateTime @default(now())
+
+  // Total counters (never reset)
+  totalAutoApplies Int @default(0)
+  totalCvTailoring Int @default(0)
+  totalJobsViewed  Int @default(0)
+
+  updatedAt DateTime @updatedAt
 }
 
 model MatchCache {

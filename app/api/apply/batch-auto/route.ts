@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
-import { getMonthlyAutoApplyLimit, startOfCurrentMonth } from "@/lib/plan-limits";
+import { normalizePlan } from "@/lib/plan-limits";
+import { checkAndIncrementAutoApply } from "@/lib/usage";
 
 function generateEmailHtml(params: {
   userName: string;
@@ -29,28 +30,13 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
-    const limit = getMonthlyAutoApplyLimit(dbUser?.plan ?? "free");
-    if (limit !== null) {
-      const usedThisMonth = await db.application.count({
-        where: { user_id: user.id, applied_at: { gte: startOfCurrentMonth() } },
-      });
-      if (usedThisMonth >= limit) {
-        return NextResponse.json(
-          {
-            error: "limit_reached",
-            message: "You've reached your monthly auto-apply limit.",
-            upgrade_url: "/pricing",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
     const { jobIds } = await req.json() as { jobIds: string[] };
     if (!Array.isArray(jobIds) || jobIds.length === 0) {
       return NextResponse.json({ error: "jobIds array required" }, { status: 400 });
     }
+
+    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+    const plan = normalizePlan(dbUser?.plan);
 
     const [jobs, profile, cvRows] = await Promise.all([
       db.job.findMany({
@@ -67,10 +53,23 @@ export async function POST(req: NextRequest) {
     const cvSummary = cvRows[0]?.clean_summary ?? "I have relevant experience for this role.";
     const results: { jobId: string; status: string }[] = [];
     let emailCount = 0;
+    let limitReached = false;
 
     for (const job of jobs) {
       if (!job.recruiter_email) {
         results.push({ jobId: job.id, status: "skipped_no_email" });
+        continue;
+      }
+
+      if (limitReached) {
+        results.push({ jobId: job.id, status: "limit_reached" });
+        continue;
+      }
+
+      const { allowed } = await checkAndIncrementAutoApply(user.id, plan);
+      if (!allowed) {
+        limitReached = true;
+        results.push({ jobId: job.id, status: "limit_reached" });
         continue;
       }
 
@@ -92,6 +91,20 @@ export async function POST(req: NextRequest) {
         console.error("[batch-auto] email failed for job", job.id, e);
         results.push({ jobId: job.id, status: "failed" });
       }
+    }
+
+    // Nothing went out and the reason is purely quota — surface it as a clean
+    // 403 instead of a 200 full of "limit_reached" rows.
+    if (emailCount === 0 && limitReached) {
+      return NextResponse.json(
+        {
+          error: "limit_reached",
+          feature: "autoApply",
+          message: "You've reached your monthly auto-apply limit.",
+          upgrade_url: "/pricing",
+        },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({ success: true, count: emailCount, results });

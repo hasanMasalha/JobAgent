@@ -1,38 +1,33 @@
 export type PaidPlan = "pro" | "unlimited";
 export type BillingInterval = "monthly" | "annual";
+export type PlanKey = "free" | "pro" | "unlimited";
 
-// null = unlimited
-export const MONTHLY_AUTO_APPLY_LIMITS: Record<string, number | null> = {
-  free: 5,
-  pro: 100,
-  unlimited: null,
-};
+export const PLAN_LIMITS = {
+  free: {
+    jobMatchesPerDay: 10, // AI matches shown per day
+    autoAppliesPerMonth: 5, // auto-apply submissions
+    cvTailoringPerMonth: 5, // CV tailoring requests
+    savedJobsMax: 20, // saved/bookmarked jobs
+    cvVersionsMax: 1, // number of CV versions
+  },
+  pro: {
+    jobMatchesPerDay: 100, // matches per day
+    autoAppliesPerMonth: 100, // auto-apply per month
+    cvTailoringPerMonth: 100, // CV tailoring per month
+    savedJobsMax: 500, // saved jobs
+    cvVersionsMax: 3, // CV versions
+  },
+  unlimited: {
+    jobMatchesPerDay: 999999, // unlimited
+    autoAppliesPerMonth: 999999, // unlimited
+    cvTailoringPerMonth: 999999, // unlimited
+    savedJobsMax: 999999, // unlimited
+    cvVersionsMax: 10, // multiple CVs
+  },
+} as const satisfies Record<PlanKey, Record<string, number>>;
 
-export function getMonthlyAutoApplyLimit(plan: string): number | null {
-  return plan in MONTHLY_AUTO_APPLY_LIMITS
-    ? MONTHLY_AUTO_APPLY_LIMITS[plan]
-    : MONTHLY_AUTO_APPLY_LIMITS.free;
-}
-
-export function startOfCurrentMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
-}
-
-// null = unlimited
-export const DAILY_MATCH_LIMITS: Record<string, number | null> = {
-  free: 10,
-  pro: null,
-  unlimited: null,
-};
-
-export function getDailyMatchLimit(plan: string): number | null {
-  return plan in DAILY_MATCH_LIMITS ? DAILY_MATCH_LIMITS[plan] : DAILY_MATCH_LIMITS.free;
-}
-
-export function startOfTodayUTC(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+export function normalizePlan(plan: string | null | undefined): PlanKey {
+  return plan === "pro" || plan === "unlimited" ? plan : "free";
 }
 
 export function priceIdFor(plan: PaidPlan, interval: BillingInterval): string | undefined {
