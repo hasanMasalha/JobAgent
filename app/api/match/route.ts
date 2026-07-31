@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
+import { db } from "@/lib/db";
+import { getDailyMatchLimit, startOfTodayUTC } from "@/lib/plan-limits";
 
 export async function GET(req: NextRequest) {
   const supabase = createServerClient();
@@ -10,6 +12,30 @@ export async function GET(req: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+  const plan = dbUser?.plan ?? "free";
+  const dailyLimit = getDailyMatchLimit(plan);
+  const today = startOfTodayUTC();
+
+  let seenJobIds: string[] = [];
+  if (dailyLimit !== null) {
+    const usageRow = await db.dailyMatchUsage.findUnique({
+      where: { user_id_date: { user_id: user.id, date: today } },
+    });
+    seenJobIds = Array.isArray(usageRow?.job_ids) ? (usageRow!.job_ids as string[]) : [];
+
+    if (seenJobIds.length >= dailyLimit) {
+      return NextResponse.json(
+        {
+          error: "limit_reached",
+          message: "You've reached your daily match limit. Upgrade to see unlimited matches.",
+          upgrade_url: "/pricing",
+        },
+        { status: 403 }
+      );
+    }
   }
 
   try {
@@ -55,7 +81,7 @@ export async function GET(req: NextRequest) {
     }
 
     const rawJobs = await pythonRes.json();
-    const enriched = rawJobs.map((j: Record<string, unknown>) => ({
+    let enriched = rawJobs.map((j: Record<string, unknown>) => ({
       ...j,
       apply_type: (j.apply_type as string) ?? detectApplyType({
         url: j.url as string,
@@ -64,6 +90,26 @@ export async function GET(req: NextRequest) {
       }),
       recruiter_email: (j.recruiter_email as string) ?? extractRecruiterEmail(j.description as string ?? ""),
     }));
+
+    if (dailyLimit !== null) {
+      const newIds = enriched
+        .map((j: Record<string, unknown>) => j.id as string)
+        .filter((id: string) => !seenJobIds.includes(id));
+      const slotsLeft = dailyLimit - seenJobIds.length;
+      const allowedNewIds = newIds.slice(0, slotsLeft);
+      const allowedIds = new Set([...seenJobIds, ...allowedNewIds]);
+      enriched = enriched.filter((j: Record<string, unknown>) => allowedIds.has(j.id as string));
+
+      if (allowedNewIds.length > 0) {
+        const jobIds = [...seenJobIds, ...allowedNewIds];
+        await db.dailyMatchUsage.upsert({
+          where: { user_id_date: { user_id: user.id, date: today } },
+          create: { user_id: user.id, date: today, job_ids: jobIds },
+          update: { job_ids: jobIds },
+        });
+      }
+    }
+
     const start = (page - 1) * limit;
     const jobs = enriched.slice(start, start + limit);
 

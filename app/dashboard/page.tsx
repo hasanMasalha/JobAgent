@@ -19,10 +19,21 @@ interface Usage {
   plan: string
   used: number
   limit: number | null
+  matchesUsed?: number
+  matchesLimit?: number | null
 }
 
-function UsageBanner({ usage }: { usage: Usage }) {
-  const { used, limit } = usage
+function UsageRow({
+  label,
+  used,
+  limit,
+  limitReachedMessage,
+}: {
+  label: string
+  used: number
+  limit: number | null
+  limitReachedMessage: string
+}) {
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 100
   const barColor =
     limit === null
@@ -34,9 +45,9 @@ function UsageBanner({ usage }: { usage: Usage }) {
       : "bg-green-500"
 
   return (
-    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 mb-6">
+    <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-applies this month</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
         <p className="text-sm font-semibold text-gray-900 dark:text-white">
           {used} / {limit === null ? "∞" : limit}
         </p>
@@ -49,9 +60,35 @@ function UsageBanner({ usage }: { usage: Usage }) {
       </div>
       {limit !== null && pct >= 80 && (
         <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-          You&apos;re close to your monthly limit.{" "}
+          {limitReachedMessage}{" "}
           <Link href="/pricing" className="underline font-medium">Upgrade your plan</Link>
         </p>
+      )}
+    </div>
+  )
+}
+
+function UsageBanner({ usage }: { usage: Usage }) {
+  const showMatches =
+    typeof usage.matchesUsed === "number" &&
+    usage.matchesLimit !== undefined &&
+    usage.matchesLimit !== null
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 mb-6 space-y-4">
+      <UsageRow
+        label="Auto-applies this month"
+        used={usage.used}
+        limit={usage.limit}
+        limitReachedMessage="You're close to your monthly limit."
+      />
+      {showMatches && (
+        <UsageRow
+          label="Daily matches today"
+          used={usage.matchesUsed!}
+          limit={usage.matchesLimit!}
+          limitReachedMessage="You're close to your daily match limit."
+        />
       )}
     </div>
   )
