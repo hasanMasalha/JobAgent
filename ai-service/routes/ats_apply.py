@@ -122,8 +122,37 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
         loop.close()
 
     except Exception as e:
-        print(f"[ats-apply-bg] EXCEPTION: {type(e).__name__}: {e}")
-        traceback.print_exc(file=sys.stdout)
+        print(f"[ats-apply-bg] UNHANDLED EXCEPTION: {type(e).__name__}: {e}")
+        print(f"[ats-apply-bg] TRACEBACK: {traceback.format_exc()}")
+        # Capture as a plain string — `e` is implicitly unbound once this
+        # except block exits, so the closure below can't reference it directly.
+        error_text = f"Unexpected error: {e}"
+
+        # Without this, a crash here leaves the Application stuck at
+        # 'applying' forever — no status update, no way for the user to
+        # know anything went wrong. Use a fresh event loop: the one above
+        # may be in an inconsistent state after the exception.
+        async def _mark_failed() -> None:
+            conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+            try:
+                await conn.execute(
+                    'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
+                    "failed",
+                    error_text,
+                    request_dict["application_id"],
+                )
+                print(f"[ats-apply-bg] DB updated after exception: {request_dict['application_id']} -> failed")
+            finally:
+                await conn.close()
+
+        try:
+            fail_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(fail_loop)
+            fail_loop.run_until_complete(_mark_failed())
+            fail_loop.close()
+        except Exception:
+            print("[ats-apply-bg] Failed to update DB after exception (non-fatal)")
+            traceback.print_exc(file=sys.stdout)
 
     print("[ats-apply-bg] ===== THREAD ENDED =====")
 
