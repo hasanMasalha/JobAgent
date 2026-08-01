@@ -14,6 +14,7 @@ interface EasyApplyDefaults {
   last_name: string;
   phone: string;
   city: string;
+  currentCompany: string;
   linkedin_url: string;
   github_url: string;
   portfolio_url: string;
@@ -61,7 +62,7 @@ function ProfileContent() {
 
   // Easy Apply defaults
   const [defaults, setDefaults] = useState<EasyApplyDefaults>({
-    first_name: "", last_name: "", phone: "", city: "",
+    first_name: "", last_name: "", phone: "", city: "", currentCompany: "",
     linkedin_url: "", github_url: "", portfolio_url: "",
     expected_salary: "", notice_period: "30", years_of_experience: "2",
     highest_education: "Bachelor's Degree",
@@ -104,6 +105,7 @@ function ProfileContent() {
           last_name: data.last_name ?? "",
           phone: data.phone ?? "",
           city: data.city ?? "",
+          currentCompany: data.currentCompany ?? "",
           linkedin_url: data.linkedin_url ?? "",
           github_url: data.github_url ?? "",
           portfolio_url: data.portfolio_url ?? "",
@@ -781,7 +783,8 @@ function ProfileContent() {
             { label: "First name", key: "first_name", placeholder: "Hasan" },
             { label: "Last name", key: "last_name", placeholder: "Masalha" },
             { label: "Phone", key: "phone", placeholder: "+972-50-000-0000" },
-            { label: "City", key: "city", placeholder: "Tel Aviv" },
+            { label: "City", key: "city", placeholder: "e.g. Tel Aviv, New York, London" },
+            { label: "Current/Most Recent Company", key: "currentCompany", placeholder: "e.g. Google, Self-employed, Student" },
           ].map(({ label, key, placeholder }) => (
             <div key={key}>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>

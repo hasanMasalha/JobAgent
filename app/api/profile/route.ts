@@ -27,6 +27,7 @@ export async function GET(_req: NextRequest) {
           last_name: true,
           phone: true,
           city: true,
+          currentCompany: true,
           linkedin_url: true,
           github_url: true,
           portfolio_url: true,
@@ -70,6 +71,7 @@ export async function GET(_req: NextRequest) {
       last_name: dbUser?.last_name ?? null,
       phone: dbUser?.phone ?? null,
       city: dbUser?.city ?? null,
+      currentCompany: dbUser?.currentCompany ?? null,
       linkedin_url: dbUser?.linkedin_url ?? null,
       github_url: dbUser?.github_url ?? null,
       portfolio_url: dbUser?.portfolio_url ?? null,
@@ -101,7 +103,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const {
-      first_name, last_name, phone, city,
+      first_name, last_name, phone, city, currentCompany,
       linkedin_url, github_url, portfolio_url,
       expected_salary, notice_period, years_of_experience,
       highest_education, work_authorized, requires_sponsorship,
@@ -115,6 +117,7 @@ export async function PATCH(req: NextRequest) {
         last_name,
         phone,
         city,
+        currentCompany,
         linkedin_url,
         github_url,
         portfolio_url,
