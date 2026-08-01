@@ -20,6 +20,8 @@ INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 
 async def _send_application_confirmation_email(application_id: str) -> None:
+    print("[ats-apply] Sending confirmation email to user")
+    print(f"[ats-apply] NEXTJS_URL={NEXTJS_URL!r} INTERNAL_API_KEY_set={bool(INTERNAL_API_KEY)}")
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -28,9 +30,10 @@ async def _send_application_confirmation_email(application_id: str) -> None:
                 headers={"X-Internal-Key": INTERNAL_API_KEY},
                 timeout=30,
             )
-            print(f"[ats-apply-bg] Confirmation email response: {resp.status_code} {resp.text[:200]}")
+            result = {"status_code": resp.status_code, "body": resp.text[:200]}
+            print(f"[ats-apply] Email result: {result}")
     except Exception:
-        print("[ats-apply-bg] Confirmation email request failed (non-fatal)")
+        print("[ats-apply] Email result: request failed (non-fatal)")
         traceback.print_exc(file=sys.stdout)
 
 
@@ -112,7 +115,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             finally:
                 await conn.close()
 
-            if status == "applied":
+            if status in ("applied", "pending_verification"):
                 await _send_application_confirmation_email(request_dict["application_id"])
 
         loop.run_until_complete(_run())
@@ -154,6 +157,17 @@ async def ats_apply(req: ATSApplyRequest):
                 return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
             tailored_cv = cv_row["raw_text"]
             print(f"[ats-apply] Quick-apply: using raw CV ({len(tailored_cv)} chars)")
+
+        # Structured "Easy Apply defaults" — used to answer common custom
+        # questions (sponsorship, work authorization, salary, etc.) without
+        # guessing or calling Claude for things we already know.
+        profile_row = await conn.fetchrow(
+            'SELECT years_of_experience, expected_salary, work_authorized, requires_sponsorship, '
+            'willing_to_relocate, notice_period, portfolio_url, github_url, highest_education '
+            'FROM "User" WHERE id = $1',
+            req.user_id,
+        )
+        profile = dict(profile_row) if profile_row else {}
     finally:
         await conn.close()
 
@@ -184,6 +198,8 @@ async def ats_apply(req: ATSApplyRequest):
             "cv_base64": cv_base64,
             "cv_filename": cv_filename,
             "cover_letter": cover_letter,
+            "profile": profile,
+            "cv_text": tailored_cv,
         },
     }
 

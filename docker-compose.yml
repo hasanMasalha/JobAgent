@@ -8,6 +8,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PYTHON_SERVICE_URL=http://fastapi:8000
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
       - fastapi
 
@@ -20,6 +21,12 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
       - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      # Must be the compose service name, not localhost — the fastapi
+      # container's own localhost has nothing listening on :3000, which was
+      # silently swallowing every callback to /api/email/send-* (caught by
+      # the bare `except Exception` in ats_apply.py and scheduler.py).
+      - NEXTJS_URL=http://nextjs:3000
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     volumes:
       - ./ai-service/companies.csv:/app/companies.csv
       - ./ai-service/browser_profile:/app/browser_profile

@@ -1,12 +1,77 @@
+import asyncio
 import os
 import random
 import tempfile
 import time
 
+import anthropic
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
 from captcha_solver import detect_and_solve_captcha
+
+_claude_client = anthropic.Anthropic()
+
+
+def _fast_path_answer(label_text: str, profile: dict, linkedin_url: str) -> str | None:
+    """Deterministic answers for well-known Greenhouse question patterns, using
+    the candidate's structured profile fields. Returns None when nothing
+    matches, so the caller falls back to asking Claude instead of guessing."""
+    label = label_text.lower()
+
+    if "linkedin" in label:
+        return linkedin_url or "N/A"
+    if any(k in label for k in ("github", "portfolio", "personal website", "website")):
+        return profile.get("github_url") or profile.get("portfolio_url") or "N/A"
+    if any(k in label for k in ("how did you hear", "hear about", "how did you find")):
+        return "LinkedIn"
+    if any(k in label for k in ("sponsorship", "visa sponsorship")):
+        return "Yes" if profile.get("requires_sponsorship") else "No"
+    if any(k in label for k in ("authorized to work", "legally authorized", "work authorization", "eligible to work")):
+        return "Yes" if profile.get("work_authorized", True) else "No"
+    if any(k in label for k in ("relocate", "relocation")):
+        return "Yes" if profile.get("willing_to_relocate") else "No"
+    if "notice period" in label:
+        return profile.get("notice_period") or "Immediate"
+    if any(k in label for k in ("salary", "compensation", "expected pay")):
+        return profile.get("expected_salary") or "Negotiable"
+    if ("years" in label or "experience" in label) and "sponsor" not in label:
+        return str(profile.get("years_of_experience") or "2")
+    return None
+
+
+async def _ask_claude_for_answer(question: str, cv_text: str, profile: dict) -> str:
+    """Ask Claude for a short, honest answer to a custom application question,
+    grounded in the candidate's actual CV/profile — never invents experience."""
+    prompt = (
+        "You are filling out a job application form on behalf of a candidate. "
+        "Answer the question below with a SHORT, direct answer suitable for a "
+        "single form field (usually one sentence or a few words). Only use "
+        "information present in the candidate's CV or profile below — never "
+        "invent facts. If the question can't be answered from the given "
+        "information, give a brief, honest answer such as 'N/A' or 'Not specified'.\n\n"
+        f"Question: {question}\n\n"
+        "Candidate profile:\n"
+        f"- Years of experience: {profile.get('years_of_experience') or 'unknown'}\n"
+        f"- Expected salary: {profile.get('expected_salary') or 'unknown'}\n"
+        f"- Notice period: {profile.get('notice_period') or 'unknown'}\n"
+        f"- Highest education: {profile.get('highest_education') or 'unknown'}\n\n"
+        f"CV:\n{(cv_text or '')[:3000]}\n\n"
+        "Return ONLY the answer text — no explanation, no quotes, no markdown."
+    )
+    try:
+        message = await asyncio.to_thread(
+            _claude_client.messages.create,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        answer = message.content[0].text.strip()
+        print(f"[ats-form] Claude answered {question!r} -> {answer!r}")
+        return answer[:500] if answer else "N/A"
+    except Exception as e:
+        print(f"[ats-form] Claude question-answer failed for {question!r}: {e}")
+        return "N/A"
 
 
 async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
@@ -38,6 +103,8 @@ async def fill_ats_form(
     cv_filename: str,
     cover_letter: str,
     linkedin_url: str = "",
+    profile: dict | None = None,
+    cv_text: str = "",
 ) -> dict:
     """Fill ATS application form using Playwright."""
 
@@ -170,7 +237,8 @@ async def fill_ats_form(
                 )
             else:
                 result = await _fill_form_fields(
-                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
+                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url,
+                    profile or {}, cv_text,
                 )
 
             await browser.close()
@@ -346,6 +414,8 @@ async def _fill_form_fields(
     cv_path: str,
     cover_letter: str,
     linkedin_url: str,
+    profile: dict,
+    cv_text: str,
 ) -> dict:
     """Fill form fields using common CSS selectors."""
 
@@ -587,17 +657,16 @@ async def _fill_form_fields(
         print(f"[ats-form] Custom question: {q_id} — {label_text}")
 
         if q_type not in ("file", "checkbox", "radio", "hidden"):
-            label_lower = label_text.lower()
-            if any(k in label_lower for k in ("linkedin", "linkedin profile", "linkedin url")):
-                answer = linkedin_url or "N/A"
-            elif any(k in label_lower for k in ("github", "portfolio", "website", "url")):
-                answer = "N/A"
-            elif any(k in label_lower for k in ("salary", "expected", "compensation")):
-                answer = "Negotiable"
-            elif any(k in label_lower for k in ("years", "experience")):
-                answer = "2"
-            else:
-                answer = "Yes"
+            if not label_text:
+                # No label to reason about — skip rather than guess.
+                print(f"[ats-form] Skipping {q_id}: no label text found")
+                continue
+
+            answer = _fast_path_answer(label_text, profile, linkedin_url)
+            if answer is None:
+                print(f"[ats-form] No fast-path match for {label_text!r} — asking Claude")
+                answer = await _ask_claude_for_answer(label_text, cv_text, profile)
+
             try:
                 await q.fill(answer)
                 filled.append(f"custom_{q_id}")
