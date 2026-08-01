@@ -75,6 +75,14 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                 print("[ats-apply-bg] Greenhouse email verification required")
             elif result.get("success"):
                 status = "applied"
+            elif result.get("error") == "unknown_state":
+                # We couldn't find a confirmation signal, but we also have no
+                # positive evidence the submit failed (no field errors, no
+                # captcha, no exception) — don't tell the user it failed when
+                # it may well have gone through. Only actual errors map to
+                # 'failed' below.
+                status = "pending_verification"
+                print("[ats-apply-bg] Could not confirm outcome — treating as pending_verification, not failed")
             else:
                 status = "failed"
                 reason = "captcha" if (result.get("captcha") or result.get("recaptcha")) else result.get("error", "unknown")
@@ -86,7 +94,12 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                 if status == "failed":
                     error_msg = result.get("error")
                 elif status == "pending_verification":
-                    error_msg = "Check your email for a verification code from Greenhouse to complete your application."
+                    # result["message"] already distinguishes "Greenhouse emailed you a
+                    # verification code" from "submitted but unconfirmed" — use it
+                    # instead of a single hardcoded message that only fit the former.
+                    error_msg = result.get("message") or (
+                        "Check your email for a verification code from Greenhouse to complete your application."
+                    )
                 else:
                     error_msg = None
                 await conn.execute(

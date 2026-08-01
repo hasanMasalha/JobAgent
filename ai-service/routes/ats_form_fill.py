@@ -773,7 +773,9 @@ async def _fill_form_fields(
             }
 
         # ── URL contains confirmation path ────────────────────────────────────
-        if any(k in url_after for k in ("confirmation", "thank", "success", "submitted")):
+        # "?gh_jid=" shows up on Greenhouse's post-apply confirmation redirect
+        # for some job boards even when there's no "thank you" wording on the page.
+        if any(k in url_after for k in ("confirmation", "thank", "success", "submitted", "?gh_jid=")):
             print(f"[ats-form] SUCCESS — URL indicates confirmation: {url_after}")
             return {"success": True, "filled": filled, "message": "Application submitted (URL confirmation)"}
 
@@ -784,9 +786,10 @@ async def _fill_form_fields(
 
         # ── Explicit text success signals ─────────────────────────────────────
         success_signals = [
-            "thank you", "application received", "successfully submitted",
-            "we'll be in touch", "application has been submitted",
-            "your application has been", "תודה",
+            "thank you", "thank you for applying", "application received",
+            "successfully submitted", "we'll be in touch",
+            "application has been submitted", "your application has been",
+            "תודה",
         ]
         if any(s in page_text_lower for s in success_signals):
             print("[ats-form] SUCCESS confirmed via page text")
@@ -796,7 +799,8 @@ async def _fill_form_fields(
         modal = await page.query_selector(
             '.modal, .dialog, [role="dialog"], '
             '[class*="confirmation"], [class*="Confirmation"], '
-            '[class*="success"], [class*="Success"]'
+            '[class*="success"], [class*="Success"], '
+            '.application-confirmation, [data-qa="confirmation"]'
         )
         if modal:
             modal_text = (await modal.inner_text()).strip()
@@ -840,6 +844,28 @@ async def _fill_form_fields(
                 "error": f"Form errors: {'; '.join(real_errors[:3])}",
                 "filled": filled,
                 "errors": errors,
+            }
+
+        # ── No explicit confirmation, but the submit likely went through ──────
+        # Some Greenhouse boards redirect back to the job listing URL with a
+        # trailing "?" (or other query params) instead of showing a "thank you"
+        # page — no error, no confirmation text, just silence. If we filled the
+        # core required fields and clicked submit, and the URL either changed
+        # or now carries query params it didn't have before, treat that as a
+        # likely-successful submission rather than an unknown failure.
+        core_fields_filled = all(f in filled for f in ("first_name", "last_name", "email", "resume"))
+        url_has_query_params = "?" in url_after
+        if core_fields_filled and (url_after != url_before or url_has_query_params):
+            print(
+                f"[ats-form] No explicit confirmation, but form was filled and URL suggests "
+                f"a submit happened (before={url_before!r} after={url_after!r}) — "
+                f"treating as likely submitted"
+            )
+            return {
+                "success": True,
+                "status": "pending_verification",
+                "filled": filled,
+                "message": "Form was submitted but confirmation could not be verified — check your email or the job portal to confirm.",
             }
 
         # ── Unknown state — no confirmation signals found ─────────────────────
