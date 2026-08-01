@@ -920,6 +920,53 @@ async def _fill_form_fields(
         print("[ats-form] POST-SUBMIT HTML (first 3000):")
         print(html[:3000])
 
+        # ── Detect a silent form reset ────────────────────────────────────────
+        # If the Apply button is still visible, we're still looking at the job
+        # listing/collapsed-form state — the submit didn't actually go through
+        # (most likely a client-side validation error, or the click landed on
+        # the wrong element). Dump diagnostics, then try a couple of
+        # alternative submit paths before giving up.
+        apply_btn_after = await page.locator(
+            'button:has-text("Apply"), input[value="Apply"]'
+        ).count()
+
+        if apply_btn_after > 0:
+            print("[ats-form] Apply button still visible after submit — form likely failed")
+            await page.evaluate("window.scrollTo(0, 0)")
+            await page.wait_for_timeout(1000)
+
+            page_text_full = await page.inner_text("body")
+            lines = [ln.strip() for ln in page_text_full.split("\n") if ln.strip()]
+            print("[ats-form] All page text lines after submit:")
+            for line in lines[:50]:
+                print(f"[ats-form]   {line}")
+
+            print("[ats-form] Retrying via JS document.querySelector('form').submit()...")
+            try:
+                submitted = await page.evaluate("""() => {
+                    const form = document.querySelector('form');
+                    if (form) { form.submit(); return true; }
+                    return false;
+                }""")
+                print(f"[ats-form] JS form.submit() returned: {submitted}")
+            except Exception as e:
+                print(f"[ats-form] JS form.submit() failed: {e}")
+            await page.wait_for_timeout(5000)
+
+            if await page.locator('button:has-text("Apply"), input[value="Apply"]').count() > 0:
+                print("[ats-form] Still on listing page — trying get_by_role Submit application click")
+                try:
+                    submit_role_btn = page.get_by_role("button", name="Submit application")
+                    if await submit_role_btn.count() > 0:
+                        await submit_role_btn.first.click()
+                        print("[ats-form] Clicked Submit application via get_by_role")
+                        await page.wait_for_timeout(5000)
+                except Exception as e:
+                    print(f"[ats-form] get_by_role submit click failed: {e}")
+
+            url_after = page.url
+            print(f"[ats-form] URL after retry attempts: {url_after}")
+
         page_text = await page.inner_text("body")
         print(f"[ats-form] FULL page text length: {len(page_text)}")
         print("[ats-form] Page text (first 1000):")
