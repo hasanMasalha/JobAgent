@@ -204,7 +204,7 @@ export async function sendApplicationConfirmationEmail(params: {
   `;
 
   await resend.emails.send({
-    from: "JobAgent <onboarding@resend.dev>",
+    from: "JobAgent <notifications@jobagent.uk>",
     to: userEmail,
     subject: `Application submitted — ${jobTitle} at ${company}`,
     html,
