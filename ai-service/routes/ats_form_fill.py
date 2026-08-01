@@ -35,6 +35,11 @@ def _fast_path_answer(label_text: str, profile: dict, linkedin_url: str) -> str 
         return profile.get("notice_period") or "Immediate"
     if any(k in label for k in ("salary", "compensation", "expected pay")):
         return profile.get("expected_salary") or "Negotiable"
+    if any(k in label for k in (
+        "current company", "recent company", "current employer",
+        "recent employer", "company name", "employer name",
+    )):
+        return profile.get("currentCompany") or "Self-employed"
     if ("years" in label or "experience" in label) and "sponsor" not in label:
         return str(profile.get("years_of_experience") or "2")
     return None
@@ -538,6 +543,20 @@ async def _fill_form_fields(
             filled.append("country")
     except Exception as e:
         print(f"[ats-form] Country field error: {e}")
+
+    # Candidate location — separate free-text field some Greenhouse boards show
+    # alongside (not instead of) the country autocomplete above.
+    try:
+        location_field = page.locator('#candidate-location')
+        if await location_field.count() > 0:
+            city = profile.get("city", "") or ""
+            country_name = profile.get("country", "Israel")
+            location_text = f"{city}, {country_name}".strip(", ")
+            await location_field.fill(location_text)
+            filled.append("candidate_location")
+            print(f"[ats-form] Filled candidate-location: {location_text}")
+    except Exception as e:
+        print(f"[ats-form] candidate-location field error: {e}")
 
     # Greenhouse old form: country-code select dropdown
     try:

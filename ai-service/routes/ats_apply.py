@@ -163,7 +163,8 @@ async def ats_apply(req: ATSApplyRequest):
         # guessing or calling Claude for things we already know.
         profile_row = await conn.fetchrow(
             'SELECT years_of_experience, expected_salary, work_authorized, requires_sponsorship, '
-            'willing_to_relocate, notice_period, portfolio_url, github_url, highest_education '
+            'willing_to_relocate, notice_period, portfolio_url, github_url, highest_education, '
+            'city, "currentCompany" '
             'FROM "User" WHERE id = $1',
             req.user_id,
         )

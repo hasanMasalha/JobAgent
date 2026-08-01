@@ -44,6 +44,7 @@ model User {
   github_url           String?
   willing_to_relocate  Boolean? @default(false)
   cover_letter_default String?
+  currentCompany       String?  @default("")
 
   cvs              CV[]
   job_preferences  JobPreference[]
