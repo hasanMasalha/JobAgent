@@ -98,6 +98,36 @@ async def _human_click(page, element) -> None:
     await element.click()
 
 
+async def _react_fill(page, selector: str, value: str) -> None:
+    """Fill an input via Playwright, then re-trigger React's native value
+    setter + synthetic input/change events on the same element.
+
+    Greenhouse forms are React-controlled components — Playwright's .fill()
+    sets the underlying DOM value directly without going through React's
+    event system, so React's internal state (and therefore client-side
+    validation on submit) can still see the field as empty even though it
+    visibly shows the typed value. Values are passed as an evaluate() arg
+    rather than interpolated into the JS source, so names/emails containing
+    quotes (e.g. "O'Brien") can't break the script.
+    """
+    el = page.locator(selector)
+    await el.click()
+    await el.fill(value)
+    await page.evaluate(
+        """([sel, val]) => {
+            const el = document.querySelector(sel);
+            if (!el) return;
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeInputValueSetter.call(el, val);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }""",
+        [selector, value],
+    )
+
+
 async def fill_ats_form(
     apply_url: str,
     first_name: str,
@@ -427,12 +457,26 @@ async def _fill_form_fields(
     filled = []
     errors = []
 
-    async def fill_field(selectors: list[str], value: str, field_name: str) -> bool:
+    async def fill_field(selectors: list[str], value: str, field_name: str, react_sync: bool = False) -> bool:
         for selector in selectors:
             try:
                 el = await page.wait_for_selector(selector, timeout=3000, state="visible")
                 if el:
                     await el.fill(value)
+                    if react_sync:
+                        # Re-trigger React's native value setter + synthetic events on
+                        # the exact element we just filled — see _react_fill for why.
+                        await el.evaluate(
+                            """(node, val) => {
+                                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                                    window.HTMLInputElement.prototype, 'value'
+                                ).set;
+                                nativeInputValueSetter.call(node, val);
+                                node.dispatchEvent(new Event('input', { bubbles: true }));
+                                node.dispatchEvent(new Event('change', { bubbles: true }));
+                            }""",
+                            value,
+                        )
                     filled.append(field_name)
                     print(f"[ats-form] Filled {field_name}")
                     return True
@@ -467,7 +511,7 @@ async def _fill_form_fields(
         'input[placeholder*="First"]',
         'input[id="first-name"]',
         'input[id*="first_name"]',
-    ], first_name, "first_name")
+    ], first_name, "first_name", react_sync=True)
 
     await _human_delay(page)
     await fill_field([
@@ -477,7 +521,7 @@ async def _fill_form_fields(
         'input[placeholder*="Last"]',
         'input[id="last-name"]',
         'input[id*="last_name"]',
-    ], last_name, "last_name")
+    ], last_name, "last_name", react_sync=True)
 
     await _human_delay(page)
     await fill_field([
@@ -486,7 +530,7 @@ async def _fill_form_fields(
         'input[name="email"]',
         'input[type="email"]',
         'input[id*="email"]',
-    ], email, "email")
+    ], email, "email", react_sync=True)
 
     # Country: React-controlled autocomplete — must use keyboard events so React
     # registers state changes. fill() bypasses synthetic events and gets overwritten.
@@ -552,7 +596,7 @@ async def _fill_form_fields(
             city = profile.get("city", "") or ""
             country_name = profile.get("country", "Israel")
             location_text = f"{city}, {country_name}".strip(", ")
-            await location_field.fill(location_text)
+            await _react_fill(page, "#candidate-location", location_text)
             filled.append("candidate_location")
             print(f"[ats-form] Filled candidate-location: {location_text}")
 
@@ -612,6 +656,19 @@ async def _fill_form_fields(
                 )
                 filled.append("phone")
                 print(f"[ats-form] Typed phone: {clean_phone!r} → field value: '{val}'")
+
+                # ITI (intl-tel-input) wraps the real input in its own JS
+                # widget — re-dispatch events so React's controlled state
+                # (and ITI's own internal formatting) actually picks up the
+                # typed value rather than reverting on blur.
+                await page.evaluate("""
+                    const phoneInput = document.querySelector('#phone');
+                    if (phoneInput) {
+                        phoneInput.dispatchEvent(new Event('input', {bubbles: true}));
+                        phoneInput.dispatchEvent(new Event('change', {bubbles: true}));
+                        phoneInput.dispatchEvent(new Event('blur', {bubbles: true}));
+                    }
+                """)
         except Exception as e:
             print(f"[ats-form] Phone type error: {e}")
 
