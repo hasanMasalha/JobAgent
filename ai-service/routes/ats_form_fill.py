@@ -555,6 +555,11 @@ async def _fill_form_fields(
             await location_field.fill(location_text)
             filled.append("candidate_location")
             print(f"[ats-form] Filled candidate-location: {location_text}")
+
+            # Verify the value actually stuck — some Greenhouse boards wrap
+            # this in a JS-controlled autocomplete that silently reverts fill().
+            val = await page.locator("#candidate-location").input_value()
+            print(f"[ats-form] candidate-location value: {val!r}")
     except Exception as e:
         print(f"[ats-form] candidate-location field error: {e}")
 
@@ -828,13 +833,31 @@ async def _fill_form_fields(
         print("[ats-form] Clicking submit button...")
         await _human_click(page, submit_btn)
         print(f"[ats-form] Clicked. URL immediately: {page.url}")
-        await page.wait_for_timeout(10000)
+        await page.wait_for_timeout(15000)
         url_after = page.url
-        print(f"[ats-form] URL after 10s: {url_after}")
+        print(f"[ats-form] URL after 15s: {url_after}")
 
         screenshot_path = f"/tmp/post_submit_{int(time.time())}.png"
         await page.screenshot(path=screenshot_path, full_page=True)
         print(f"[ats-form] Post-submit screenshot: {screenshot_path}")
+
+        # Check for field validation errors
+        error_elements = await page.locator(
+            '.error, .field-error, [class*="error"], '
+            '[aria-invalid="true"], .invalid-feedback'
+        ).all()
+        for el in error_elements:
+            try:
+                text = await el.inner_text()
+                if text.strip():
+                    print(f"[ats-form] VALIDATION ERROR: {text.strip()[:100]}")
+            except Exception:
+                pass
+
+        # Save the full page HTML after submit for debugging
+        html = await page.content()
+        print("[ats-form] POST-SUBMIT HTML (first 3000):")
+        print(html[:3000])
 
         page_text = await page.inner_text("body")
         print(f"[ats-form] FULL page text length: {len(page_text)}")
