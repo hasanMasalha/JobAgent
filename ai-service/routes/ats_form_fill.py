@@ -98,34 +98,26 @@ async def _human_click(page, element) -> None:
     await element.click()
 
 
-async def _react_fill(page, selector: str, value: str) -> None:
-    """Fill an input via Playwright, then re-trigger React's native value
-    setter + synthetic input/change events on the same element.
+async def react_fill(page, locator, value: str) -> None:
+    """Click, clear, then type a value character-by-character.
 
     Greenhouse forms are React-controlled components — Playwright's .fill()
     sets the underlying DOM value directly without going through React's
     event system, so React's internal state (and therefore client-side
     validation on submit) can still see the field as empty even though it
-    visibly shows the typed value. Values are passed as an evaluate() arg
-    rather than interpolated into the JS source, so names/emails containing
-    quotes (e.g. "O'Brien") can't break the script.
+    visibly shows the typed value. .type() dispatches real per-character
+    keyboard events through the browser's own input pipeline, the same path
+    a real user's typing takes, so React picks up the change naturally.
     """
-    el = page.locator(selector)
-    await el.click()
-    await el.fill(value)
-    await page.evaluate(
-        """([sel, val]) => {
-            const el = document.querySelector(sel);
-            if (!el) return;
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype, 'value'
-            ).set;
-            nativeInputValueSetter.call(el, val);
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-        }""",
-        [selector, value],
-    )
+    await locator.click()
+    await locator.fill("")
+    await locator.type(value, delay=50)
+    await page.wait_for_timeout(100)
+
+
+async def _react_fill(page, selector: str, value: str) -> None:
+    """Same as react_fill, but takes a selector string instead of a locator."""
+    await react_fill(page, page.locator(selector), value)
 
 
 async def fill_ats_form(
@@ -462,21 +454,14 @@ async def _fill_form_fields(
             try:
                 el = await page.wait_for_selector(selector, timeout=3000, state="visible")
                 if el:
-                    await el.fill(value)
                     if react_sync:
-                        # Re-trigger React's native value setter + synthetic events on
-                        # the exact element we just filled — see _react_fill for why.
-                        await el.evaluate(
-                            """(node, val) => {
-                                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                                    window.HTMLInputElement.prototype, 'value'
-                                ).set;
-                                nativeInputValueSetter.call(node, val);
-                                node.dispatchEvent(new Event('input', { bubbles: true }));
-                                node.dispatchEvent(new Event('change', { bubbles: true }));
-                            }""",
-                            value,
-                        )
+                        # Type char-by-char instead of .fill() — see react_fill for why.
+                        await el.click()
+                        await el.fill("")
+                        await el.type(value, delay=50)
+                        await page.wait_for_timeout(100)
+                    else:
+                        await el.fill(value)
                     filled.append(field_name)
                     print(f"[ats-form] Filled {field_name}")
                     return True
@@ -749,7 +734,10 @@ async def _fill_form_fields(
                 answer = await _ask_claude_for_answer(label_text, cv_text, profile)
 
             try:
-                await q.fill(answer)
+                await q.click()
+                await q.fill("")
+                await q.type(answer, delay=50)
+                await page.wait_for_timeout(100)
                 filled.append(f"custom_{q_id}")
                 print(f"[ats-form] Filled custom question {q_id} ({label_text!r}): {answer!r}")
             except Exception as e:
@@ -831,7 +819,10 @@ async def _fill_form_fields(
 
     for field_id in eeo_field_ids:
         try:
-            select = page.locator(f'select#{field_id}')
+            # CSS ID selectors can't start with a digit (#430 is invalid
+            # syntax per the CSS spec) — these numeric Greenhouse field ids
+            # need the attribute-selector form instead.
+            select = page.locator(f'select[id="{field_id}"]')
             if await select.count() == 0:
                 continue
 
