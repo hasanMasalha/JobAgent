@@ -198,7 +198,9 @@ jobs:
               "PADDLE_PRO_MONTHLY_PRICE_ID=${{ secrets.PADDLE_PRO_MONTHLY_PRICE_ID }}" \
               "PADDLE_PRO_ANNUAL_PRICE_ID=${{ secrets.PADDLE_PRO_ANNUAL_PRICE_ID }}" \
               "PADDLE_UNLIMITED_MONTHLY_PRICE_ID=${{ secrets.PADDLE_UNLIMITED_MONTHLY_PRICE_ID }}" \
-              "PADDLE_UNLIMITED_ANNUAL_PRICE_ID=${{ secrets.PADDLE_UNLIMITED_ANNUAL_PRICE_ID }}"; do
+              "PADDLE_UNLIMITED_ANNUAL_PRICE_ID=${{ secrets.PADDLE_UNLIMITED_ANNUAL_PRICE_ID }}" \
+              "NEXTJS_URL=http://nextjs:3000" \
+              "INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}"; do
               key="${entry%%=*}"
               if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
                 sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env
