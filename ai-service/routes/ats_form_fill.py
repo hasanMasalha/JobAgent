@@ -762,6 +762,67 @@ async def _fill_form_fields(
     except Exception as e:
         print(f"[ats-form] referral select: {e}")
 
+    # ── EEO demographic fields (gender, race, veteran, disability) ───────────
+    # Greenhouse renders these as native <select> elements with short numeric
+    # ids (e.g. #430 gender, #431 race/ethnicity, #432 veteran status,
+    # #433 disability status). These are voluntary EEO self-identification
+    # questions — "Decline to self-identify" is always one of the options
+    # Greenhouse itself offers, so selecting it never fabricates or guesses
+    # an actual answer about the candidate.
+    eeo_field_ids = ["430", "431", "432", "433", "434", "436"]
+    decline_phrases = ("decline", "prefer not", "don't wish", "not to disclose")
+
+    for field_id in eeo_field_ids:
+        try:
+            select = page.locator(f'select#{field_id}')
+            if await select.count() == 0:
+                continue
+
+            option_labels = await select.locator("option").all_inner_texts()
+            decline_label = next(
+                (label for label in option_labels if any(p in label.lower() for p in decline_phrases)),
+                None,
+            )
+
+            try:
+                if decline_label:
+                    await select.select_option(label=decline_label)
+                    print(f"[ats-form] EEO field {field_id}: selected {decline_label!r}")
+                elif option_labels:
+                    await select.select_option(index=0)
+                    print(f"[ats-form] EEO field {field_id}: no decline option found, selected first option {option_labels[0]!r}")
+                filled.append(f"eeo_{field_id}")
+                continue
+            except Exception as e:
+                print(f"[ats-form] EEO field {field_id}: select_option failed ({e}), falling back to JS value set")
+
+            # Fallback for boards where this is a JS/React-controlled select
+            # that Playwright's select_option can't drive directly — force
+            # the value and dispatch real events so the framework's state
+            # actually updates (a bare `.value =` assignment gets silently
+            # reverted otherwise, same lesson as the country field above).
+            await page.evaluate(
+                """(fieldId) => {
+                    const select = document.getElementById(fieldId);
+                    if (!select) return;
+                    const options = Array.from(select.options);
+                    const decline = options.find(o =>
+                        o.text.toLowerCase().includes('decline') ||
+                        o.text.toLowerCase().includes('prefer not') ||
+                        o.text.toLowerCase().includes("don't wish") ||
+                        o.text.toLowerCase().includes('not to disclose')
+                    );
+                    select.value = decline ? decline.value : (options[0] ? options[0].value : select.value);
+                    select.dispatchEvent(new Event('input', { bubbles: true }));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                field_id,
+            )
+            filled.append(f"eeo_{field_id}")
+            print(f"[ats-form] EEO field {field_id}: set via JS fallback")
+        except Exception as e:
+            print(f"[ats-form] EEO field {field_id} error: {e}")
+
     # ── Pre-submit field value dump ───────────────────────────────────────────
 
     print("[ats-form] ── PRE-SUBMIT FIELD VALUES ─────────────────────────────")
