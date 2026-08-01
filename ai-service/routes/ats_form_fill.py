@@ -3,6 +3,7 @@ import os
 import random
 import tempfile
 import time
+from urllib.parse import parse_qs, urlsplit
 
 import anthropic
 from playwright.async_api import async_playwright
@@ -1021,6 +1022,21 @@ async def _fill_form_fields(
         print(page_text[:1000])
         page_text_lower = page_text.lower()
 
+        # A bare "?" appended to the same path (some Greenhouse boards redirect
+        # back to the listing this way when a submit actually fails silently)
+        # is NOT evidence of success — only a genuine path change or a new,
+        # non-empty query parameter counts.
+        before_parts = urlsplit(url_before)
+        after_parts = urlsplit(url_after)
+        path_changed = after_parts.path.rstrip("/") != before_parts.path.rstrip("/")
+        before_query_keys = set(parse_qs(before_parts.query).keys())
+        after_query = parse_qs(after_parts.query)
+        has_new_meaningful_query_param = any(
+            key not in before_query_keys and any(v.strip() for v in values)
+            for key, values in after_query.items()
+        )
+        url_indicates_success = path_changed or has_new_meaningful_query_param
+
         # ── Greenhouse email verification challenge ───────────────────────────
         verification_signals = [
             "security code",
@@ -1046,10 +1062,16 @@ async def _fill_form_fields(
             print(f"[ats-form] SUCCESS — URL indicates confirmation: {url_after}")
             return {"success": True, "filled": filled, "message": "Application submitted (URL confirmation)"}
 
-        # ── URL changed to anything different ─────────────────────────────────
-        if url_after != url_before:
-            print(f"[ats-form] URL changed after submit: {url_before} → {url_after}")
+        # ── URL changed to a genuinely different path, or gained a real query param ──
+        if url_indicates_success:
+            reason = "path changed" if path_changed else "gained a new query parameter"
+            print(f"[ats-form] SUCCESS — URL {reason}: {url_before} → {url_after}")
             return {"success": True, "filled": filled, "message": "Application submitted (URL changed)"}
+        elif url_after != url_before:
+            print(
+                f"[ats-form] URL changed but only by a bare '?' or empty query param — "
+                f"not treating as success: {url_before} → {url_after}"
+            )
 
         # ── Explicit text success signals ─────────────────────────────────────
         success_signals = [
@@ -1113,29 +1135,11 @@ async def _fill_form_fields(
                 "errors": errors,
             }
 
-        # ── No explicit confirmation, but the submit likely went through ──────
-        # Some Greenhouse boards redirect back to the job listing URL with a
-        # trailing "?" (or other query params) instead of showing a "thank you"
-        # page — no error, no confirmation text, just silence. If we filled the
-        # core required fields and clicked submit, and the URL either changed
-        # or now carries query params it didn't have before, treat that as a
-        # likely-successful submission rather than an unknown failure.
-        core_fields_filled = all(f in filled for f in ("first_name", "last_name", "email", "resume"))
-        url_has_query_params = "?" in url_after
-        if core_fields_filled and (url_after != url_before or url_has_query_params):
-            print(
-                f"[ats-form] No explicit confirmation, but form was filled and URL suggests "
-                f"a submit happened (before={url_before!r} after={url_after!r}) — "
-                f"treating as likely submitted"
-            )
-            return {
-                "success": True,
-                "status": "pending_verification",
-                "filled": filled,
-                "message": "Form was submitted but confirmation could not be verified — check your email or the job portal to confirm.",
-            }
-
         # ── Unknown state — no confirmation signals found ─────────────────────
+        # A bare "?" URL change with no path change and no meaningful query
+        # value lands here rather than being guessed as a success — genuinely
+        # inconclusive outcomes surface as pending_verification (not failed)
+        # via ats_apply.py's unknown_state handling instead.
         print("[ats-form] No confirmation signals found — unknown state")
         return {
             "success": False,
