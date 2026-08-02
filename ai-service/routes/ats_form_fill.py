@@ -970,22 +970,49 @@ async def _fill_greenhouse_form(
         'input[type="file"]',
     ]
 
-    # Try setting the file directly on the input first, without clicking any
-    # trigger — clicking a decorative "Attach" overlay can steal focus or
-    # briefly detach/replace the real input right as set_input_files() is
-    # about to run. set_input_files() doesn't need the input visible or
-    # clicked; it only needs the element to exist in the DOM.
-    direct_resume_input = page.locator('input[type="file"]#resume')
-    if await direct_resume_input.count() > 0:
-        try:
-            await direct_resume_input.set_input_files(cv_path)
-            filled.append("resume")
-            print("[ats-form] Set resume directly on input")
-        except Exception as e:
-            print(f"[ats-form] Direct resume set failed: {e}")
-    else:
-        # Fallback: click the visible trigger first (Greenhouse hides the
-        # real input behind it on some boards), then try the usual
+    # Diagnostic: enumerate every file input on the page. There have been
+    # repeated "resume not attaching" reports despite #resume existing and
+    # set_input_files() succeeding — this tells us on the next real run
+    # whether #resume is actually the input Greenhouse reads from, or
+    # whether there's a second/decoy file input we're missing entirely.
+    file_inputs = await page.locator('input[type="file"]').all()
+    print(f"[ats-form] Found {len(file_inputs)} file input(s) on page")
+    for i, inp in enumerate(file_inputs):
+        inp_id = await inp.get_attribute("id")
+        inp_name = await inp.get_attribute("name")
+        print(f"[ats-form] File input {i}: id={inp_id!r} name={inp_name!r}")
+
+    # set_input_files() sets files via CDP, not via JS assignment — it does
+    # NOT require the input to be visible (unlike .fill()/.click(), it skips
+    # the standard visibility actionability check entirely), so a hidden
+    # input behind a styled "Attach" button is not on its own a reason this
+    # would fail. Try the direct locators first; only fall back to clicking
+    # a visible trigger button if none of them exist in the DOM at all.
+    resume_direct_locators = [
+        page.locator('input[type="file"]#resume'),
+        page.locator('input[type="file"][name="resume"]'),
+        page.locator('input[type="file"]').first,
+    ]
+    resume_set = False
+    for locator in resume_direct_locators:
+        if await locator.count() > 0:
+            try:
+                await locator.set_input_files(cv_path, no_wait_after=True)
+                await page.wait_for_timeout(1000)
+                files_count = await locator.evaluate("el => el.files ? el.files.length : 0")
+                print(f"[ats-form] set_input_files via {locator!r} -> files.length={files_count}")
+                if files_count > 0:
+                    filled.append("resume")
+                    resume_set = True
+                    print("[ats-form] Resume attached successfully")
+                    break
+            except Exception as e:
+                print(f"[ats-form] set_input_files via {locator!r} failed: {e}")
+
+    if not resume_set:
+        # No file input matched anything, or files.length stayed 0 for all
+        # of them — try clicking the visible trigger first (Greenhouse hides
+        # the real input behind it on some boards) before the usual
         # multi-selector upload.
         try:
             upload_btn = await page.query_selector(
@@ -1110,9 +1137,34 @@ async def _fill_greenhouse_form(
 
     # ── Custom questions (Greenhouse question_XXXXXXX fields) ────────────────
 
+    # Diagnostic: dump every input/select/textarea on the page before
+    # matching on `[id^="question_"]`. If custom questions are showing
+    # empty, this is how we tell whether the selector genuinely isn't
+    # matching this board's field ids (some non-Greenhouse boards behind
+    # this same function — workable/bamboohr/comeet/teamtailor/ashby — use
+    # a completely different id scheme) versus the fields matching fine but
+    # the answer not sticking.
+    all_inputs = await page.evaluate(
+        """() => {
+            const result = [];
+            document.querySelectorAll('input, select, textarea').forEach(el => {
+                result.push({
+                    id: el.id,
+                    name: el.name,
+                    type: el.type || el.tagName,
+                    value: el.value,
+                    placeholder: el.placeholder,
+                });
+            });
+            return result;
+        }"""
+    )
+    print(f"[ats-form] ALL inputs before custom-question fill: {all_inputs}")
+
     custom_questions = await page.query_selector_all(
         'input[id^="question_"], textarea[id^="question_"], select[id^="question_"]'
     )
+    print(f"[ats-form] Matched {len(custom_questions)} custom question field(s) via [id^='question_']")
     for q in custom_questions:
         q_id = await q.get_attribute("id") or ""
         tag_name = await q.evaluate("el => el.tagName.toLowerCase()")
