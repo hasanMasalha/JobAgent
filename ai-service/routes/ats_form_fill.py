@@ -849,12 +849,14 @@ async def _fill_greenhouse_form(
 
     # Candidate location — separate free-text field some Greenhouse boards show
     # alongside (not instead of) the country autocomplete above.
+    city = profile.get("city", "") or ""
+    country_name = profile.get("country", "Israel")
+    location_text = f"{city}, {country_name}".strip(", ")
+    candidate_location_found = False
     try:
         location_field = page.locator('#candidate-location')
         if await location_field.count() > 0:
-            city = profile.get("city", "") or ""
-            country_name = profile.get("country", "Israel")
-            location_text = f"{city}, {country_name}".strip(", ")
+            candidate_location_found = True
             await _react_fill(page, "#candidate-location", location_text)
             filled.append("candidate_location")
             print(f"[ats-form] Filled candidate-location: {location_text}")
@@ -865,6 +867,27 @@ async def _fill_greenhouse_form(
             print(f"[ats-form] candidate-location value: {val!r}")
     except Exception as e:
         print(f"[ats-form] candidate-location field error: {e}")
+
+    # Some boards use a differently-named city/location field instead of
+    # #candidate-location — only try these if that one wasn't found, so we
+    # don't double-fill the same location under two different selectors.
+    if not candidate_location_found:
+        for selector in [
+            "#location",
+            'input[placeholder*="city" i]',
+            'input[placeholder*="location" i]',
+            'input[name*="location" i]',
+        ]:
+            try:
+                loc = page.locator(selector)
+                if await loc.count() > 0:
+                    el = await loc.first.element_handle()
+                    await _type_into_element(page, el, location_text)
+                    filled.append("location")
+                    print(f"[ats-form] Filled location via {selector!r}: {location_text}")
+                    break
+            except Exception as e:
+                print(f"[ats-form] location field {selector!r} error: {e}")
 
     # Greenhouse old form: country-code select dropdown
     try:
@@ -956,6 +979,7 @@ async def _fill_greenhouse_form(
                     '.iti',
                     '#phone',  # click phone first — some ITI builds only mount the widget on focus
                 ]
+                israel_selected = False
                 for iti_sel in iti_selectors:
                     try:
                         el = await page.query_selector(iti_sel)
@@ -971,10 +995,33 @@ async def _fill_greenhouse_form(
                             await israel_option.click()
                             await page.wait_for_timeout(200)
                             print(f"[ats-form] ITI: selected Israel via {iti_sel!r} click")
+                            israel_selected = True
                             break
                         print(f"[ats-form] ITI: clicked {iti_sel!r}, no Israel option found in dropdown")
                     except Exception as e:
                         print(f"[ats-form] ITI: {iti_sel!r} click failed: {e}")
+
+                if not israel_selected:
+                    # None of our selectors matched a clickable "Israel"
+                    # element in the opened list — instead of matching
+                    # markup, drive the dropdown's own keyboard type-ahead
+                    # (the same accessibility feature a native <select>
+                    # supports): open the flag, type the country name, and
+                    # press Enter to select whatever it lands on.
+                    try:
+                        flag = page.locator('.iti__selected-flag').first
+                        if await flag.count() > 0:
+                            await flag.click()
+                            await page.wait_for_timeout(500)
+                            await page.keyboard.type("Israel")
+                            await page.wait_for_timeout(500)
+                            await page.keyboard.press("Enter")
+                            await page.wait_for_timeout(300)
+                            print("[ats-form] ITI: selected Israel via keyboard type-ahead")
+                        else:
+                            print("[ats-form] ITI: keyboard fallback skipped — .iti__selected-flag not found")
+                    except Exception as e:
+                        print(f"[ats-form] ITI: keyboard type-ahead fallback failed: {e}")
 
                 flag_count = await page.locator(
                     '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
@@ -1058,6 +1105,23 @@ async def _fill_greenhouse_form(
                     filled.append("resume")
                     resume_set = True
                     print("[ats-form] Resume attached successfully")
+                    # set_input_files() goes through CDP, which does fire a
+                    # real trusted change/input event in normal cases — but
+                    # some React uploaders attach their handler after their
+                    # own async init, missing that first event. A follow-up
+                    # dispatch is cheap insurance so React's own UI (e.g. a
+                    # "resume.pdf attached" label) picks up the file too, not
+                    # just el.files itself.
+                    try:
+                        await locator.evaluate(
+                            """(el) => {
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }"""
+                        )
+                        print("[ats-form] Re-dispatched change/input for resume input")
+                    except Exception as e:
+                        print(f"[ats-form] Resume change/input re-dispatch failed (non-fatal): {e}")
                     break
             except Exception as e:
                 print(f"[ats-form] set_input_files via {locator!r} failed: {e}")
