@@ -361,33 +361,56 @@ async def _fill_lever_form(
     # explicitly (rather than relying on the generic Yes/No fallback below)
     # since a required field left on its default/blank value can be exactly
     # what triggers a Lever verification error on submit.
+    #
+    # "SAP" appears in the field's LABEL, not in the select's own options
+    # (which are just "Select.../No/Yes") — get_by_label is the correct,
+    # purpose-built way to find a control by its associated label text, so
+    # it's tried first.
+    sap_done = False
     try:
-        sap_select = await page.query_selector('select[name*="sap" i], select[id*="sap" i]')
-        if not sap_select:
-            for sel in await page.query_selector_all("select"):
-                sel_id = await sel.get_attribute("id") or ""
-                label_text = ""
-                if sel_id:
-                    label_el = await page.query_selector(f'label[for="{sel_id}"]')
-                    if label_el:
-                        label_text = (await label_el.inner_text()).strip().lower()
-                option_texts = " ".join(
-                    (await opt.inner_text()).strip().lower()
-                    for opt in await sel.query_selector_all("option")
-                )
-                if "sap" in label_text or "sap" in option_texts:
-                    sap_select = sel
-                    break
-        if sap_select:
-            for opt in await sap_select.query_selector_all("option"):
-                if (await opt.inner_text()).strip().lower() == "no":
-                    val = await opt.get_attribute("value") or ""
-                    await sap_select.select_option(value=val)
-                    filled.append("sap_employee_status")
-                    print("[ats-form] Lever: selected 'No' for SAP employee status")
-                    break
+        sap_label_locator = page.get_by_label("Are you a current SAP employee?")
+        if await sap_label_locator.count() > 0:
+            await sap_label_locator.select_option(label="No")
+            filled.append("sap_employee_status")
+            print("[ats-form] Lever: SAP status set to No")
+            sap_done = True
     except Exception as e:
-        print(f"[ats-form] Lever: SAP employee status field error: {e}")
+        print(f"[ats-form] Lever: get_by_label SAP lookup failed: {e}")
+
+    if not sap_done:
+        try:
+            sap_select = await page.query_selector('select[name*="sap" i], select[id*="sap" i]')
+            if not sap_select:
+                for sel in await page.query_selector_all("select"):
+                    sel_id = await sel.get_attribute("id") or ""
+                    label_text = ""
+                    if sel_id:
+                        label_el = await page.query_selector(f'label[for="{sel_id}"]')
+                        if label_el:
+                            label_text = (await label_el.inner_text()).strip().lower()
+
+                    # Collect option texts with an explicit loop, not a
+                    # generator expression — `await` inside a generator's
+                    # element clause can't be consumed by a plain str.join()
+                    # (this was the "can only join an iterable" bug).
+                    option_text_parts = []
+                    for opt in await sel.query_selector_all("option"):
+                        option_text_parts.append((await opt.inner_text()).strip().lower())
+                    option_texts = " ".join(option_text_parts)
+
+                    if "sap" in label_text or "employee" in label_text or "sap" in option_texts:
+                        sap_select = sel
+                        break
+            if sap_select:
+                for opt in await sap_select.query_selector_all("option"):
+                    if (await opt.inner_text()).strip().lower() == "no":
+                        val = await opt.get_attribute("value") or ""
+                        await sap_select.select_option(value=val)
+                        filled.append("sap_employee_status")
+                        print("[ats-form] Lever: SAP status set to No")
+                        break
+        except Exception as e:
+            print(f"[ats-form] Lever: SAP employee status field error: {e}")
 
     # Dropdowns — pick "No" for employee-status questions, first option otherwise
     try:
