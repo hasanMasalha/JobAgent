@@ -261,7 +261,8 @@ async def fill_ats_form(
 
             if "lever.co" in apply_url:
                 result = await _fill_lever_form(
-                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url
+                    page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url,
+                    profile or {},
                 )
             else:
                 result = await _fill_form_fields(
@@ -288,6 +289,7 @@ async def _fill_lever_form(
     cv_path: str,
     cover_letter: str,
     linkedin_url: str,
+    profile: dict,
 ) -> dict:
     """Fill Lever-specific application form (lever.co)."""
 
@@ -310,6 +312,15 @@ async def _fill_lever_form(
     await _try_fill('input[name="name"]', full_name, "name")
     await _try_fill('input[name="email"]', email, "email")
     await _try_fill('input[name="phone"]', phone or "", "phone")
+
+    # Current location — required on many Lever boards; leaving it empty can
+    # trigger "There was an error verifying your application" on submit.
+    location = (profile or {}).get("city") or "Israel"
+    await _try_fill(
+        'input[name="location"], input[placeholder*="location" i], input[placeholder*="city" i]',
+        location,
+        "location",
+    )
 
     # Resume upload
     try:
@@ -345,6 +356,38 @@ async def _fill_lever_form(
             print("[ats-form] Lever: filled cover letter")
     except Exception:
         pass
+
+    # SAP-specific "Are you a current SAP employee?" dropdown — answered
+    # explicitly (rather than relying on the generic Yes/No fallback below)
+    # since a required field left on its default/blank value can be exactly
+    # what triggers a Lever verification error on submit.
+    try:
+        sap_select = await page.query_selector('select[name*="sap" i], select[id*="sap" i]')
+        if not sap_select:
+            for sel in await page.query_selector_all("select"):
+                sel_id = await sel.get_attribute("id") or ""
+                label_text = ""
+                if sel_id:
+                    label_el = await page.query_selector(f'label[for="{sel_id}"]')
+                    if label_el:
+                        label_text = (await label_el.inner_text()).strip().lower()
+                option_texts = " ".join(
+                    (await opt.inner_text()).strip().lower()
+                    for opt in await sel.query_selector_all("option")
+                )
+                if "sap" in label_text or "sap" in option_texts:
+                    sap_select = sel
+                    break
+        if sap_select:
+            for opt in await sap_select.query_selector_all("option"):
+                if (await opt.inner_text()).strip().lower() == "no":
+                    val = await opt.get_attribute("value") or ""
+                    await sap_select.select_option(value=val)
+                    filled.append("sap_employee_status")
+                    print("[ats-form] Lever: selected 'No' for SAP employee status")
+                    break
+    except Exception as e:
+        print(f"[ats-form] Lever: SAP employee status field error: {e}")
 
     # Dropdowns — pick "No" for employee-status questions, first option otherwise
     try:
@@ -393,6 +436,66 @@ async def _fill_lever_form(
             return {"success": True, "filled": filled, "ats": "lever"}
         return None
 
+    async def _check_lever_error() -> str | None:
+        page_text = await page.inner_text("body")
+        text_lower = page_text.lower()
+        if "error verifying your application" in text_lower or "please try again" in text_lower:
+            return page_text.strip()[:500]
+        return None
+
+    async def _retry_lever_submit() -> bool:
+        # Re-query fresh each attempt rather than reusing a stale ElementHandle
+        # — the original "Element is not visible" failure came from clicking a
+        # handle to a button that Lever had already replaced/repositioned
+        # after rendering the error banner.
+        print("[ats-form] Lever: error detected — waiting 2s and retrying submit")
+        await page.wait_for_timeout(2000)
+
+        for sel in ('button[type="submit"]', 'button:has-text("SUBMIT APPLICATION")'):
+            try:
+                btn = await page.query_selector(sel)
+                if btn and await btn.is_visible():
+                    await btn.click()
+                    print(f"[ats-form] Lever: retried submit via {sel!r}")
+                    await page.wait_for_timeout(4000)
+                    return True
+            except Exception as e:
+                print(f"[ats-form] Lever: retry via {sel!r} failed: {e}")
+
+        try:
+            btn = page.get_by_text("SUBMIT APPLICATION")
+            if await btn.count() > 0:
+                await btn.first.click()
+                print("[ats-form] Lever: retried submit via get_by_text")
+                await page.wait_for_timeout(4000)
+                return True
+        except Exception as e:
+            print(f"[ats-form] Lever: retry via get_by_text failed: {e}")
+
+        return False
+
+    async def _handle_lever_error() -> dict | None:
+        """Returns a failure dict if a Lever error persists after retrying,
+        a success dict if the retry actually confirmed submission, or None if
+        no error was present (caller should continue with its own fallback)."""
+        lever_error = await _check_lever_error()
+        if not lever_error:
+            return None
+
+        print(f"[ats-form] Lever: verification error detected: {lever_error[:200]}")
+        if await _retry_lever_submit():
+            ok = await _check_success()
+            if ok:
+                return ok
+            lever_error = await _check_lever_error()
+            if not lever_error:
+                # Retry click went through with no confirmation text and no
+                # error either — treat like the existing "no explicit
+                # confirmation" case rather than guessing further here.
+                return None
+
+        return {"success": False, "error": lever_error, "filled": filled, "ats": "lever"}
+
     # Try JS form.submit() first — bypasses LinkedIn iframe overlay
     try:
         submitted = await page.evaluate("""() => {
@@ -405,6 +508,9 @@ async def _fill_lever_form(
             ok = await _check_success()
             if ok:
                 return ok
+            error_result = await _handle_lever_error()
+            if error_result:
+                return error_result
     except Exception as e:
         print(f"[ats-form] Lever: JS submit error: {e}")
 
@@ -421,6 +527,9 @@ async def _fill_lever_form(
             ok = await _check_success()
             if ok:
                 return ok
+            error_result = await _handle_lever_error()
+            if error_result:
+                return error_result
             return {
                 "success": True,
                 "filled": filled,
