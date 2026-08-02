@@ -20,6 +20,16 @@ def _fast_path_answer(label_text: str, profile: dict, linkedin_url: str) -> str 
     matches, so the caller falls back to asking Claude instead of guessing."""
     label = label_text.lower()
 
+    # Standard GDPR/data-privacy consent-to-processing boilerplate — every
+    # ATS form gates submission on this, and it's not a substantive legal
+    # question (unlike background checks, non-competes, etc. below), so
+    # answering it is required just to submit the application at all.
+    # Deliberately narrow: NOT matching bare "consent"/"agree"/"terms"/
+    # "policy" here — those also show up on background-check consent,
+    # drug-testing policy, non-compete/arbitration terms, which DO carry
+    # real legal consequences and must not be auto-affirmed.
+    if any(k in label for k in ("privacy", "gdpr", "data protection")):
+        return "I agree"
     if "linkedin" in label:
         return linkedin_url or "N/A"
     if any(k in label for k in ("github", "portfolio", "personal website", "website")):
@@ -63,11 +73,18 @@ async def _ask_claude_for_answer(question: str, cv_text: str, profile: dict) -> 
         "professional response grounded in what the CV actually shows about "
         "the candidate's background and its fit with the question — do not "
         "invent employers, titles, achievements, or experience that aren't in "
-        "the CV. Never guess on questions with legal or eligibility "
+        "the CV. If the question is asking for consent to standard data "
+        "privacy/GDPR processing (mentions privacy, GDPR, or data "
+        "protection) — that's boilerplate required to submit any "
+        "application, not a substantive legal question — answer 'I agree'. "
+        "Never guess on questions with real legal or eligibility "
         "consequences (work authorization, sponsorship, criminal history, "
-        "prior termination, non-competes, and similar) — if the profile data "
-        "above doesn't cover it, answer honestly with 'Not specified' rather "
-        "than guessing Yes or No.\n\n"
+        "prior termination, non-competes, background checks, drug testing, "
+        "and similar) — if the profile data above doesn't cover it, answer "
+        "honestly with 'Not specified' rather than guessing Yes or No. This "
+        "application is submitted automatically with no human review step, "
+        "so a guessed answer here becomes a false statement submitted to "
+        "the employer under the candidate's real name.\n\n"
         f"Question: {question}\n\n"
         "Candidate profile:\n"
         f"- Years of experience: {profile.get('years_of_experience') or 'unknown'}\n"
@@ -1570,18 +1587,25 @@ async def _fill_form_fields(
         await page.screenshot(path=screenshot_path, full_page=True)
         print(f"[ats-form] Post-submit screenshot: {screenshot_path}")
 
-        # Check for field validation errors
-        error_elements = await page.locator(
-            '.error, .field-error, [class*="error"], '
-            '[aria-invalid="true"], .invalid-feedback'
-        ).all()
-        for el in error_elements:
-            try:
-                text = await el.inner_text()
-                if text.strip():
-                    print(f"[ats-form] VALIDATION ERROR: {text.strip()[:100]}")
-            except Exception:
-                pass
+        # Check for field validation errors. Named validation_error_msgs, not
+        # `errors` — this function already has an `errors` list (accumulated
+        # field-fill failures from _fill_greenhouse_form) that's returned in
+        # the final result dict; reusing that name here would silently
+        # overwrite it.
+        validation_error_msgs = await page.evaluate(
+            """() => {
+                const msgs = [];
+                document.querySelectorAll(
+                    '.error, .field-error, [class*="error"], '
+                    + '[aria-invalid="true"], .invalid-feedback, .validation-error'
+                ).forEach(el => {
+                    const txt = (el.innerText || '').trim();
+                    if (txt) msgs.push(txt);
+                });
+                return msgs;
+            }"""
+        )
+        print(f"[ats-form] Validation errors: {validation_error_msgs}")
 
         # Save the full page HTML after submit for debugging
         html = await page.content()
