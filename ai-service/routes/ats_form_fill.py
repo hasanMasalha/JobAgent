@@ -809,7 +809,8 @@ async def _fill_greenhouse_form(
                 'li.select-option:has-text("Israel"), '
                 '[role="option"]:has-text("Israel"), '
                 'li:has-text("Israel"), '
-                '.dropdown-item:has-text("Israel")'
+                '.dropdown-item:has-text("Israel"), '
+                '[class*="option"]:has-text("Israel")'
             )
             if option:
                 await option.click()
