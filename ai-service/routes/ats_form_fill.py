@@ -778,6 +778,13 @@ async def _fill_form_fields(
             }""")
             await page.wait_for_timeout(300)
             print("[ats-form] Set ITI country to IL")
+
+            flag_count = await page.locator(
+                '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
+            ).count()
+            print(f"[ats-form] ITI flag elements: {flag_count}")
+            if flag_count == 0:
+                print("[ats-form] WARNING: ITI flag not found — country code may not be set")
         except Exception as e:
             print(f"[ats-form] ITI country set error: {e}")
 
@@ -823,14 +830,57 @@ async def _fill_form_fields(
     except Exception:
         pass
 
-    await upload_file([
+    resume_upload_selectors = [
         "#resume",
         'input[id="resume"]',
         'input[type="file"][name="resume"]',
         'input[type="file"][id*="resume"]',
         'input[type="file"][accept*="pdf"]',
         'input[type="file"]',
-    ], cv_path, "resume")
+    ]
+    await upload_file(resume_upload_selectors, cv_path, "resume")
+
+    # Verify the browser actually registered a file — set_input_files()
+    # returning True only means Playwright found a matching element and
+    # called the API, not that Greenhouse's own JS accepted it as the real
+    # upload target (e.g. a decoy/duplicate input in the DOM).
+    try:
+        resume_field = page.locator("#resume")
+        resume_value = await resume_field.input_value() if await resume_field.count() > 0 else ""
+        print(f"[ats-form] Resume field value: {resume_value!r}")
+
+        file_display = await page.locator(
+            '[class*="filename"], [class*="file-name"], '
+            '.file-chosen, .upload-filename'
+        ).all_inner_texts()
+        print(f"[ats-form] File display: {file_display}")
+
+        if not resume_value and not any(file_display):
+            print("[ats-form] Resume upload not confirmed — retrying")
+
+            # Retry 1: click the upload trigger again, in case the first
+            # click didn't actually reveal/activate the real file input.
+            retry_btn = await page.query_selector(
+                'button:has-text("Attach"), label[for*="resume"], button:has-text("Upload")'
+            )
+            if retry_btn:
+                await retry_btn.click()
+                await page.wait_for_timeout(500)
+                print("[ats-form] Retried resume upload trigger click")
+
+            # Retry 2: re-attempt set_input_files. Note there is no such
+            # thing as "setting a file input via JS" — browsers block
+            # programmatic assignment to input.files for security, so
+            # set_input_files() (which goes through CDP, not page JS) is
+            # the only real mechanism; retrying it is the direct-input path.
+            await upload_file(resume_upload_selectors, cv_path, "resume")
+
+            resume_value = await resume_field.input_value() if await resume_field.count() > 0 else ""
+            print(f"[ats-form] Resume field value after retry: {resume_value!r}")
+            if not resume_value:
+                print("[ats-form] WARNING: Resume still not confirmed attached after retry")
+    except Exception as e:
+        print(f"[ats-form] Resume verification error: {e}")
 
     cover_letter_filled = await fill_field([
         'textarea[name="cover_letter"]',
@@ -866,15 +916,56 @@ async def _fill_form_fields(
     # ── Custom questions (Greenhouse question_XXXXXXX fields) ────────────────
 
     custom_questions = await page.query_selector_all(
-        'input[id^="question_"], textarea[id^="question_"]'
+        'input[id^="question_"], textarea[id^="question_"], select[id^="question_"]'
     )
     for q in custom_questions:
         q_id = await q.get_attribute("id") or ""
+        tag_name = await q.evaluate("el => el.tagName.toLowerCase()")
         q_type = await q.get_attribute("type") or "text"
 
         label = await page.query_selector(f'label[for="{q_id}"]')
         label_text = (await label.inner_text()).strip() if label else ""
-        print(f"[ats-form] Custom question: {q_id} — {label_text}")
+        print(f"[ats-form] Custom question: {q_id} ({tag_name}) — {label_text}")
+
+        if tag_name == "select":
+            # Dropdown-style custom questions (e.g. "How many years of X
+            # experience?") were previously skipped entirely — the selector
+            # above only matched input/textarea, so a required select-type
+            # question stayed on its blank/placeholder option forever.
+            if not label_text:
+                print(f"[ats-form] Skipping {q_id}: no label text found")
+                continue
+
+            answer = _fast_path_answer(label_text, profile, linkedin_url)
+            if answer is None:
+                print(f"[ats-form] No fast-path match for {label_text!r} — asking Claude")
+                answer = await _ask_claude_for_answer(label_text, cv_text, profile)
+
+            try:
+                option_labels = [
+                    (await opt.inner_text()).strip()
+                    for opt in await q.query_selector_all("option")
+                ]
+                match = next(
+                    (o for o in option_labels if o.lower() == answer.lower()), None
+                )
+                if not match:
+                    match = next(
+                        (o for o in option_labels
+                         if answer.lower() in o.lower() or o.lower() in answer.lower()),
+                        None,
+                    )
+                if not match and len(option_labels) > 1:
+                    match = option_labels[1]  # skip index 0 — usually a "Select..." placeholder
+                if match:
+                    await q.select_option(label=match)
+                    filled.append(f"custom_{q_id}")
+                    print(f"[ats-form] Filled custom select {q_id} ({label_text!r}): {match!r}")
+                else:
+                    print(f"[ats-form] Custom select {q_id} has no options to choose from")
+            except Exception as e:
+                print(f"[ats-form] Could not fill custom select {q_id}: {e}")
+            continue
 
         if q_type not in ("file", "checkbox", "radio", "hidden"):
             if not label_text:
@@ -894,6 +985,28 @@ async def _fill_form_fields(
                 print(f"[ats-form] Filled custom question {q_id} ({label_text!r}): {answer!r}")
             except Exception as e:
                 print(f"[ats-form] Could not fill custom question {q_id}: {e}")
+
+    # ── Verify no required fields were left empty ─────────────────────────────
+    # A final sweep across the whole form (not just the custom questions
+    # above) — catches anything required that none of the earlier steps
+    # matched, so we at least know about it before submit fails.
+    try:
+        required_empty = await page.evaluate("""
+            () => {
+                const empties = [];
+                document.querySelectorAll(
+                    'input[required], select[required], textarea[required]'
+                ).forEach(el => {
+                    if (!el.value) {
+                        empties.push({ id: el.id, type: el.type, tagName: el.tagName });
+                    }
+                });
+                return empties;
+            }
+        """)
+        print(f"[ats-form] Required empty fields: {required_empty}")
+    except Exception as e:
+        print(f"[ats-form] Could not check required fields: {e}")
 
     # ── CAPTCHA check — attempt to solve with 2captcha, bail only if unsolvable ──
     # Only targets visible user challenges. reCAPTCHA v3 (invisible) runs silently
