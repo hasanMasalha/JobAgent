@@ -144,6 +144,37 @@ async def _react_fill(page, selector: str, value: str) -> None:
     await react_fill(page, page.locator(selector), value)
 
 
+async def _type_into_element(page, element, value: str) -> None:
+    """Focus an element and type into it via real, per-character keyboard
+    events (not .fill()/value-assignment), then Tab away to blur it.
+
+    The _valueTracker trick sets element.value directly — if React
+    re-renders that field before we read it back (which a controlled
+    component does on every render, always syncing the DOM to its own
+    state), a change React never truly registered gets silently wiped back
+    to empty. Driving the browser's real input pipeline — keydown/keypress/
+    input per character, exactly like a human typing — goes through the
+    same path React's own change handling is built to observe, so there's
+    no internal tracker state to get out of sync in the first place.
+    """
+    await element.click()
+    await page.wait_for_timeout(200)
+    await page.keyboard.press("Control+A")
+    await page.keyboard.press("Delete")
+    await page.wait_for_timeout(100)
+    for char in value:
+        await page.keyboard.type(char, delay=50)
+    await page.wait_for_timeout(200)
+    await page.keyboard.press("Tab")
+    await page.wait_for_timeout(200)
+
+
+async def type_into_field(page, selector: str, value: str) -> None:
+    """Same as _type_into_element, but takes a selector string."""
+    element = await page.wait_for_selector(selector, timeout=5000)
+    await _type_into_element(page, element, value)
+
+
 async def fill_ats_form(
     apply_url: str,
     first_name: str,
@@ -611,9 +642,13 @@ async def _fill_form_fields(
                 el = await page.wait_for_selector(selector, timeout=3000, state="visible")
                 if el:
                     if react_sync:
-                        # React value-tracker trick instead of .fill() — see react_fill for why.
-                        await el.click()
-                        await _apply_react_value(page, el, value)
+                        # Real keyboard typing instead of .fill()/value-tracker — see
+                        # _type_into_element for why.
+                        await _type_into_element(page, el, value)
+                        seen_value = await page.evaluate(
+                            "(sel) => document.querySelector(sel)?.value", selector
+                        )
+                        print(f"[ats-form] After keyboard type {selector!r}: {seen_value!r}")
                     else:
                         await el.fill(value)
                     filled.append(field_name)
@@ -783,8 +818,45 @@ async def _fill_form_fields(
                 '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
             ).count()
             print(f"[ats-form] ITI flag elements: {flag_count}")
+
             if flag_count == 0:
-                print("[ats-form] WARNING: ITI flag not found — country code may not be set")
+                # The intlTelInputGlobals JS API found nothing to call —
+                # either the widget wasn't initialized yet or this board
+                # uses different class names entirely. Fall back to driving
+                # it as a real user would: click each candidate container
+                # until one opens a dropdown, then click the Israel entry.
+                print("[ats-form] WARNING: ITI flag not found via JS API — trying interactive click fallback")
+                iti_selectors = [
+                    '.iti__flag-container',
+                    '.iti__selected-flag',
+                    '[class*="iti__flag"]',
+                    '.iti',
+                    '#phone',  # click phone first — some ITI builds only mount the widget on focus
+                ]
+                for iti_sel in iti_selectors:
+                    try:
+                        el = await page.query_selector(iti_sel)
+                        if not el:
+                            continue
+                        await el.click()
+                        await page.wait_for_timeout(300)
+                        israel_option = await page.query_selector(
+                            '[data-country-code="il"], li:has-text("Israel"), '
+                            '.iti__country:has-text("Israel")'
+                        )
+                        if israel_option:
+                            await israel_option.click()
+                            await page.wait_for_timeout(200)
+                            print(f"[ats-form] ITI: selected Israel via {iti_sel!r} click")
+                            break
+                        print(f"[ats-form] ITI: clicked {iti_sel!r}, no Israel option found in dropdown")
+                    except Exception as e:
+                        print(f"[ats-form] ITI: {iti_sel!r} click failed: {e}")
+
+                flag_count = await page.locator(
+                    '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
+                ).count()
+                print(f"[ats-form] ITI flag elements after fallback: {flag_count}")
         except Exception as e:
             print(f"[ats-form] ITI country set error: {e}")
 
