@@ -258,7 +258,8 @@ async def fill_ats_form(
             await page.goto(apply_url, wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_timeout(3000)
 
-            screenshot_path = f"/tmp/ats_load_{int(time.time())}.png"
+            os.makedirs("/app/screenshots", exist_ok=True)
+            screenshot_path = f"/app/screenshots/ats_load_{int(time.time())}.png"
             await page.screenshot(path=screenshot_path, full_page=True)
             print(f"[ats-form] Screenshot saved: {screenshot_path}")
 
@@ -631,7 +632,7 @@ async def _fill_lever_form(
     return {"success": False, "error": "Lever submit failed", "filled": filled}
 
 
-async def _fill_form_fields(
+async def _fill_greenhouse_form(
     page,
     first_name: str,
     last_name: str,
@@ -643,10 +644,28 @@ async def _fill_form_fields(
     profile: dict,
     cv_text: str,
 ) -> dict:
-    """Fill form fields using common CSS selectors."""
+    """Fill a Greenhouse-shaped application form: name/email, phone+country,
+    location, resume, cover letter, custom questions, and EEO fields.
 
-    filled = []
-    errors = []
+    Selectors here (#first_name, #candidate-location, question_* ids, the
+    numeric EEO ids) are Greenhouse's specifically — this is also the fill
+    function invoked for workable/bamboohr/comeet/teamtailor/ashby since
+    none of those get their own dedicated handling, but the DOM it targets
+    is Greenhouse's. Submit + confirmation detection happens in the caller,
+    unchanged.
+
+    Returns {"filled": [...], "errors": [...]} on the normal path, or
+    {"early_result": {...full result dict...}} if an unsolvable CAPTCHA
+    means there's no point continuing to submit.
+    """
+
+    filled: list[str] = []
+    errors: list[str] = []
+
+    # Step 1: let the form finish rendering before touching any field —
+    # Greenhouse's embedded form does its own client-side init after load.
+    await page.wait_for_load_state("networkidle")
+    await page.wait_for_timeout(1000)
 
     async def fill_field(selectors: list[str], value: str, field_name: str, react_sync: bool = False) -> bool:
         for selector in selectors:
@@ -655,7 +674,9 @@ async def _fill_form_fields(
                 if el:
                     if react_sync:
                         # Real keyboard typing instead of .fill()/value-tracker — see
-                        # _type_into_element for why.
+                        # _type_into_element for why. Confirmed working for
+                        # first/last/email; don't swap back to .fill()-based
+                        # clearing, that's the exact bug this fixed.
                         await _type_into_element(page, el, value)
                         seen_value = await page.evaluate(
                             "(sel) => document.querySelector(sel)?.value", selector
@@ -687,8 +708,7 @@ async def _fill_form_fields(
         print(f"[ats-form] WARNING: Could not upload {field_name}")
         return False
 
-    # ── Standard fields ──────────────────────────────────────────────────────
-
+    # Steps 2-4: first name, last name, email
     await _human_delay(page, 300, 600)
     await fill_field([
         "#first_name",
@@ -1246,12 +1266,14 @@ async def _fill_form_fields(
         if not solved:
             print("[ats-form] CAPTCHA could not be solved automatically")
             return {
-                "success": False,
-                "error": "captcha_detected",
-                "captcha": True,
-                "captcha_type": captcha_type,
-                "filled": filled,
-                "message": f"Form has {captcha_type} — could not solve automatically",
+                "early_result": {
+                    "success": False,
+                    "error": "captcha_detected",
+                    "captcha": True,
+                    "captcha_type": captcha_type,
+                    "filled": filled,
+                    "message": f"Form has {captcha_type} — could not solve automatically",
+                }
             }
         print("[ats-form] CAPTCHA solved, continuing to submit")
 
@@ -1412,6 +1434,33 @@ async def _fill_form_fields(
         print(f"[ats-form] Pre-submit dump error: {e}")
     print("[ats-form] ────────────────────────────────────────────────────────")
 
+    return {"filled": filled, "errors": errors}
+
+
+async def _fill_form_fields(
+    page,
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    cv_path: str,
+    cover_letter: str,
+    linkedin_url: str,
+    profile: dict,
+    cv_text: str,
+) -> dict:
+    """Fill the form via _fill_greenhouse_form, then submit and detect the
+    outcome. Split in two so filling and submit-confirmation are each their
+    own function instead of one 1000+ line block."""
+
+    fill_outcome = await _fill_greenhouse_form(
+        page, first_name, last_name, email, phone, cv_path, cover_letter, linkedin_url, profile, cv_text,
+    )
+    if "early_result" in fill_outcome:
+        return fill_outcome["early_result"]
+    filled = fill_outcome["filled"]
+    errors = fill_outcome["errors"]
+
     # ── Submit ────────────────────────────────────────────────────────────────
 
     # Prefer type=submit over has-text("Apply") — the listing page also has
@@ -1443,7 +1492,8 @@ async def _fill_form_fields(
 
     if not submit_btn:
         print("[ats-form] ERROR: No visible submit button found")
-        await page.screenshot(path=f"/tmp/no_submit_{int(time.time())}.png", full_page=True)
+        os.makedirs("/app/screenshots", exist_ok=True)
+        await page.screenshot(path=f"/app/screenshots/no_submit_{int(time.time())}.png", full_page=True)
         return {"success": False, "error": "No submit button found", "filled": filled, "errors": errors}
 
     try:
@@ -1463,7 +1513,8 @@ async def _fill_form_fields(
         url_after = page.url
         print(f"[ats-form] URL after 15s: {url_after}")
 
-        screenshot_path = f"/tmp/post_submit_{int(time.time())}.png"
+        os.makedirs("/app/screenshots", exist_ok=True)
+        screenshot_path = f"/app/screenshots/post_submit_{int(time.time())}.png"
         await page.screenshot(path=screenshot_path, full_page=True)
         print(f"[ats-form] Post-submit screenshot: {screenshot_path}")
 
@@ -1641,7 +1692,8 @@ async def _fill_form_fields(
 
         if real_errors:
             print(f"[ats-form] Real field errors detected: {real_errors}")
-            err_screenshot_path = f"/tmp/form_error_{int(time.time())}.png"
+            os.makedirs("/app/screenshots", exist_ok=True)
+            err_screenshot_path = f"/app/screenshots/form_error_{int(time.time())}.png"
             await page.screenshot(path=err_screenshot_path, full_page=True)
             print(f"[ats-form] Error screenshot: {err_screenshot_path}")
             return {
