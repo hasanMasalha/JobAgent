@@ -99,21 +99,44 @@ async def _human_click(page, element) -> None:
     await element.click()
 
 
-async def react_fill(page, locator, value: str) -> None:
-    """Click, clear, then type a value character-by-character.
-
-    Greenhouse forms are React-controlled components — Playwright's .fill()
-    sets the underlying DOM value directly without going through React's
-    event system, so React's internal state (and therefore client-side
-    validation on submit) can still see the field as empty even though it
-    visibly shows the typed value. .type() dispatches real per-character
-    keyboard events through the browser's own input pipeline, the same path
-    a real user's typing takes, so React picks up the change naturally.
+async def _apply_react_value(page, element, value: str) -> None:
+    """Core of the React value-tracker trick, operating on an already-
+    resolved ElementHandle. See react_fill for why this is needed instead of
+    a plain .fill()/.type().
     """
-    await locator.click()
-    await locator.fill("")
-    await locator.type(value, delay=50)
-    await page.wait_for_timeout(100)
+    await page.evaluate(
+        """([element, value]) => {
+            const lastValue = element.value;
+            element.value = value;
+            const tracker = element._valueTracker;
+            if (tracker) {
+                tracker.setValue(lastValue);
+            }
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        }""",
+        [element, value],
+    )
+    print(f"[ats-form] React-filled: {value[:20]}")
+
+
+async def react_fill(page, locator, value: str) -> None:
+    """Fill a React-controlled input via React's own internal _valueTracker,
+    so React detects the change as if the user had typed it.
+
+    React overrides the native <input>.value setter to track state itself.
+    Plain assignment (or Playwright's .fill()) updates the DOM but leaves
+    React's tracked "last known value" unchanged; when the resulting input
+    event fires, React compares element.value against
+    _valueTracker.getValue(), sees no difference from its own perspective,
+    and skips the state update — so the form looks filled but React (and
+    therefore client-side validation on submit) still sees it as empty.
+    Calling tracker.setValue(lastValue) first forces a mismatch so React
+    processes the change for real. This is an internal React implementation
+    detail (not public API) but has been stable since React 15/16.
+    """
+    element = await locator.element_handle()
+    await _apply_react_value(page, element, value)
 
 
 async def _react_fill(page, selector: str, value: str) -> None:
@@ -588,11 +611,9 @@ async def _fill_form_fields(
                 el = await page.wait_for_selector(selector, timeout=3000, state="visible")
                 if el:
                     if react_sync:
-                        # Type char-by-char instead of .fill() — see react_fill for why.
+                        # React value-tracker trick instead of .fill() — see react_fill for why.
                         await el.click()
-                        await el.fill("")
-                        await el.type(value, delay=50)
-                        await page.wait_for_timeout(100)
+                        await _apply_react_value(page, el, value)
                     else:
                         await el.fill(value)
                     filled.append(field_name)
@@ -868,9 +889,7 @@ async def _fill_form_fields(
 
             try:
                 await q.click()
-                await q.fill("")
-                await q.type(answer, delay=50)
-                await page.wait_for_timeout(100)
+                await _apply_react_value(page, q, answer)
                 filled.append(f"custom_{q_id}")
                 print(f"[ats-form] Filled custom question {q_id} ({label_text!r}): {answer!r}")
             except Exception as e:
@@ -1003,6 +1022,28 @@ async def _fill_form_fields(
             print(f"[ats-form] EEO field {field_id}: set via JS fallback")
         except Exception as e:
             print(f"[ats-form] EEO field {field_id} error: {e}")
+
+    # ── Verify React actually picked up our values ────────────────────────────
+    # Reads element.value straight from the DOM by id — if this shows the
+    # values we filled, React's controlled state genuinely updated; if it
+    # shows blanks despite the fields visibly looking filled in a
+    # screenshot, the value-tracker trick above didn't take for that field.
+    try:
+        react_values = await page.evaluate("""
+            () => {
+                const inputs = document.querySelectorAll(
+                    'input[type="text"], input[type="email"], input[type="tel"]'
+                );
+                const result = {};
+                inputs.forEach(el => {
+                    if (el.id) result[el.id] = el.value;
+                });
+                return result;
+            }
+        """)
+        print(f"[ats-form] React state values: {react_values}")
+    except Exception as e:
+        print(f"[ats-form] Could not read back field values: {e}")
 
     # ── Pre-submit field value dump ───────────────────────────────────────────
 
