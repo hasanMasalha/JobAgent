@@ -810,7 +810,8 @@ async def _fill_greenhouse_form(
                 '[role="option"]:has-text("Israel"), '
                 'li:has-text("Israel"), '
                 '.dropdown-item:has-text("Israel"), '
-                '[class*="option"]:has-text("Israel")'
+                '[class*="option"]:has-text("Israel"), '
+                '[id*="react-select"][id*="option"]:has-text("Israel")'
             )
             if option:
                 await option.click()
@@ -824,6 +825,36 @@ async def _fill_greenhouse_form(
                 await page.wait_for_timeout(400)
                 val = await page.input_value("#country")
                 print(f"[ats-form] Country after ArrowDown+Enter: '{val}'")
+
+            # react-select-style widgets often keep the value that actually
+            # gets submitted on a second, unlabeled sibling input (the
+            # library's own hidden form-value mirror) separate from the
+            # visible #country search box — sync it in case our selection
+            # above only updated the visible one.
+            try:
+                hidden_sync_result = await page.evaluate(
+                    """() => {
+                        const country = document.querySelector('#country');
+                        if (!country) return 'no_country_el';
+                        const parent = country.parentElement;
+                        if (!parent) return 'no_parent';
+                        const synced = [];
+                        parent.querySelectorAll('input').forEach(inp => {
+                            if (inp !== country && !inp.id) {
+                                inp.value = country.value;
+                                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                                synced.push(inp.name || '(no name)');
+                            }
+                        });
+                        country.dispatchEvent(new Event('input', { bubbles: true }));
+                        country.dispatchEvent(new Event('change', { bubbles: true }));
+                        return synced;
+                    }"""
+                )
+                print(f"[ats-form] Country hidden-sibling-input sync: {hidden_sync_result}")
+            except Exception as e:
+                print(f"[ats-form] Country hidden-sibling-input sync failed: {e}")
 
             final_val = await page.input_value("#country")
             if not final_val:
