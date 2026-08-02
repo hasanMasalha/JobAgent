@@ -841,7 +841,18 @@ async def _fill_form_fields(
                     if (keys.length > 0) iti = window.intlTelInputGlobals.instances[keys[0]];
                 }
 
-                if (!iti) return 'no_instance';
+                // Some builds stash the instance directly on the element
+                // instead of (or in addition to) the global registry.
+                if (!iti && phoneEl._iti) {
+                    iti = phoneEl._iti;
+                }
+
+                if (!iti) {
+                    const flagBtn = document.querySelector(
+                        '.iti__flag-container, .iti__selected-flag'
+                    );
+                    return flagBtn ? 'no_instance_flag_found' : 'no_instance_no_flag';
+                }
                 iti.setCountry('il');
                 return 'set';
             }""")
@@ -906,6 +917,7 @@ async def _fill_form_fields(
             if phone_el:
                 await phone_el.click()
                 await page.wait_for_timeout(200)
+                await phone_el.fill("")
                 await page.keyboard.type(clean_phone, delay=50)
                 await page.wait_for_timeout(200)
                 val = await page.input_value(
@@ -929,18 +941,6 @@ async def _fill_form_fields(
         except Exception as e:
             print(f"[ats-form] Phone type error: {e}")
 
-    # Try clicking the upload trigger button first (Greenhouse hides the real input)
-    try:
-        upload_btn = await page.query_selector(
-            'button:has-text("Attach"), label[for*="resume"], button:has-text("Upload")'
-        )
-        if upload_btn:
-            await upload_btn.click()
-            await page.wait_for_timeout(500)
-            print("[ats-form] Clicked resume upload trigger")
-    except Exception:
-        pass
-
     resume_upload_selectors = [
         "#resume",
         'input[id="resume"]',
@@ -949,7 +949,36 @@ async def _fill_form_fields(
         'input[type="file"][accept*="pdf"]',
         'input[type="file"]',
     ]
-    await upload_file(resume_upload_selectors, cv_path, "resume")
+
+    # Try setting the file directly on the input first, without clicking any
+    # trigger — clicking a decorative "Attach" overlay can steal focus or
+    # briefly detach/replace the real input right as set_input_files() is
+    # about to run. set_input_files() doesn't need the input visible or
+    # clicked; it only needs the element to exist in the DOM.
+    direct_resume_input = page.locator('input[type="file"]#resume')
+    if await direct_resume_input.count() > 0:
+        try:
+            await direct_resume_input.set_input_files(cv_path)
+            filled.append("resume")
+            print("[ats-form] Set resume directly on input")
+        except Exception as e:
+            print(f"[ats-form] Direct resume set failed: {e}")
+    else:
+        # Fallback: click the visible trigger first (Greenhouse hides the
+        # real input behind it on some boards), then try the usual
+        # multi-selector upload.
+        try:
+            upload_btn = await page.query_selector(
+                'button:has-text("Attach"), label[for*="resume"], button:has-text("Upload")'
+            )
+            if upload_btn:
+                await upload_btn.click()
+                await page.wait_for_timeout(500)
+                print("[ats-form] Clicked resume upload trigger")
+        except Exception:
+            pass
+
+        await upload_file(resume_upload_selectors, cv_path, "resume")
 
     # Verify the browser actually registered a file — set_input_files()
     # returning True only means Playwright found a matching element and
@@ -1088,10 +1117,12 @@ async def _fill_form_fields(
                 answer = await _ask_claude_for_answer(label_text, cv_text, profile)
 
             try:
-                option_labels = [
-                    (await opt.inner_text()).strip()
-                    for opt in await q.query_selector_all("option")
-                ]
+                options = await q.evaluate(
+                    "el => Array.from(el.options).map(o => ({value: o.value, text: o.text}))"
+                )
+                print(f"[ats-form] Select options for {q_id}: {options}")
+                option_labels = [o["text"].strip() for o in options]
+
                 match = next(
                     (o for o in option_labels if o.lower() == answer.lower()), None
                 )
@@ -1105,6 +1136,19 @@ async def _fill_form_fields(
                     match = option_labels[1]  # skip index 0 — usually a "Select..." placeholder
                 if match:
                     await q.select_option(label=match)
+                    # select_option() already dispatches native events, but
+                    # dispatch an explicit change too — cheap insurance given
+                    # how many "reported success, React never saw it" cases
+                    # showed up for other field types in this exact file.
+                    matched_option = next((o for o in options if o["text"].strip() == match), None)
+                    if matched_option:
+                        await q.evaluate(
+                            """(el, val) => {
+                                el.value = val;
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }""",
+                            matched_option["value"],
+                        )
                     filled.append(f"custom_{q_id}")
                     print(f"[ats-form] Filled custom select {q_id} ({label_text!r}): {match!r}")
                 else:
@@ -1153,6 +1197,36 @@ async def _fill_form_fields(
         print(f"[ats-form] Required empty fields: {required_empty}")
     except Exception as e:
         print(f"[ats-form] Could not check required fields: {e}")
+
+    # ── Full required-field audit + screenshot, right before submit ──────────
+    # Saved to /app/screenshots/ — the volume docker-compose actually mounts
+    # (./ai-service/screenshots:/app/screenshots). Every other diagnostic
+    # screenshot in this file goes to /tmp, which isn't persisted or
+    # reachable after the container exits, so none of them are actually
+    # inspectable after the fact.
+    try:
+        all_required_fields = await page.evaluate("""
+            () => {
+                const fields = [];
+                document.querySelectorAll(
+                    'input[required], select[required], textarea[required]'
+                ).forEach(el => {
+                    fields.push({ id: el.id, type: el.type || el.tagName, value: el.value });
+                });
+                return fields;
+            }
+        """)
+        print(f"[ats-form] All required fields before submit: {all_required_fields}")
+    except Exception as e:
+        print(f"[ats-form] Could not list required fields: {e}")
+
+    try:
+        os.makedirs("/app/screenshots", exist_ok=True)
+        pre_submit_screenshot = f"/app/screenshots/pre_submit_{int(time.time())}.png"
+        await page.screenshot(path=pre_submit_screenshot, full_page=True)
+        print(f"[ats-form] Pre-submit screenshot saved: {pre_submit_screenshot}")
+    except Exception as e:
+        print(f"[ats-form] Could not save pre-submit screenshot: {e}")
 
     # ── CAPTCHA check — attempt to solve with 2captcha, bail only if unsolvable ──
     # Only targets visible user challenges. reCAPTCHA v3 (invisible) runs silently
