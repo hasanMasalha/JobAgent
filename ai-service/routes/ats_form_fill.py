@@ -796,14 +796,36 @@ async def _fill_greenhouse_form(
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
+            print("[ats-form] Country: clicking field")
             await country_el.click()
             await page.wait_for_timeout(300)
+
+            value_before_type = await country_el.input_value()
+            print(f"[ats-form] Country value before type: {value_before_type!r}")
+
             await page.keyboard.press("Control+a")
             await page.keyboard.press("Backspace")
             await page.wait_for_timeout(200)
+            print("[ats-form] Country: typing Israel")
             for char in "Israel":
                 await page.keyboard.type(char, delay=80)
             await page.wait_for_timeout(1500)
+
+            value_after_type = await country_el.input_value()
+            print(f"[ats-form] Country value after typing: {value_after_type!r}")
+
+            # Enumerate every currently-visible option, not just the one
+            # matching "Israel" — if this list comes back empty, the
+            # dropdown itself never rendered in headless mode, which is a
+            # completely different problem than "our text match is wrong."
+            visible_options = await page.locator('[role="option"]').all()
+            print(f"[ats-form] Country options visible: {len(visible_options)}")
+            for opt in visible_options[:5]:
+                try:
+                    opt_text = await opt.inner_text()
+                except Exception:
+                    opt_text = "<unreadable>"
+                print(f"[ats-form]   Option: {opt_text!r}")
 
             option = await page.query_selector(
                 'li.select-option:has-text("Israel"), '
@@ -855,6 +877,21 @@ async def _fill_greenhouse_form(
                 print(f"[ats-form] Country hidden-sibling-input sync: {hidden_sync_result}")
             except Exception as e:
                 print(f"[ats-form] Country hidden-sibling-input sync failed: {e}")
+
+            # Every input on the page that either has a value or has no id —
+            # narrower than the full ALL-inputs dump used for custom
+            # questions, scoped to exactly what's relevant here: did
+            # anything actually pick up "Israel" anywhere in the DOM.
+            try:
+                all_inputs_after_country = await page.evaluate(
+                    """() => Array.from(document.querySelectorAll('input'))
+                        .map(el => ({id: el.id, val: el.value, type: el.type}))
+                        .filter(x => x.val || !x.id)
+                        .slice(0, 10)"""
+                )
+                print(f"[ats-form] Inputs after country: {all_inputs_after_country}")
+            except Exception as e:
+                print(f"[ats-form] Could not dump inputs after country: {e}")
 
             final_val = await page.input_value("#country")
             if not final_val:
