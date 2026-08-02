@@ -13,6 +13,15 @@ from pydantic import BaseModel
 
 from routes.apply import _build_cv_pdf
 
+# Python fully-buffers stdout by default when it isn't attached to a TTY
+# (true under uvicorn/Docker) — a slow background thread's print()s can sit
+# in that buffer indefinitely, looking exactly like a silent hang even
+# though the thread is running fine. Line-buffer process-wide so every
+# print (in this module and everything it calls) actually reaches the logs
+# as it happens.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
+
 router = APIRouter()
 
 NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
@@ -65,14 +74,34 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
         async def _run() -> None:
             from routes.ats_submit import submit_via_ats
 
-            print("[ats-apply-bg] Calling submit_via_ats...")
-            result = await submit_via_ats(
-                apply_url=request_dict["apply_url"],
-                ats_platform=request_dict["ats_platform"],
-                user_data=request_dict["user_data"],
-            )
-            print(f"[ats-apply-bg] submit_via_ats returned: {result}")
+            print("[ats-apply-bg] Step 1: calling submit_via_ats")
+            try:
+                # asyncio.wait_for (not a second thread + asyncio.run) — we're
+                # already inside this thread's own event loop via
+                # run_until_complete below, so there's no "already running
+                # loop" conflict to work around. wait_for cancels the inner
+                # coroutine on timeout; that cancellation is a BaseException
+                # (CancelledError), so it passes straight through
+                # submit_via_ats's own `except Exception` instead of being
+                # swallowed there.
+                result = await asyncio.wait_for(
+                    submit_via_ats(
+                        apply_url=request_dict["apply_url"],
+                        ats_platform=request_dict["ats_platform"],
+                        user_data=request_dict["user_data"],
+                    ),
+                    timeout=120,
+                )
+            except asyncio.TimeoutError:
+                print("[ats-apply-bg] TIMEOUT after 120s — submit_via_ats did not complete")
+                result = {
+                    "success": False,
+                    "error": "timeout",
+                    "message": "Apply timed out after 2 minutes",
+                }
+            print(f"[ats-apply-bg] Step 2: got result: {result}")
 
+            print("[ats-apply-bg] Step 3: determining status")
             if result.get("success") and result.get("status") == "pending_verification":
                 status = "pending_verification"
                 print("[ats-apply-bg] Greenhouse email verification required")
@@ -90,12 +119,13 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                 status = "failed"
                 reason = "captcha" if (result.get("captcha") or result.get("recaptcha")) else result.get("error", "unknown")
                 print(f"[ats-apply-bg] form fill failed: {reason}")
+            print(f"[ats-apply-bg] Step 4: status determined: {status}")
 
-            print(f"[ats-apply-bg] Updating DB: {request_dict['application_id']} -> {status}")
+            print(f"[ats-apply-bg] Step 5: updating DB -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
                 if status == "failed":
-                    error_msg = result.get("error")
+                    error_msg = result.get("message") or result.get("error")
                 elif status == "pending_verification":
                     # result["message"] already distinguishes "Greenhouse emailed you a
                     # verification code" from "submitted but unconfirmed" — use it
@@ -111,12 +141,14 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                     error_msg,
                     request_dict["application_id"],
                 )
-                print(f"[ats-apply-bg] DB updated: {request_dict['application_id']} -> {status}")
+                print(f"[ats-apply-bg] Step 6: DB updated: {request_dict['application_id']} -> {status}")
             finally:
                 await conn.close()
 
             if status in ("applied", "pending_verification"):
+                print("[ats-apply-bg] Step 7: sending confirmation email")
                 await _send_application_confirmation_email(request_dict["application_id"])
+                print("[ats-apply-bg] Step 8: confirmation email step complete")
 
         loop.run_until_complete(_run())
         loop.close()
