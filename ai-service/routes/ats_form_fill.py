@@ -109,6 +109,42 @@ async def _ask_claude_for_answer(question: str, cv_text: str, profile: dict) -> 
         return "N/A"
 
 
+async def _ask_claude_to_pick_option(question: str, options: list[str], cv_text: str, profile: dict) -> str | None:
+    """Last-resort fallback for a select-type custom question whose fast-path/
+    Claude free-text answer didn't match any real option — asks Claude to
+    pick one of the actual option labels instead of defaulting to a
+    positional guess (e.g. option index 1), which can land on something
+    semantically unrelated to the real answer (a Yes/No option for a
+    field that was actually asking for a company name, for instance)."""
+    prompt = (
+        "You are filling out a dropdown field on a job application. Pick "
+        "EXACTLY one of the listed options that best answers the question, "
+        "based on the candidate's CV/profile below. Return ONLY the option "
+        "text, copied exactly as listed — no explanation, no extra words.\n\n"
+        f"Question: {question}\n\n"
+        f"Options: {options}\n\n"
+        f"Candidate current company: {profile.get('currentCompany') or 'unknown'}\n"
+        f"Years of experience: {profile.get('years_of_experience') or 'unknown'}\n\n"
+        f"CV:\n{(cv_text or '')[:2000]}"
+    )
+    try:
+        message = await asyncio.to_thread(
+            _claude_client.messages.create,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=50,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        picked = message.content[0].text.strip()
+        if picked in options:
+            print(f"[ats-form] Claude picked option {picked!r} for {question!r}")
+            return picked
+        print(f"[ats-form] Claude's pick {picked!r} isn't one of the listed options — ignoring")
+        return None
+    except Exception as e:
+        print(f"[ats-form] Claude option-pick failed for {question!r}: {e}")
+        return None
+
+
 async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
     await page.wait_for_timeout(random.randint(min_ms, max_ms))
 
@@ -1216,13 +1252,29 @@ async def _fill_greenhouse_form(
                     (o for o in option_labels if o.lower() == answer.lower()), None
                 )
                 if not match:
+                    # `len(o) >= 4` guards the o-in-answer direction only —
+                    # without it, a short generic option like "Yes"/"No" can
+                    # match by pure coincidence whenever the answer string
+                    # happens to contain that substring anywhere (e.g. a
+                    # free-text company-name answer that isn't Yes/No at all
+                    # still getting matched to a "Yes" option). The
+                    # answer-in-o direction stays unguarded since the
+                    # fast-path answers that are intentionally short
+                    # ("Yes"/"No") are meant to match this way.
                     match = next(
                         (o for o in option_labels
-                         if answer.lower() in o.lower() or o.lower() in answer.lower()),
+                         if answer.lower() in o.lower() or (len(o) >= 4 and o.lower() in answer.lower())),
                         None,
                     )
+                if not match:
+                    print(
+                        f"[ats-form] No text match for {label_text!r} answer {answer!r} "
+                        f"among options {option_labels!r} — this may not be the kind of "
+                        f"question the answer assumed; asking Claude to pick an option"
+                    )
+                    match = await _ask_claude_to_pick_option(label_text, option_labels, cv_text, profile)
                 if not match and len(option_labels) > 1:
-                    match = option_labels[1]  # skip index 0 — usually a "Select..." placeholder
+                    match = option_labels[1]  # last resort — skip index 0, usually a "Select..." placeholder
                 if match:
                     await q.select_option(label=match)
                     # select_option() already dispatches native events, but
@@ -1404,6 +1456,7 @@ async def _fill_greenhouse_form(
         "gender", "hispanic_ethnicity", "veteran_status", "disability_status",
         "430", "431", "432", "433", "434", "436",
     ]
+    eeo_set: list[str] = []
     try:
         eeo_set = await page.evaluate(
             """(eeoIds) => {
@@ -1451,6 +1504,72 @@ async def _fill_greenhouse_form(
         print(f"[ats-form] EEO values after JS set: {eeo_values}")
     except Exception as e:
         print(f"[ats-form] EEO fields JS error: {e}")
+
+    # ── EEO fields that are custom React dropdowns, not native <select> ──────
+    # The all-inputs diagnostic showed ids 430-436 as type="text" on some
+    # boards — real react-select-style widgets, where the JS pass above
+    # (which only touches actual <select> elements) never finds anything to
+    # set. Only run this for ids the native-select pass above didn't already
+    # handle — no point re-doing ids that already worked.
+    for field_id in [fid for fid in EEO_FIELD_IDS if fid not in eeo_set]:
+        try:
+            dropdown = page.locator(f'[id="{field_id}"]')
+            if await dropdown.count() == 0:
+                continue
+
+            await dropdown.click()
+            await page.wait_for_timeout(500)
+
+            option_locator = page.locator(
+                'div[role="option"], li[role="option"], [class*="option"]'
+            )
+            option_count = await option_locator.count()
+            if option_count == 0:
+                print(f"[ats-form] EEO {field_id}: clicked but no dropdown options appeared")
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(300)
+                continue
+
+            decline_option = page.locator(
+                'div[role="option"]:has-text("Decline"), '
+                'li:has-text("Decline"), '
+                '[class*="option"]:has-text("Decline"), '
+                '[class*="option"]:has-text("prefer not")'
+            ).first
+
+            if await decline_option.count() > 0:
+                await decline_option.click()
+                filled.append(f"eeo_{field_id}")
+                print(f"[ats-form] EEO {field_id}: clicked decline (React dropdown)")
+            else:
+                # Skip blank/placeholder-looking entries rather than blindly
+                # clicking whichever option happens to be first — for a
+                # div-based listbox a "Select..." placeholder can render as
+                # a real, clickable option, not just an implicit unselected
+                # native-<select> default. Blindly clicking index 0 here
+                # could otherwise assign a real (and wrong) demographic
+                # answer instead of leaving/declining the question.
+                picked = False
+                for i in range(option_count):
+                    text = (await option_locator.nth(i).inner_text()).strip()
+                    if not text or text.lower() in ("select", "select...", "choose", "choose one", "please select"):
+                        continue
+                    await option_locator.nth(i).click()
+                    filled.append(f"eeo_{field_id}")
+                    print(f"[ats-form] EEO {field_id}: clicked option {text!r} (React dropdown, no decline option found)")
+                    picked = True
+                    break
+                if not picked:
+                    print(f"[ats-form] EEO {field_id}: no usable option found among {option_count} candidates")
+
+            # Close the menu before moving to the next field — these option
+            # selectors aren't scoped to this field's dropdown (React portals
+            # often render the menu at the end of <body>), so a menu left
+            # open could get matched again while processing the next id.
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(300)
+        except Exception as e:
+            print(f"[ats-form] EEO {field_id}: React dropdown click failed: {e}")
 
     # ── Verify React actually picked up our values ────────────────────────────
     # Reads element.value straight from the DOM by id — if this shows the
