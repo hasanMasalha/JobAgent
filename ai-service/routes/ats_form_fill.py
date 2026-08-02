@@ -1150,11 +1150,14 @@ async def _fill_form_fields(
     # question ids ("430", "431"...). Handled in one JS pass rather than
     # per-id Playwright locators/select_option calls, since select_option
     # showed empty React state on submit for some boards even after
-    # reporting success — setting .value directly and dispatching the events
-    # ourselves is more reliable here. The `.options`/length guard protects
-    # against a matched element that isn't actually a native <select> (e.g.
-    # a custom-rendered dropdown reusing the same id), since such an element
-    # wouldn't have a usable `.value`/options list to set anyway.
+    # reporting success. React attaches the same _valueTracker to <select>
+    # elements as to text inputs (see _apply_react_value) — a plain
+    # `.value = x` + dispatch, with no tracker.setValue() reset, is exactly
+    # the bug that was just fixed for first/last/email, just not carried
+    # over here yet. The `.options`/length guard protects against a matched
+    # element that isn't actually a native <select> (e.g. a custom-rendered
+    # dropdown reusing the same id), since such an element wouldn't have a
+    # usable `.value`/options list to set anyway.
     # These are voluntary EEO self-identification questions — "Decline to
     # self-identify" is always one of the options Greenhouse itself offers,
     # so selecting it never fabricates or guesses an actual answer.
@@ -1168,17 +1171,21 @@ async def _fill_form_fields(
                 const setIds = [];
                 eeoIds.forEach(id => {
                     const el = document.querySelector(`select[id="${id}"]`);
-                    if (!el || !el.options || !el.options.length) return;
+                    if (!el || !el.options || el.options.length < 2) return;
                     const opts = Array.from(el.options);
                     const decline = opts.find(o =>
                         o.text.toLowerCase().includes('decline') ||
                         o.text.toLowerCase().includes('prefer not') ||
                         o.text.toLowerCase().includes("don't wish") ||
-                        o.text.toLowerCase().includes('do not wish')
+                        o.text.toLowerCase().includes('do not wish') ||
+                        o.text.toLowerCase().includes('i do not')
                     );
-                    const target = decline || opts[1] || opts[0];
+                    const target = decline || opts[1];
                     if (!target) return;
+                    const lastValue = el.value;
                     el.value = target.value;
+                    const tracker = el._valueTracker;
+                    if (tracker) tracker.setValue(lastValue);
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     el.dispatchEvent(new Event('change', { bubbles: true }));
                     setIds.push(id);
@@ -1190,6 +1197,19 @@ async def _fill_form_fields(
         for field_id in eeo_set:
             filled.append(f"eeo_{field_id}")
         print(f"[ats-form] EEO fields set via JS: {eeo_set}")
+
+        eeo_values = await page.evaluate(
+            """(eeoIds) => {
+                const result = {};
+                eeoIds.forEach(id => {
+                    const el = document.querySelector(`select[id="${id}"]`);
+                    result[id] = el ? el.value : 'NOT FOUND';
+                });
+                return result;
+            }""",
+            EEO_FIELD_IDS,
+        )
+        print(f"[ats-form] EEO values after JS set: {eeo_values}")
     except Exception as e:
         print(f"[ats-form] EEO fields JS error: {e}")
 
