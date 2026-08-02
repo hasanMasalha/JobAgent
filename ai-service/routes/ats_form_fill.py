@@ -960,68 +960,53 @@ async def _fill_form_fields(
         print(f"[ats-form] referral select: {e}")
 
     # ── EEO demographic fields (gender, race, veteran, disability) ───────────
-    # Greenhouse renders these as native <select> elements with short numeric
-    # ids (e.g. #430 gender, #431 race/ethnicity, #432 veteran status,
-    # #433 disability status). These are voluntary EEO self-identification
-    # questions — "Decline to self-identify" is always one of the options
-    # Greenhouse itself offers, so selecting it never fabricates or guesses
-    # an actual answer about the candidate.
-    eeo_field_ids = ["430", "431", "432", "433", "434", "436"]
-    decline_phrases = ("decline", "prefer not", "don't wish", "not to disclose")
-
-    for field_id in eeo_field_ids:
-        try:
-            # CSS ID selectors can't start with a digit (#430 is invalid
-            # syntax per the CSS spec) — these numeric Greenhouse field ids
-            # need the attribute-selector form instead.
-            select = page.locator(f'select[id="{field_id}"]')
-            if await select.count() == 0:
-                continue
-
-            option_labels = await select.locator("option").all_inner_texts()
-            decline_label = next(
-                (label for label in option_labels if any(p in label.lower() for p in decline_phrases)),
-                None,
-            )
-
-            try:
-                if decline_label:
-                    await select.select_option(label=decline_label)
-                    print(f"[ats-form] EEO field {field_id}: selected {decline_label!r}")
-                elif option_labels:
-                    await select.select_option(index=0)
-                    print(f"[ats-form] EEO field {field_id}: no decline option found, selected first option {option_labels[0]!r}")
-                filled.append(f"eeo_{field_id}")
-                continue
-            except Exception as e:
-                print(f"[ats-form] EEO field {field_id}: select_option failed ({e}), falling back to JS value set")
-
-            # Fallback for boards where this is a JS/React-controlled select
-            # that Playwright's select_option can't drive directly — force
-            # the value and dispatch real events so the framework's state
-            # actually updates (a bare `.value =` assignment gets silently
-            # reverted otherwise, same lesson as the country field above).
-            await page.evaluate(
-                """(fieldId) => {
-                    const select = document.getElementById(fieldId);
-                    if (!select) return;
-                    const options = Array.from(select.options);
-                    const decline = options.find(o =>
+    # Different Greenhouse boards use different id schemes for these fields —
+    # some semantic ("gender", "veteran_status"), some short numeric custom-
+    # question ids ("430", "431"...). Handled in one JS pass rather than
+    # per-id Playwright locators/select_option calls, since select_option
+    # showed empty React state on submit for some boards even after
+    # reporting success — setting .value directly and dispatching the events
+    # ourselves is more reliable here. The `.options`/length guard protects
+    # against a matched element that isn't actually a native <select> (e.g.
+    # a custom-rendered dropdown reusing the same id), since such an element
+    # wouldn't have a usable `.value`/options list to set anyway.
+    # These are voluntary EEO self-identification questions — "Decline to
+    # self-identify" is always one of the options Greenhouse itself offers,
+    # so selecting it never fabricates or guesses an actual answer.
+    EEO_FIELD_IDS = [
+        "gender", "hispanic_ethnicity", "veteran_status", "disability_status",
+        "430", "431", "432", "433", "434", "436",
+    ]
+    try:
+        eeo_set = await page.evaluate(
+            """(eeoIds) => {
+                const setIds = [];
+                eeoIds.forEach(id => {
+                    const el = document.querySelector(`select[id="${id}"]`);
+                    if (!el || !el.options || !el.options.length) return;
+                    const opts = Array.from(el.options);
+                    const decline = opts.find(o =>
                         o.text.toLowerCase().includes('decline') ||
                         o.text.toLowerCase().includes('prefer not') ||
                         o.text.toLowerCase().includes("don't wish") ||
-                        o.text.toLowerCase().includes('not to disclose')
+                        o.text.toLowerCase().includes('do not wish')
                     );
-                    select.value = decline ? decline.value : (options[0] ? options[0].value : select.value);
-                    select.dispatchEvent(new Event('input', { bubbles: true }));
-                    select.dispatchEvent(new Event('change', { bubbles: true }));
-                }""",
-                field_id,
-            )
+                    const target = decline || opts[1] || opts[0];
+                    if (!target) return;
+                    el.value = target.value;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    setIds.push(id);
+                });
+                return setIds;
+            }""",
+            EEO_FIELD_IDS,
+        )
+        for field_id in eeo_set:
             filled.append(f"eeo_{field_id}")
-            print(f"[ats-form] EEO field {field_id}: set via JS fallback")
-        except Exception as e:
-            print(f"[ats-form] EEO field {field_id} error: {e}")
+        print(f"[ats-form] EEO fields set via JS: {eeo_set}")
+    except Exception as e:
+        print(f"[ats-form] EEO fields JS error: {e}")
 
     # ── Verify React actually picked up our values ────────────────────────────
     # Reads element.value straight from the DOM by id — if this shows the
@@ -1029,8 +1014,8 @@ async def _fill_form_fields(
     # shows blanks despite the fields visibly looking filled in a
     # screenshot, the value-tracker trick above didn't take for that field.
     try:
-        react_values = await page.evaluate("""
-            () => {
+        react_values = await page.evaluate(
+            """(eeoIds) => {
                 const inputs = document.querySelectorAll(
                     'input[type="text"], input[type="email"], input[type="tel"]'
                 );
@@ -1038,9 +1023,14 @@ async def _fill_form_fields(
                 inputs.forEach(el => {
                     if (el.id) result[el.id] = el.value;
                 });
+                eeoIds.forEach(id => {
+                    const el = document.querySelector(`select[id="${id}"]`);
+                    if (el) result[id] = el.value;
+                });
                 return result;
-            }
-        """)
+            }""",
+            EEO_FIELD_IDS,
+        )
         print(f"[ats-form] React state values: {react_values}")
     except Exception as e:
         print(f"[ats-form] Could not read back field values: {e}")
