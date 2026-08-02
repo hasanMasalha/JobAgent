@@ -34,6 +34,8 @@ def _fast_path_answer(label_text: str, profile: dict, linkedin_url: str) -> str 
         return "Yes" if profile.get("willing_to_relocate") else "No"
     if "notice period" in label:
         return profile.get("notice_period") or "Immediate"
+    if any(k in label for k in ("current location", "location", "city", "based in", "where are you")):
+        return profile.get("city") or None
     if any(k in label for k in ("salary", "compensation", "expected pay")):
         return profile.get("expected_salary") or "Negotiable"
     if any(k in label for k in (
@@ -52,10 +54,20 @@ async def _ask_claude_for_answer(question: str, cv_text: str, profile: dict) -> 
     prompt = (
         "You are filling out a job application form on behalf of a candidate. "
         "Answer the question below with a SHORT, direct answer suitable for a "
-        "single form field (usually one sentence or a few words). Only use "
-        "information present in the candidate's CV or profile below — never "
-        "invent facts. If the question can't be answered from the given "
-        "information, give a brief, honest answer such as 'N/A' or 'Not specified'.\n\n"
+        "single form field (usually one sentence or a few words). Ground your "
+        "answer in the candidate's actual CV/profile below — for objective "
+        "questions with a real answer in that data (years of experience, "
+        "education, current role, skills, etc.), extract and use it directly "
+        "rather than answering vaguely. For a genuinely open-ended question "
+        "(e.g. 'why do you want this role'), you may write a brief, "
+        "professional response grounded in what the CV actually shows about "
+        "the candidate's background and its fit with the question — do not "
+        "invent employers, titles, achievements, or experience that aren't in "
+        "the CV. Never guess on questions with legal or eligibility "
+        "consequences (work authorization, sponsorship, criminal history, "
+        "prior termination, non-competes, and similar) — if the profile data "
+        "above doesn't cover it, answer honestly with 'Not specified' rather "
+        "than guessing Yes or No.\n\n"
         f"Question: {question}\n\n"
         "Candidate profile:\n"
         f"- Years of experience: {profile.get('years_of_experience') or 'unknown'}\n"
@@ -804,20 +816,47 @@ async def _fill_form_fields(
             clean_phone = "0" + clean_phone[3:]
 
         try:
-            await page.evaluate("""() => {
+            # Click the phone field first — some ITI builds only fully
+            # initialize (and register the instance getInstance() looks up)
+            # once the input has actually received focus.
+            phone_field_for_iti = page.locator('#phone, input[type="tel"]')
+            if await phone_field_for_iti.count() > 0:
+                await phone_field_for_iti.first.click()
+                await page.wait_for_timeout(500)
+
+            iti_result = await page.evaluate("""() => {
                 const phoneEl = document.querySelector('#phone, input[type="tel"]');
-                if (!phoneEl) return;
-                const iti = window.intlTelInputGlobals
+                if (!phoneEl) return 'no_phone_el';
+
+                // Primary: the documented API, keyed to this exact element.
+                let iti = window.intlTelInputGlobals
                     && window.intlTelInputGlobals.getInstance(phoneEl);
-                if (iti) { iti.setCountry('il'); }
+
+                // Fallback: getInstance() relies on a data-intl-tel-input-id
+                // attribute being set on the input, which some builds omit —
+                // in that case, reach into the instances collection directly
+                // and just take the first (usually only) one on the page.
+                if (!iti && window.intlTelInputGlobals && window.intlTelInputGlobals.instances) {
+                    const keys = Object.keys(window.intlTelInputGlobals.instances);
+                    if (keys.length > 0) iti = window.intlTelInputGlobals.instances[keys[0]];
+                }
+
+                if (!iti) return 'no_instance';
+                iti.setCountry('il');
+                return 'set';
             }""")
             await page.wait_for_timeout(300)
-            print("[ats-form] Set ITI country to IL")
+            print(f"[ats-form] Set ITI country to IL (result: {iti_result})")
 
             flag_count = await page.locator(
                 '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
             ).count()
             print(f"[ats-form] ITI flag elements: {flag_count}")
+
+            dial_code_locator = page.locator('.iti__selected-dial-code')
+            if await dial_code_locator.count() > 0:
+                dial_code_text = await dial_code_locator.first.inner_text()
+                print(f"[ats-form] Phone dial code: {dial_code_text!r}")
 
             if flag_count == 0:
                 # The intlTelInputGlobals JS API found nothing to call —
@@ -916,10 +955,18 @@ async def _fill_form_fields(
     # returning True only means Playwright found a matching element and
     # called the API, not that Greenhouse's own JS accepted it as the real
     # upload target (e.g. a decoy/duplicate input in the DOM).
-    try:
+    async def _resume_confirmed() -> bool:
         resume_field = page.locator("#resume")
         resume_value = await resume_field.input_value() if await resume_field.count() > 0 else ""
         print(f"[ats-form] Resume field value: {resume_value!r}")
+
+        files_count = 0
+        try:
+            if await resume_field.count() > 0:
+                files_count = await resume_field.evaluate("el => el.files.length")
+        except Exception:
+            pass
+        print(f"[ats-form] Resume files count: {files_count}")
 
         file_display = await page.locator(
             '[class*="filename"], [class*="file-name"], '
@@ -927,7 +974,16 @@ async def _fill_form_fields(
         ).all_inner_texts()
         print(f"[ats-form] File display: {file_display}")
 
-        if not resume_value and not any(file_display):
+        attached_indicators = await page.locator(
+            '[class*="filename"], [class*="file-name"], '
+            '.resume-filename, p:has-text(".pdf")'
+        ).count()
+        print(f"[ats-form] Resume attached indicators: {attached_indicators}")
+
+        return bool(resume_value) or files_count > 0 or any(file_display) or attached_indicators > 0
+
+    try:
+        if not await _resume_confirmed():
             print("[ats-form] Resume upload not confirmed — retrying")
 
             # Retry 1: click the upload trigger again, in case the first
@@ -947,10 +1003,28 @@ async def _fill_form_fields(
             # the only real mechanism; retrying it is the direct-input path.
             await upload_file(resume_upload_selectors, cv_path, "resume")
 
-            resume_value = await resume_field.input_value() if await resume_field.count() > 0 else ""
-            print(f"[ats-form] Resume field value after retry: {resume_value!r}")
-            if not resume_value:
-                print("[ats-form] WARNING: Resume still not confirmed attached after retry")
+            if not await _resume_confirmed():
+                # Retry 3: some upload buttons open the browser's native file
+                # picker rather than exposing a directly targetable <input
+                # type=file> — expect_file_chooser intercepts that dialog so
+                # we can supply the file without ever touching the OS UI.
+                print("[ats-form] Still not confirmed — trying file chooser fallback")
+                try:
+                    async with page.expect_file_chooser(timeout=5000) as fc_info:
+                        trigger = page.locator(
+                            'button:has-text("Attach"), [class*="upload"], #resume-upload-trigger'
+                        )
+                        if await trigger.count() > 0:
+                            await trigger.first.click()
+                    file_chooser = await fc_info.value
+                    await file_chooser.set_files(cv_path)
+                    filled.append("resume")
+                    print("[ats-form] Uploaded resume via file chooser")
+                except Exception as e:
+                    print(f"[ats-form] File chooser fallback failed: {e}")
+
+                if not await _resume_confirmed():
+                    print("[ats-form] WARNING: Resume still not confirmed attached after all retries")
     except Exception as e:
         print(f"[ats-form] Resume verification error: {e}")
 
