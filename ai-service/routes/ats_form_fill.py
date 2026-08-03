@@ -796,14 +796,41 @@ async def _fill_greenhouse_form(
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
-            # Screenshot evidence showed the react-select menu never opens
-            # from typing into #country alone — react-select opens its menu
-            # from a click on the "control" div (the whole widget's clickable
-            # surface: value container + indicators), not necessarily from
-            # focusing/typing into the underlying input. Try that first.
             menu_opened_via_control = False
+
+            # Confirmed from the actual rendered HTML: this board's react-select
+            # dropdown opens via a dedicated toggle button
+            # (aria-label="Toggle flyout"), not generically from clicking
+            # anywhere in the .select__control container — try the real
+            # trigger first.
+            toggle_btn = page.locator('button[aria-label="Toggle flyout"]').first
+            if await toggle_btn.count() > 0:
+                await toggle_btn.click()
+                await page.wait_for_timeout(500)
+                print("[ats-form] Clicked Toggle flyout button")
+
+                await page.keyboard.type("Israel", delay=50)
+                await page.wait_for_timeout(500)
+
+                israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+                if await israel_opt.count() > 0:
+                    await israel_opt.click()
+                    print("[ats-form] Selected Israel from dropdown (Toggle flyout)")
+                else:
+                    await page.keyboard.press("Enter")
+                    print("[ats-form] Pressed Enter for Israel (Toggle flyout, no exact option match)")
+                menu_opened_via_control = True
+            else:
+                print("[ats-form] Toggle flyout button not found — trying select__control click")
+
+            # Screenshot evidence from an earlier attempt showed the
+            # react-select menu never opens from typing into #country alone —
+            # react-select opens its menu from a click on the "control" div
+            # (the whole widget's clickable surface), not necessarily from
+            # focusing/typing into the underlying input. Try that next if the
+            # toggle button above wasn't found.
             country_control = page.locator('.select__control, [class*="select__control"]').first
-            if await country_control.count() > 0:
+            if not menu_opened_via_control and await country_control.count() > 0:
                 await country_control.click()
                 await page.wait_for_timeout(500)
                 print("[ats-form] Clicked react-select control")
@@ -827,7 +854,7 @@ async def _fill_greenhouse_form(
                         )
                 else:
                     print("[ats-form] Menu did not open after control click — falling back to input click + type")
-            else:
+            elif not menu_opened_via_control:
                 print("[ats-form] No select__control found — using input-based approach")
 
             if not menu_opened_via_control:
@@ -1131,34 +1158,72 @@ async def _fill_greenhouse_form(
                 # it as a real user would: click each candidate container
                 # until one opens a dropdown, then click the Israel entry.
                 print("[ats-form] WARNING: ITI flag not found via JS API — trying interactive click fallback")
-                iti_selectors = [
-                    '.iti__flag-container',
-                    '.iti__selected-flag',
-                    '[class*="iti__flag"]',
-                    '.iti',
-                    '#phone',  # click phone first — some ITI builds only mount the widget on focus
-                ]
+
                 israel_selected = False
-                for iti_sel in iti_selectors:
-                    try:
-                        el = await page.query_selector(iti_sel)
-                        if not el:
-                            continue
-                        await el.click()
-                        await page.wait_for_timeout(300)
-                        israel_option = await page.query_selector(
-                            '[data-country-code="il"], li:has-text("Israel"), '
-                            '.iti__country:has-text("Israel")'
-                        )
-                        if israel_option:
-                            await israel_option.click()
+                # Confirmed from the actual rendered HTML: this ITI build uses
+                # the newer v18+ markup (button.iti__selected-country +
+                # ul.iti__country-list), not the older .iti__flag-container/
+                # .iti__country names the generic fallback below was written
+                # against — try the real selectors first.
+                try:
+                    iti_country_btn = page.locator(
+                        'button.iti__selected-country, button[aria-label="Select country"]'
+                    ).first
+                    if await iti_country_btn.count() > 0:
+                        await iti_country_btn.click()
+                        await page.wait_for_timeout(500)
+                        print("[ats-form] Clicked ITI flag button (iti__selected-country)")
+
+                        search = page.locator(
+                            '#iti-0__search-input, input[id$="__search-input"]'
+                        ).first
+                        if await search.count() > 0:
+                            await search.type("Israel", delay=50)
+                            await page.wait_for_timeout(500)
+                        else:
+                            print("[ats-form] ITI: no search input found after opening country list")
+
+                        israel_item = page.locator("ul.iti__country-list li").filter(has_text="Israel").first
+                        if await israel_item.count() > 0:
+                            await israel_item.click()
                             await page.wait_for_timeout(200)
-                            print(f"[ats-form] ITI: selected Israel via {iti_sel!r} click")
+                            print("[ats-form] Selected Israel in ITI (iti__country-list)")
                             israel_selected = True
-                            break
-                        print(f"[ats-form] ITI: clicked {iti_sel!r}, no Israel option found in dropdown")
-                    except Exception as e:
-                        print(f"[ats-form] ITI: {iti_sel!r} click failed: {e}")
+                        else:
+                            print("[ats-form] ITI: no Israel item found in iti__country-list")
+                    else:
+                        print("[ats-form] ITI: button.iti__selected-country not found")
+                except Exception as e:
+                    print(f"[ats-form] ITI: iti__selected-country flow failed: {e}")
+
+                if not israel_selected:
+                    iti_selectors = [
+                        '.iti__flag-container',
+                        '.iti__selected-flag',
+                        '[class*="iti__flag"]',
+                        '.iti',
+                        '#phone',  # click phone first — some ITI builds only mount the widget on focus
+                    ]
+                    for iti_sel in iti_selectors:
+                        try:
+                            el = await page.query_selector(iti_sel)
+                            if not el:
+                                continue
+                            await el.click()
+                            await page.wait_for_timeout(300)
+                            israel_option = await page.query_selector(
+                                '[data-country-code="il"], li:has-text("Israel"), '
+                                '.iti__country:has-text("Israel")'
+                            )
+                            if israel_option:
+                                await israel_option.click()
+                                await page.wait_for_timeout(200)
+                                print(f"[ats-form] ITI: selected Israel via {iti_sel!r} click")
+                                israel_selected = True
+                                break
+                            print(f"[ats-form] ITI: clicked {iti_sel!r}, no Israel option found in dropdown")
+                        except Exception as e:
+                            print(f"[ats-form] ITI: {iti_sel!r} click failed: {e}")
 
                 if not israel_selected:
                     # None of our selectors matched a clickable "Israel"
