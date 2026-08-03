@@ -831,6 +831,49 @@ async def _fill_greenhouse_form(
                     opt_text = "<unreadable>"
                 print(f"[ats-form]   Option: {opt_text!r}")
 
+            # Broader search — page.locator() already queries the whole
+            # document (not scoped to #country's container), so a react-select
+            # menu portaled to document.body would already be included above
+            # if it uses role="option". This widens the selector itself in
+            # case the actual markup doesn't, plus checks is_visible() since
+            # an option element can exist in the DOM while its menu is still
+            # display:none/collapsed.
+            all_options = await page.locator(
+                '[role="option"], '
+                '[class*="react-select__option"], '
+                '[class*="option--is-focused"], '
+                '.greenhouse-option, '
+                '[id*="react-select"]'
+            ).all()
+            print(f"[ats-form] All options in DOM: {len(all_options)}")
+            for opt in all_options[:5]:
+                try:
+                    opt_text = await opt.inner_text()
+                except Exception:
+                    opt_text = "<unreadable>"
+                try:
+                    opt_visible = await opt.is_visible()
+                except Exception:
+                    opt_visible = "<unknown>"
+                print(f"[ats-form]   Option: {opt_text!r} visible={opt_visible}")
+
+            try:
+                menus_in_dom = await page.evaluate(
+                    """() => {
+                        const menus = document.querySelectorAll(
+                            '[class*="menu"], [class*="dropdown"], [class*="listbox"], [role="listbox"]'
+                        );
+                        return Array.from(menus).map(m => ({
+                            class: m.className,
+                            text: m.innerText.slice(0, 100),
+                            visible: m.offsetParent !== null,
+                        }));
+                    }"""
+                )
+                print(f"[ats-form] Menus in DOM: {menus_in_dom}")
+            except Exception as e:
+                print(f"[ats-form] Could not scan for menus in DOM: {e}")
+
             option = await page.query_selector(
                 'li.select-option:has-text("Israel"), '
                 '[role="option"]:has-text("Israel"), '
