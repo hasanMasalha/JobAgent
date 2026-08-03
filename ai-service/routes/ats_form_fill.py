@@ -806,19 +806,40 @@ async def _fill_greenhouse_form(
             toggle_btn = page.locator('button[aria-label="Toggle flyout"]').first
             if await toggle_btn.count() > 0:
                 await toggle_btn.click()
-                await page.wait_for_timeout(500)
-                print("[ats-form] Clicked Toggle flyout button")
+                await page.wait_for_timeout(300)
 
-                await page.keyboard.type("Israel", delay=50)
-                await page.wait_for_timeout(500)
+                try:
+                    await page.wait_for_selector(".select__menu", timeout=3000)
+                    print("[ats-form] Country menu opened")
 
-                israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-                if await israel_opt.count() > 0:
-                    await israel_opt.click()
-                    print("[ats-form] Selected Israel from dropdown (Toggle flyout)")
-                else:
+                    await page.keyboard.type("Israel", delay=50)
+                    await page.wait_for_timeout(800)
+
+                    # A single count() check right after typing can catch the
+                    # menu mid-filter, before react-select has re-rendered the
+                    # matching option's text — wait_for(state="visible") lets
+                    # Playwright's own auto-waiting retry until it's actually
+                    # there instead of trusting one snapshot.
+                    israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+                    try:
+                        await israel_opt.wait_for(state="visible", timeout=2000)
+                        await israel_opt.click()
+                        print("[ats-form] Clicked Israel option")
+                    except Exception:
+                        opts = await page.locator(".select__option").all()
+                        print(f"[ats-form] Options available: {len(opts)}")
+                        for opt in opts[:5]:
+                            try:
+                                opt_text = await opt.inner_text()
+                            except Exception:
+                                opt_text = "<unreadable>"
+                            print(f"[ats-form]   Option: {opt_text!r}")
+                        await page.keyboard.press("Enter")
+                        print("[ats-form] Pressed Enter for Israel (no exact option match found in time)")
+                except Exception as e:
+                    print(f"[ats-form] Menu error: {e}")
                     await page.keyboard.press("Enter")
-                    print("[ats-form] Pressed Enter for Israel (Toggle flyout, no exact option match)")
+
                 menu_opened_via_control = True
             else:
                 print("[ats-form] Toggle flyout button not found — trying select__control click")
