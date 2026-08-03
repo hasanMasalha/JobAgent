@@ -796,119 +796,147 @@ async def _fill_greenhouse_form(
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
-            print("[ats-form] Country: clicking field")
-            await country_el.click()
-            await page.wait_for_timeout(300)
+            # Screenshot evidence showed the react-select menu never opens
+            # from typing into #country alone — react-select opens its menu
+            # from a click on the "control" div (the whole widget's clickable
+            # surface: value container + indicators), not necessarily from
+            # focusing/typing into the underlying input. Try that first.
+            menu_opened_via_control = False
+            country_control = page.locator('.select__control, [class*="select__control"]').first
+            if await country_control.count() > 0:
+                await country_control.click()
+                await page.wait_for_timeout(500)
+                print("[ats-form] Clicked react-select control")
 
-            value_before_type = await country_el.input_value()
-            print(f"[ats-form] Country value before type: {value_before_type!r}")
+                menu = page.locator(".select__menu")
+                if await menu.count() > 0:
+                    print("[ats-form] Menu opened after control click")
+                    menu_opened_via_control = True
+                    await page.keyboard.type("Israel", delay=50)
+                    await page.wait_for_timeout(500)
 
-            await page.keyboard.press("Control+a")
-            await page.keyboard.press("Backspace")
-            await page.wait_for_timeout(200)
-            print("[ats-form] Country: typing Israel")
-            for char in "Israel":
-                await page.keyboard.type(char, delay=80)
-            await page.wait_for_timeout(1500)
-
-            value_after_type = await country_el.input_value()
-            print(f"[ats-form] Country value after typing: {value_after_type!r}")
-
-            # The broad li/[class*="option"] selectors used below can match
-            # unrelated page content (job description bullet points are
-            # <li> elements too) — find every element that actually contains
-            # the text "Israel" anywhere on the page, independent of any
-            # selector guess, to identify what the real dropdown option
-            # looks like structurally.
-            try:
-                israel_elements = await page.evaluate(
-                    """() => {
-                        const walker = document.createTreeWalker(
-                            document.body,
-                            NodeFilter.SHOW_TEXT,
-                            null
-                        );
-                        const results = [];
-                        let node;
-                        while (node = walker.nextNode()) {
-                            if (node.textContent.includes('Israel')) {
-                                const el = node.parentElement;
-                                results.push({
-                                    tag: el.tagName,
-                                    class: el.className,
-                                    role: el.getAttribute('role'),
-                                    text: node.textContent.trim().slice(0, 50),
-                                });
-                            }
-                        }
-                        return results.slice(0, 10);
-                    }"""
-                )
-                print(f"[ats-form] Elements containing Israel: {israel_elements}")
-            except Exception as e:
-                print(f"[ats-form] Could not scan for Israel text: {e}")
-
-            try:
-                focused = await page.evaluate(
-                    """() => {
-                        const el = document.activeElement;
-                        return {
-                            tag: el.tagName,
-                            id: el.id,
-                            class: el.className,
-                            role: el.getAttribute('role'),
-                        };
-                    }"""
-                )
-                print(f"[ats-form] Focused element: {focused}")
-            except Exception as e:
-                print(f"[ats-form] Could not read focused element: {e}")
-
-            try:
-                os.makedirs("/app/screenshots", exist_ok=True)
-                await page.screenshot(path="/app/screenshots/country_dropdown.png")
-                print("[ats-form] Country dropdown screenshot saved")
-            except Exception as e:
-                print(f"[ats-form] Could not save country dropdown screenshot: {e}")
-
-            # Confirmed via the Israel-text tree-walker scan above: this
-            # board's country field is react-select with classNamePrefix
-            # "select" (input class "select__input", role "combobox").
-            # [role="option"] and generic li/[class*="option"] selectors were
-            # matching job-description bullet points, not the real dropdown —
-            # go straight for the actual react-select menu/option classes
-            # instead of the broad guesses that caused those false matches.
-            try:
-                await page.wait_for_selector(".select__menu, .select__menu-list", timeout=3000)
-                print("[ats-form] React-select menu appeared")
-            except Exception:
-                print("[ats-form] React-select menu timeout — .select__menu never appeared")
-
-            react_select_options = await page.locator(".select__option").all()
-            print(f"[ats-form] React-select options: {len(react_select_options)}")
-            for opt in react_select_options[:10]:
-                try:
-                    opt_text = await opt.inner_text()
-                except Exception:
-                    opt_text = "<unreadable>"
-                print(f"[ats-form]   react-select option: {opt_text!r}")
-
-            option = None
-            israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-            if await israel_opt.count() > 0:
-                option = israel_opt
-            if option:
-                await option.click()
-                await page.wait_for_timeout(400)
-                val = await page.input_value("#country")
-                print(f"[ats-form] Country after dropdown click: '{val}'")
+                    israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+                    if await israel_opt.count() > 0:
+                        await israel_opt.click()
+                        print("[ats-form] Selected Israel via react-select control click")
+                    else:
+                        await page.keyboard.press("Enter")
+                        print(
+                            "[ats-form] Country: pressed Enter after control-click "
+                            "typing (no exact Israel option match)"
+                        )
+                else:
+                    print("[ats-form] Menu did not open after control click — falling back to input click + type")
             else:
-                await page.keyboard.press("ArrowDown")
+                print("[ats-form] No select__control found — using input-based approach")
+
+            if not menu_opened_via_control:
+                print("[ats-form] Country: clicking field")
+                await country_el.click()
+                await page.wait_for_timeout(300)
+
+                value_before_type = await country_el.input_value()
+                print(f"[ats-form] Country value before type: {value_before_type!r}")
+
+                await page.keyboard.press("Control+a")
+                await page.keyboard.press("Backspace")
                 await page.wait_for_timeout(200)
-                await page.keyboard.press("Enter")
-                await page.wait_for_timeout(400)
-                val = await page.input_value("#country")
-                print(f"[ats-form] Country after ArrowDown+Enter: '{val}'")
+                print("[ats-form] Country: typing Israel")
+                for char in "Israel":
+                    await page.keyboard.type(char, delay=80)
+                await page.wait_for_timeout(1500)
+
+                value_after_type = await country_el.input_value()
+                print(f"[ats-form] Country value after typing: {value_after_type!r}")
+
+                # The broad li/[class*="option"] selectors tried previously
+                # matched unrelated page content (job description bullet
+                # points are <li> elements too) — find every element that
+                # actually contains the text "Israel" anywhere on the page,
+                # independent of any selector guess, to identify what the
+                # real dropdown option looks like structurally.
+                try:
+                    israel_elements = await page.evaluate(
+                        """() => {
+                            const walker = document.createTreeWalker(
+                                document.body,
+                                NodeFilter.SHOW_TEXT,
+                                null
+                            );
+                            const results = [];
+                            let node;
+                            while (node = walker.nextNode()) {
+                                if (node.textContent.includes('Israel')) {
+                                    const el = node.parentElement;
+                                    results.push({
+                                        tag: el.tagName,
+                                        class: el.className,
+                                        role: el.getAttribute('role'),
+                                        text: node.textContent.trim().slice(0, 50),
+                                    });
+                                }
+                            }
+                            return results.slice(0, 10);
+                        }"""
+                    )
+                    print(f"[ats-form] Elements containing Israel: {israel_elements}")
+                except Exception as e:
+                    print(f"[ats-form] Could not scan for Israel text: {e}")
+
+                try:
+                    focused = await page.evaluate(
+                        """() => {
+                            const el = document.activeElement;
+                            return {
+                                tag: el.tagName,
+                                id: el.id,
+                                class: el.className,
+                                role: el.getAttribute('role'),
+                            };
+                        }"""
+                    )
+                    print(f"[ats-form] Focused element: {focused}")
+                except Exception as e:
+                    print(f"[ats-form] Could not read focused element: {e}")
+
+                try:
+                    os.makedirs("/app/screenshots", exist_ok=True)
+                    await page.screenshot(path="/app/screenshots/country_dropdown.png")
+                    print("[ats-form] Country dropdown screenshot saved")
+                except Exception as e:
+                    print(f"[ats-form] Could not save country dropdown screenshot: {e}")
+
+                try:
+                    await page.wait_for_selector(".select__menu, .select__menu-list", timeout=3000)
+                    print("[ats-form] React-select menu appeared")
+                except Exception:
+                    print("[ats-form] React-select menu timeout — .select__menu never appeared")
+
+                react_select_options = await page.locator(".select__option").all()
+                print(f"[ats-form] React-select options: {len(react_select_options)}")
+                for opt in react_select_options[:10]:
+                    try:
+                        opt_text = await opt.inner_text()
+                    except Exception:
+                        opt_text = "<unreadable>"
+                    print(f"[ats-form]   react-select option: {opt_text!r}")
+
+                option = None
+                israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+                if await israel_opt.count() > 0:
+                    option = israel_opt
+                if option:
+                    await option.click()
+                    await page.wait_for_timeout(400)
+                    val = await page.input_value("#country")
+                    print(f"[ats-form] Country after dropdown click: '{val}'")
+                else:
+                    await page.keyboard.press("ArrowDown")
+                    await page.wait_for_timeout(200)
+                    await page.keyboard.press("Enter")
+                    await page.wait_for_timeout(400)
+                    val = await page.input_value("#country")
+                    print(f"[ats-form] Country after ArrowDown+Enter: '{val}'")
 
             # react-select-style widgets often keep the value that actually
             # gets submitted on a second, unlabeled sibling input (the
