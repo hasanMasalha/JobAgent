@@ -798,13 +798,57 @@ async def _fill_greenhouse_form(
         if country_el:
             menu_opened_via_control = False
 
+            # New theory: typing into #country before opening the flyout may
+            # be what actually renders the (filtered) menu, rather than the
+            # toggle-button click alone. Try type-first; if no menu appears,
+            # clear back to empty before falling through to the toggle-click
+            # flow below so that flow starts from a clean, untyped field
+            # instead of double-typing "Israel" on top of this attempt.
+            await country_el.click()
+            await page.wait_for_timeout(200)
+            await page.keyboard.type("Israel", delay=80)
+            await page.wait_for_timeout(500)
+
+            menu_after_typing = page.locator('[class*="select__menu"]')
+            menu_after_typing_count = await menu_after_typing.count()
+            print(f"[ats-form] Menu after typing: {menu_after_typing_count}")
+
+            if menu_after_typing_count > 0:
+                opts = await page.locator('[class*="select__option"]').all()
+                print(f"[ats-form] Options in menu: {len(opts)}")
+                for opt in opts[:5]:
+                    try:
+                        opt_text = await opt.inner_text()
+                    except Exception:
+                        opt_text = "<unreadable>"
+                    try:
+                        opt_visible = await opt.is_visible()
+                    except Exception:
+                        opt_visible = "<unknown>"
+                    print(f"[ats-form]   Option: {opt_text!r} vis={opt_visible}")
+
+                israel_from_typing = page.locator('[class*="select__option"]').filter(has_text="Israel").first
+                if await israel_from_typing.count() > 0:
+                    await israel_from_typing.click()
+                    print("[ats-form] Clicked Israel (menu appeared from typing alone)")
+                    menu_opened_via_control = True
+                else:
+                    print("[ats-form] Menu appeared from typing, but no Israel option found in it")
+            else:
+                # Typing alone didn't render a menu — clear the field before
+                # trying the toggle-button flow below, so it isn't typing
+                # "Israel" a second time on top of what's already there.
+                await page.keyboard.press("Control+a")
+                await page.keyboard.press("Backspace")
+                await page.wait_for_timeout(200)
+
             # Confirmed from the actual rendered HTML: this board's react-select
             # dropdown opens via a dedicated toggle button
             # (aria-label="Toggle flyout"), not generically from clicking
             # anywhere in the .select__control container — try the real
             # trigger first.
             toggle_btn = page.locator('button[aria-label="Toggle flyout"]').first
-            if await toggle_btn.count() > 0:
+            if not menu_opened_via_control and await toggle_btn.count() > 0:
                 await toggle_btn.click()
                 await page.wait_for_timeout(300)
 
@@ -913,7 +957,7 @@ async def _fill_greenhouse_form(
                         await page.keyboard.press("Enter")
 
                 menu_opened_via_control = True
-            else:
+            elif not menu_opened_via_control:
                 print("[ats-form] Toggle flyout button not found — trying select__control click")
 
             # Screenshot evidence from an earlier attempt showed the
