@@ -870,14 +870,45 @@ async def _fill_greenhouse_form(
             except Exception as e:
                 print(f"[ats-form] Could not scan for menus in DOM: {e}")
 
-            option = await page.query_selector(
-                'li.select-option:has-text("Israel"), '
-                '[role="option"]:has-text("Israel"), '
-                'li:has-text("Israel"), '
-                '.dropdown-item:has-text("Israel"), '
-                '[class*="option"]:has-text("Israel"), '
-                '[id*="react-select"][id*="option"]:has-text("Israel")'
+            # The option elements existing in the DOM (confirmed by the
+            # diagnostics above) doesn't mean their label text has actually
+            # populated yet — some react-select boards render empty option
+            # shells first and fill the text in asynchronously a beat later.
+            # A single point-in-time :has-text("Israel") query can miss that
+            # window entirely. Poll for non-empty option text instead of
+            # trusting one snapshot.
+            option = None
+            option_selector = (
+                'li.select-option, [role="option"], li, '
+                '.dropdown-item, [class*="option"], [id*="react-select"][id*="option"]'
             )
+            for attempt in range(10):
+                await page.wait_for_timeout(300)
+                candidates = await page.locator(option_selector).all()
+                non_empty = []
+                for candidate in candidates:
+                    try:
+                        candidate_text = (await candidate.inner_text()).strip()
+                    except Exception:
+                        candidate_text = ""
+                    if candidate_text:
+                        non_empty.append((candidate, candidate_text))
+                print(f"[ats-form] Country options attempt {attempt}: {len(non_empty)} non-empty")
+                if non_empty:
+                    option = next((c for c, txt in non_empty if "israel" in txt.lower()), None)
+                    if not option:
+                        # Non-empty options loaded, but none say Israel — this
+                        # is a real content mismatch, not a timing issue, so
+                        # don't guess by clicking whichever option loaded
+                        # first: that would submit a country that isn't the
+                        # candidate's, which is worse than leaving it empty
+                        # and falling through to the ArrowDown+Enter/native-
+                        # setter fallbacks below.
+                        print(
+                            f"[ats-form] Country: non-empty options loaded but "
+                            f"none mention Israel: {[txt for _, txt in non_empty]!r}"
+                        )
+                    break
             if option:
                 await option.click()
                 await page.wait_for_timeout(400)
