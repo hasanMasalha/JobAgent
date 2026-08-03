@@ -837,8 +837,54 @@ async def _fill_greenhouse_form(
                         await page.keyboard.press("Enter")
                         print("[ats-form] Pressed Enter for Israel (no exact option match found in time)")
                 except Exception as e:
+                    # wait_for_selector's default state is "visible", not just
+                    # "attached" — if the menu exists in the DOM but fails
+                    # Playwright's visibility check (display:none during a
+                    # transition, zero-size, a hidden ancestor), this times
+                    # out even though the element is genuinely there and a
+                    # raw JS click on it would still work (React's synthetic
+                    # event system doesn't care about CSS visibility either).
                     print(f"[ats-form] Menu error: {e}")
-                    await page.keyboard.press("Enter")
+                    try:
+                        menu_info = await page.evaluate(
+                            """() => {
+                                const menus = document.querySelectorAll('[class*="select__menu"]');
+                                return Array.from(menus).map(m => ({
+                                    class: m.className,
+                                    visible: m.offsetParent !== null,
+                                    display: window.getComputedStyle(m).display,
+                                    children: m.children.length,
+                                    text: m.innerText.slice(0, 200),
+                                }));
+                            }"""
+                        )
+                        print(f"[ats-form] Menu info after toggle: {menu_info}")
+                    except Exception as e2:
+                        menu_info = None
+                        print(f"[ats-form] Could not inspect menu via JS: {e2}")
+
+                    clicked_via_js = False
+                    if menu_info:
+                        try:
+                            clicked = await page.evaluate(
+                                """() => {
+                                    const options = document.querySelectorAll('[class*="select__option"]');
+                                    for (const opt of options) {
+                                        if (opt.innerText.includes('Israel')) {
+                                            opt.click();
+                                            return 'clicked: ' + opt.innerText;
+                                        }
+                                    }
+                                    return 'not found, options: ' + options.length;
+                                }"""
+                            )
+                            print(f"[ats-form] JS click result: {clicked}")
+                            clicked_via_js = clicked.startswith("clicked:")
+                        except Exception as e3:
+                            print(f"[ats-form] JS option click failed: {e3}")
+
+                    if not clicked_via_js:
+                        await page.keyboard.press("Enter")
 
                 menu_opened_via_control = True
             else:
