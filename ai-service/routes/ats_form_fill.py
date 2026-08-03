@@ -871,101 +871,32 @@ async def _fill_greenhouse_form(
             except Exception as e:
                 print(f"[ats-form] Could not save country dropdown screenshot: {e}")
 
-            # Enumerate every currently-visible option, not just the one
-            # matching "Israel" — if this list comes back empty, the
-            # dropdown itself never rendered in headless mode, which is a
-            # completely different problem than "our text match is wrong."
-            visible_options = await page.locator('[role="option"]').all()
-            print(f"[ats-form] Country options visible: {len(visible_options)}")
-            for opt in visible_options[:5]:
-                try:
-                    opt_text = await opt.inner_text()
-                except Exception:
-                    opt_text = "<unreadable>"
-                print(f"[ats-form]   Option: {opt_text!r}")
-
-            # Broader search — page.locator() already queries the whole
-            # document (not scoped to #country's container), so a react-select
-            # menu portaled to document.body would already be included above
-            # if it uses role="option". This widens the selector itself in
-            # case the actual markup doesn't, plus checks is_visible() since
-            # an option element can exist in the DOM while its menu is still
-            # display:none/collapsed.
-            all_options = await page.locator(
-                '[role="option"], '
-                '[class*="react-select__option"], '
-                '[class*="option--is-focused"], '
-                '.greenhouse-option, '
-                '[id*="react-select"]'
-            ).all()
-            print(f"[ats-form] All options in DOM: {len(all_options)}")
-            for opt in all_options[:5]:
-                try:
-                    opt_text = await opt.inner_text()
-                except Exception:
-                    opt_text = "<unreadable>"
-                try:
-                    opt_visible = await opt.is_visible()
-                except Exception:
-                    opt_visible = "<unknown>"
-                print(f"[ats-form]   Option: {opt_text!r} visible={opt_visible}")
-
+            # Confirmed via the Israel-text tree-walker scan above: this
+            # board's country field is react-select with classNamePrefix
+            # "select" (input class "select__input", role "combobox").
+            # [role="option"] and generic li/[class*="option"] selectors were
+            # matching job-description bullet points, not the real dropdown —
+            # go straight for the actual react-select menu/option classes
+            # instead of the broad guesses that caused those false matches.
             try:
-                menus_in_dom = await page.evaluate(
-                    """() => {
-                        const menus = document.querySelectorAll(
-                            '[class*="menu"], [class*="dropdown"], [class*="listbox"], [role="listbox"]'
-                        );
-                        return Array.from(menus).map(m => ({
-                            class: m.className,
-                            text: m.innerText.slice(0, 100),
-                            visible: m.offsetParent !== null,
-                        }));
-                    }"""
-                )
-                print(f"[ats-form] Menus in DOM: {menus_in_dom}")
-            except Exception as e:
-                print(f"[ats-form] Could not scan for menus in DOM: {e}")
+                await page.wait_for_selector(".select__menu, .select__menu-list", timeout=3000)
+                print("[ats-form] React-select menu appeared")
+            except Exception:
+                print("[ats-form] React-select menu timeout — .select__menu never appeared")
 
-            # The option elements existing in the DOM (confirmed by the
-            # diagnostics above) doesn't mean their label text has actually
-            # populated yet — some react-select boards render empty option
-            # shells first and fill the text in asynchronously a beat later.
-            # A single point-in-time :has-text("Israel") query can miss that
-            # window entirely. Poll for non-empty option text instead of
-            # trusting one snapshot.
+            react_select_options = await page.locator(".select__option").all()
+            print(f"[ats-form] React-select options: {len(react_select_options)}")
+            for opt in react_select_options[:10]:
+                try:
+                    opt_text = await opt.inner_text()
+                except Exception:
+                    opt_text = "<unreadable>"
+                print(f"[ats-form]   react-select option: {opt_text!r}")
+
             option = None
-            option_selector = (
-                'li.select-option, [role="option"], li, '
-                '.dropdown-item, [class*="option"], [id*="react-select"][id*="option"]'
-            )
-            for attempt in range(10):
-                await page.wait_for_timeout(300)
-                candidates = await page.locator(option_selector).all()
-                non_empty = []
-                for candidate in candidates:
-                    try:
-                        candidate_text = (await candidate.inner_text()).strip()
-                    except Exception:
-                        candidate_text = ""
-                    if candidate_text:
-                        non_empty.append((candidate, candidate_text))
-                print(f"[ats-form] Country options attempt {attempt}: {len(non_empty)} non-empty")
-                if non_empty:
-                    option = next((c for c, txt in non_empty if "israel" in txt.lower()), None)
-                    if not option:
-                        # Non-empty options loaded, but none say Israel — this
-                        # is a real content mismatch, not a timing issue, so
-                        # don't guess by clicking whichever option loaded
-                        # first: that would submit a country that isn't the
-                        # candidate's, which is worse than leaving it empty
-                        # and falling through to the ArrowDown+Enter/native-
-                        # setter fallbacks below.
-                        print(
-                            f"[ats-form] Country: non-empty options loaded but "
-                            f"none mention Israel: {[txt for _, txt in non_empty]!r}"
-                        )
-                    break
+            israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+            if await israel_opt.count() > 0:
+                option = israel_opt
             if option:
                 await option.click()
                 await page.wait_for_timeout(400)
