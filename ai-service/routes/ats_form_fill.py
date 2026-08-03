@@ -815,27 +815,53 @@ async def _fill_greenhouse_form(
                     await page.keyboard.type("Israel", delay=50)
                     await page.wait_for_timeout(800)
 
+                    # Prefer scoping by ARIA role first — a role="listbox"/
+                    # role="option" query only matches elements semantically
+                    # marked as part of THIS dropdown, so unlike a page-wide
+                    # class selector it can't accidentally match unrelated
+                    # content (which is exactly what happened a few commits
+                    # back with a broad class-based selector matching job-
+                    # description bullet points). Falls back to the
+                    # confirmed .select__option class below if this widget
+                    # doesn't expose those roles.
+                    option_clicked = False
+                    try:
+                        listbox = page.get_by_role("listbox")
+                        await listbox.wait_for(state="visible", timeout=2000)
+                        print("[ats-form] Listbox appeared (role-based)")
+                        role_option = listbox.get_by_role("option", name="Israel", exact=False)
+                        if await role_option.count() > 0:
+                            await role_option.first.click()
+                            print("[ats-form] Selected Israel via role-based listbox/option")
+                            option_clicked = True
+                        else:
+                            role_opts_text = await listbox.get_by_role("option").all_inner_texts()
+                            print(f"[ats-form] Listbox options (role-based): {role_opts_text[:5]}")
+                    except Exception as e:
+                        print(f"[ats-form] Role-based listbox not found: {e}")
+
                     # A single count() check right after typing can catch the
                     # menu mid-filter, before react-select has re-rendered the
                     # matching option's text — wait_for(state="visible") lets
                     # Playwright's own auto-waiting retry until it's actually
                     # there instead of trusting one snapshot.
-                    israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-                    try:
-                        await israel_opt.wait_for(state="visible", timeout=2000)
-                        await israel_opt.click()
-                        print("[ats-form] Clicked Israel option")
-                    except Exception:
-                        opts = await page.locator(".select__option").all()
-                        print(f"[ats-form] Options available: {len(opts)}")
-                        for opt in opts[:5]:
-                            try:
-                                opt_text = await opt.inner_text()
-                            except Exception:
-                                opt_text = "<unreadable>"
-                            print(f"[ats-form]   Option: {opt_text!r}")
-                        await page.keyboard.press("Enter")
-                        print("[ats-form] Pressed Enter for Israel (no exact option match found in time)")
+                    if not option_clicked:
+                        israel_opt = page.locator(".select__option").filter(has_text="Israel").first
+                        try:
+                            await israel_opt.wait_for(state="visible", timeout=2000)
+                            await israel_opt.click()
+                            print("[ats-form] Clicked Israel option")
+                        except Exception:
+                            opts = await page.locator(".select__option").all()
+                            print(f"[ats-form] Options available: {len(opts)}")
+                            for opt in opts[:5]:
+                                try:
+                                    opt_text = await opt.inner_text()
+                                except Exception:
+                                    opt_text = "<unreadable>"
+                                print(f"[ats-form]   Option: {opt_text!r}")
+                            await page.keyboard.press("Enter")
+                            print("[ats-form] Pressed Enter for Israel (no exact option match found in time)")
                 except Exception as e:
                     # wait_for_selector's default state is "visible", not just
                     # "attached" — if the menu exists in the DOM but fails
