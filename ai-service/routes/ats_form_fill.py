@@ -268,12 +268,8 @@ async def fill_ats_form(
 
     try:
         async with async_playwright() as p:
-            # headless=False here relies on the container running under Xvfb
-            # (see ai-service/Dockerfile's xvfb-run wrapper) — there's a real
-            # virtual X display for Chromium to render into, DISPLAY is set
-            # by xvfb-run automatically, so no --display arg is needed here.
             browser = await p.chromium.launch(
-                headless=False,
+                headless=True,
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
