@@ -814,6 +814,63 @@ async def _fill_greenhouse_form(
             value_after_type = await country_el.input_value()
             print(f"[ats-form] Country value after typing: {value_after_type!r}")
 
+            # The broad li/[class*="option"] selectors used below can match
+            # unrelated page content (job description bullet points are
+            # <li> elements too) — find every element that actually contains
+            # the text "Israel" anywhere on the page, independent of any
+            # selector guess, to identify what the real dropdown option
+            # looks like structurally.
+            try:
+                israel_elements = await page.evaluate(
+                    """() => {
+                        const walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_TEXT,
+                            null
+                        );
+                        const results = [];
+                        let node;
+                        while (node = walker.nextNode()) {
+                            if (node.textContent.includes('Israel')) {
+                                const el = node.parentElement;
+                                results.push({
+                                    tag: el.tagName,
+                                    class: el.className,
+                                    role: el.getAttribute('role'),
+                                    text: node.textContent.trim().slice(0, 50),
+                                });
+                            }
+                        }
+                        return results.slice(0, 10);
+                    }"""
+                )
+                print(f"[ats-form] Elements containing Israel: {israel_elements}")
+            except Exception as e:
+                print(f"[ats-form] Could not scan for Israel text: {e}")
+
+            try:
+                focused = await page.evaluate(
+                    """() => {
+                        const el = document.activeElement;
+                        return {
+                            tag: el.tagName,
+                            id: el.id,
+                            class: el.className,
+                            role: el.getAttribute('role'),
+                        };
+                    }"""
+                )
+                print(f"[ats-form] Focused element: {focused}")
+            except Exception as e:
+                print(f"[ats-form] Could not read focused element: {e}")
+
+            try:
+                os.makedirs("/app/screenshots", exist_ok=True)
+                await page.screenshot(path="/app/screenshots/country_dropdown.png")
+                print("[ats-form] Country dropdown screenshot saved")
+            except Exception as e:
+                print(f"[ats-form] Could not save country dropdown screenshot: {e}")
+
             # Enumerate every currently-visible option, not just the one
             # matching "Israel" — if this list comes back empty, the
             # dropdown itself never rendered in headless mode, which is a
