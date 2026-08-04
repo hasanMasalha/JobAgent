@@ -836,349 +836,87 @@ async def _fill_greenhouse_form(
         'input[id*="email"]',
     ], email, "email", react_sync=True)
 
-    # Country: React-controlled autocomplete — must use keyboard events so React
-    # registers state changes. fill() bypasses synthetic events and gets overwritten.
+    # Country: react-select-style autocomplete. Eight prior attempts in this
+    # block's history (React-fiber onChange, char-by-char keyboard typing,
+    # JS-dispatched mousedown/click, real mouse-coordinate clicks with
+    # scroll-into-view) all failed to get a confirmed selection out of this
+    # widget. Trying Playwright's role-based combobox/option locators next —
+    # they auto-wait for actionability (visible, scrolled into view, not
+    # obscured) instead of us hand-computing bounding boxes, and are the
+    # documented Playwright pattern for ARIA comboboxes if this board
+    # actually exposes proper roles.
+    #
+    # NOTE: this deliberately uses combo.fill() where the original version of
+    # this comment block warned "fill() bypasses synthetic events and gets
+    # overwritten" for this exact input. That finding predates this attempt.
+    # The single-value-chip check below is kept as the one piece of prior
+    # diagnostics that's proven trustworthy (raw .value and each attempt's
+    # own self-reported "clicked" result both turned out to be false
+    # positives earlier) — if it comes back False here too, that's
+    # confirmation the original warning was right, not a fluke.
     try:
-        country_el = await page.query_selector('#country, input[id="country"]')
-        if country_el:
-            # Primary approach: skip the dropdown UI entirely and invoke
-            # react-select's own onChange handler directly, found by walking
-            # up the React fiber tree from the #country input. There's no
-            # menu to close if we never open one, so this sidesteps every
-            # outside-click/blur race the DOM-driven attempts below existed
-            # to work around.
-            fiber_result = await page.evaluate(
-                """() => {
-                    const input = document.querySelector('#country');
-                    if (!input) return 'no input';
+        async def _country_single_value_confirmed() -> bool:
+            count = await page.locator(
+                '[class*="select__single-value"], [class*="singleValue"]'
+            ).filter(has_text="Israel").count()
+            return count > 0
 
-                    const fiberKey = Object.keys(input).find(k =>
-                        k.startsWith('__reactFiber') ||
-                        k.startsWith('__reactInternalInstance')
-                    );
-                    if (!fiberKey) return 'no fiber';
+        country_confirmed = False
 
-                    let fiber = input[fiberKey];
-                    let attempts = 0;
+        combo = page.get_by_role("combobox", name="Country")
+        combo_count = await combo.count()
+        print(f"[ats-form] Country combobox by role count: {combo_count}")
 
-                    while (fiber && attempts < 30) {
-                        attempts++;
-                        const props = fiber.memoizedProps;
+        if combo_count == 0:
+            combo = page.locator("#country")
+            combo_count = await combo.count()
+            print(f"[ats-form] Country combobox by #country fallback count: {combo_count}")
 
-                        if (props && props.onChange && props.options !== undefined) {
-                            const options = props.options || [];
-                            const israel = options.find(o =>
-                                (o.label || '').includes('Israel') ||
-                                (o.value || '').includes('IL') ||
-                                (o.value || '').includes('il') ||
-                                (o.value || '').includes('Israel')
-                            );
+        if combo_count > 0:
+            await combo.first.click()
+            await page.wait_for_timeout(300)
 
-                            if (israel) {
-                                props.onChange(israel);
-                                return 'set via fiber: ' + JSON.stringify(israel);
-                            }
+            await combo.first.fill("Israel")
+            await page.wait_for_timeout(1000)
 
-                            return 'options: ' +
-                                options.slice(0, 5).map(o => o.label + '=' + o.value).join(', ');
-                        }
-                        fiber = fiber.return;
-                    }
-                    return 'fiber walked ' + attempts + ' levels, no select found';
-                }"""
-            )
-            print(f"[ats-form] React fiber country: {fiber_result}")
-
-            await page.wait_for_timeout(500)
-            fiber_val = await page.locator('#country').input_value()
-            fiber_hidden_val = await page.evaluate(
-                """() => {
-                    const inputs = document.querySelectorAll('input');
-                    for (const inp of inputs) {
-                        if (!inp.id && inp.value) return inp.value;
-                    }
-                    return '';
-                }"""
-            )
-            print(f"[ats-form] After fiber: country={fiber_val!r} hidden={fiber_hidden_val!r}")
-
-            fiber_succeeded = fiber_result.startswith("set via fiber:")
-
-            # Tracks whether an option was actually PICKED — never inferred
-            # from #country's raw .value, which fills up with plain typed
-            # filter text (from the char-by-char loop below) whether or not
-            # the dropdown ever opened or a selection ever landed. Trusting
-            # that raw value as "success" was the bug: it made every fallback
-            # below look unnecessary even when nothing had actually been
-            # selected, and Greenhouse's own post-submit page text confirmed
-            # it — "Country*" still showed as an unmet required field.
-            country_confirmed = fiber_succeeded
-
-            if not fiber_succeeded:
-                # Fiber walk didn't find a settable Select component — React
-                # internals/prop shapes vary by version and build, so fall
-                # back to driving the visible dropdown. Type one character at
-                # a time and check for the menu after every keystroke
-                # (react-select renders it as soon as the filtered input has
-                # any match), then select the option via a JS-dispatched
-                # mousedown+click in the very same evaluate() call — no
-                # intervening await that could let a close handler run first.
-                await country_el.click()
-                await page.wait_for_timeout(200)
-
-                for char in "Israel":
-                    await page.keyboard.type(char)
-                    count = await page.locator('[class*="select__menu"]').count()
-                    if count > 0:
-                        print(f"[ats-form] Menu appeared after typing: {char!r}")
-                        break
-                    await page.wait_for_timeout(150)
-
-                await page.wait_for_timeout(300)
-
-                menu_count = await page.locator('[class*="select__menu"]').count()
-                print(f"[ats-form] Menu after char-by-char: {menu_count}")
-
-                if menu_count > 0:
-                    result = await page.evaluate(
-                        """() => {
-                            const opts = document.querySelectorAll('[class*="select__option"]');
-                            console.log('options found:', opts.length);
-                            for (const opt of opts) {
-                                if (opt.innerText.trim().includes('Israel')) {
-                                    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                    opt.click();
-                                    return 'clicked: ' + opt.innerText;
-                                }
-                            }
-                            return 'not found. opts: ' + Array.from(opts).map(o => o.innerText).join('|');
-                        }"""
-                    )
-                    print(f"[ats-form] Option click: {result}")
-                    country_confirmed = result.startswith("clicked:")
-                    print(f"[ats-form] Country selected via char-by-char typing: {country_confirmed}")
-                else:
-                    # Typing never rendered a menu — fall back to the toggle
-                    # button, but open it and read for "Israel" inside a
-                    # single JS round trip below rather than clicking via
-                    # Playwright and awaiting in between.
-                    await page.evaluate(
-                        """() => {
-                            const btn = document.querySelector('button[aria-label="Toggle flyout"]');
-                            if (btn) {
-                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                            }
-                        }"""
-                    )
-                    await page.wait_for_timeout(300)
-
-                    result = await page.evaluate(
-                        """() => {
-                            const opts = document.querySelectorAll('[class*="select__option"]');
-                            for (const opt of opts) {
-                                if (opt.innerText.includes('Israel')) {
-                                    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                    return 'js-clicked: ' + opt.innerText;
-                                }
-                            }
-                            return 'opts found: ' + opts.length;
-                        }"""
-                    )
-                    print(f"[ats-form] JS toggle result: {result}")
-                    country_confirmed = result.startswith("js-clicked:")
-                    print(f"[ats-form] Country selected via toggle fallback: {country_confirmed}")
-
-            # react-select-style widgets often keep the value that actually
-            # gets submitted on a second, unlabeled sibling input (the
-            # library's own hidden form-value mirror) separate from the
-            # visible #country search box — sync it in case our selection
-            # above only updated the visible one.
+            option = page.get_by_role("option", name="Israel", exact=True)
             try:
-                hidden_sync_result = await page.evaluate(
-                    """() => {
-                        const country = document.querySelector('#country');
-                        if (!country) return 'no_country_el';
-                        const parent = country.parentElement;
-                        if (!parent) return 'no_parent';
-                        const synced = [];
-                        parent.querySelectorAll('input').forEach(inp => {
-                            if (inp !== country && !inp.id) {
-                                inp.value = country.value;
-                                inp.dispatchEvent(new Event('input', { bubbles: true }));
-                                inp.dispatchEvent(new Event('change', { bubbles: true }));
-                                synced.push(inp.name || '(no name)');
-                            }
-                        });
-                        country.dispatchEvent(new Event('input', { bubbles: true }));
-                        country.dispatchEvent(new Event('change', { bubbles: true }));
-                        return synced;
-                    }"""
-                )
-                print(f"[ats-form] Country hidden-sibling-input sync: {hidden_sync_result}")
+                await option.wait_for(state="visible", timeout=3000)
+                await option.click()
+                country_confirmed = True
+                print("[ats-form] Country: clicked Israel option (exact role match)")
             except Exception as e:
-                print(f"[ats-form] Country hidden-sibling-input sync failed: {e}")
-
-            # Every input on the page that either has a value or has no id —
-            # narrower than the full ALL-inputs dump used for custom
-            # questions, scoped to exactly what's relevant here: did
-            # anything actually pick up "Israel" anywhere in the DOM.
-            try:
-                all_inputs_after_country = await page.evaluate(
-                    """() => Array.from(document.querySelectorAll('input'))
-                        .map(el => ({id: el.id, val: el.value, type: el.type}))
-                        .filter(x => x.val || !x.id)
-                        .slice(0, 10)"""
-                )
-                print(f"[ats-form] Inputs after country: {all_inputs_after_country}")
-            except Exception as e:
-                print(f"[ats-form] Could not dump inputs after country: {e}")
-
-            # Authoritative check, independent of what each attempt above
-            # self-reported: react-select only renders a "single value" chip
-            # (class contains "single-value"/"singleValue") once an option is
-            # genuinely selected — unlike #country's raw .value, which fills
-            # with plain typed filter text regardless of whether a selection
-            # ever landed. A "clicked:"/"js-clicked:" result above means we
-            # found the option and dispatched events at it, not that
-            # react-select's own state actually changed, so this is the real
-            # test.
-            async def _country_single_value_confirmed() -> bool:
-                count = await page.locator(
-                    '[class*="select__single-value"], [class*="singleValue"]'
-                ).filter(has_text="Israel").count()
-                return count > 0
-
-            if not country_confirmed:
-                country_confirmed = await _country_single_value_confirmed()
-            print(f"[ats-form] Country single-value chip confirms Israel: {country_confirmed}")
-
-            final_val = await page.input_value("#country")
-            print(f"[ats-form] Country raw input value (NOT proof of selection): {final_val!r}")
-
-            if not country_confirmed:
-                # Keyboard typing, the toggle button, and React-fiber
-                # manipulation have all failed to persist a selection on
-                # this board — fall back to driving the widget with real
-                # mouse events at the actual on-screen coordinates of the
-                # toggle button and the "Israel" option, instead of any more
-                # synthetic/JS-dispatched interaction. Gated on
-                # country_confirmed, not on final_val — final_val is always
-                # truthy once the char-by-char loop above has typed
-                # "Israel" into the box, which made this fallback (and the
-                # last-resort injection below) unreachable dead code before,
-                # even though no option had actually been picked and
-                # Greenhouse's own post-submit page still showed "Country*"
-                # as an unmet required field.
-                print("[ats-form] Country not confirmed selected — trying mouse-coordinate clicking")
+                print(f"[ats-form] Country: exact role option not found: {e}")
+                option_fuzzy = page.get_by_role("option", name="Israel", exact=False).first
                 try:
-                    toggle = page.locator('button[aria-label="Toggle flyout"]').first
-                    toggle_count = await toggle.count()
-                    print(f"[ats-form] Country toggle button count: {toggle_count}")
-                    if toggle_count > 0:
-                        # A prior run found the toggle button at a real bbox
-                        # (x=637, y=745, 24x24) but the menu still didn't open
-                        # after clicking those coordinates — the button may
-                        # have been outside the actually-scrolled viewport (a
-                        # bounding_box() call still returns page coordinates
-                        # for an off-screen element; page.mouse.click() at
-                        # those coordinates then clicks whatever real content
-                        # is at that point on the visible viewport, not the
-                        # button). Scroll it into view and re-read its bbox
-                        # before doing anything else.
-                        await toggle.scroll_into_view_if_needed()
-                        await page.wait_for_timeout(300)
+                    await option_fuzzy.wait_for(state="visible", timeout=2000)
+                    await option_fuzzy.click()
+                    country_confirmed = True
+                    print("[ats-form] Country: clicked Israel option (fuzzy role match)")
+                except Exception as e2:
+                    print(f"[ats-form] Country: fuzzy role option not found either: {e2}")
+                    await combo.first.press("ArrowDown")
+                    await page.wait_for_timeout(200)
+                    await combo.first.press("Enter")
+                    print("[ats-form] Country: keyboard ArrowDown+Enter fallback")
+        else:
+            print("[ats-form] Country: no combobox found by role or #country selector")
 
-                        bbox = await toggle.bounding_box()
-                        print(f"[ats-form] Country toggle bbox after scroll: {bbox}")
+        if not country_confirmed:
+            country_confirmed = await _country_single_value_confirmed()
+        print(f"[ats-form] Country single-value chip confirms Israel: {country_confirmed}")
 
-                        if bbox:
-                            await page.mouse.move(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
-                            await page.wait_for_timeout(200)
-                            await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
-                            await page.wait_for_timeout(800)
+        final_val = ""
+        if await page.locator("#country").count() > 0:
+            final_val = await page.input_value("#country")
+        print(f"[ats-form] Country raw input value (NOT proof of selection): {final_val!r}")
 
-                            os.makedirs("/app/screenshots", exist_ok=True)
-                            await page.screenshot(path="/app/screenshots/after_toggle_click.png", full_page=False)
-
-                            menu = await page.locator('[class*="select__menu"]').count()
-                            print(f"[ats-form] Country menu count after scrolled click: {menu}")
-
-                            if menu > 0:
-                                menu_el = page.locator('[class*="select__menu"]').first
-                                menu_bbox = await menu_el.bounding_box()
-                                print(f"[ats-form] Country menu bbox: {menu_bbox}")
-
-                                opts = await page.locator('[class*="select__option"]').all()
-                                print(f"[ats-form] Country option count in menu: {len(opts)}")
-                                for i, opt in enumerate(opts[:10]):
-                                    opt_bbox = await opt.bounding_box()
-                                    opt_text = await opt.inner_text()
-                                    print(f"[ats-form] Country option {i}: {opt_text!r} at {opt_bbox}")
-
-                                    if "Israel" in opt_text and opt_bbox:
-                                        await page.mouse.click(
-                                            opt_bbox["x"] + opt_bbox["width"] / 2,
-                                            opt_bbox["y"] + opt_bbox["height"] / 2,
-                                        )
-                                        print("[ats-form] Country: mouse-clicked Israel option")
-                                        break
-                            else:
-                                # Type to filter while the dropdown might still
-                                # be focused — don't click anywhere else
-                                # first, that's exactly what closed the menu
-                                # in earlier attempts.
-                                await page.keyboard.type("Israel", delay=100)
-                                await page.wait_for_timeout(500)
-                                menu2 = await page.locator('[class*="select__menu"]').count()
-                                print(f"[ats-form] Country menu count after typing: {menu2}")
-                                if menu2 > 0:
-                                    await page.keyboard.press("Enter")
-                        else:
-                            print("[ats-form] Country toggle button has no bounding box — likely not visible")
-                    else:
-                        print("[ats-form] Country toggle flyout button not found for mouse-coordinate attempt")
-                except Exception as e:
-                    print(f"[ats-form] Mouse-coordinate country selection failed: {e}")
-
-                await page.wait_for_timeout(300)
-                country_confirmed = await _country_single_value_confirmed()
-                final_val = await page.input_value("#country")
-                print(
-                    f"[ats-form] Country after mouse-coordinate attempt: "
-                    f"confirmed={country_confirmed} raw={final_val!r}"
-                )
-
-            if not country_confirmed:
-                # Absolute last resort: fire React's native value setter +
-                # synthetic events on the raw input. This does NOT trigger
-                # react-select's onChange or update its internal selected
-                # state — it only fakes what #country's DOM value looks like
-                # — so it will not satisfy Greenhouse's actual "Country*"
-                # required-field check if that field truly depends on a real
-                # selection. Kept only in case some board variant reads the
-                # raw input value directly.
-                print("[ats-form] Country still not confirmed — falling back to raw value injection (unlikely to satisfy validation)")
-                await page.evaluate("""() => {
-                    const input = document.getElementById('country');
-                    if (!input) return;
-                    const setter = Object.getOwnPropertyDescriptor(
-                        window.HTMLInputElement.prototype, 'value'
-                    ).set;
-                    setter.call(input, 'Israel');
-                    input.dispatchEvent(new Event('input', {bubbles: true}));
-                    input.dispatchEvent(new Event('change', {bubbles: true}));
-                    input.dispatchEvent(new Event('blur', {bubbles: true}));
-                }""")
-                await page.wait_for_timeout(400)
-                final_val = await page.input_value("#country")
-                print(f"[ats-form] Country after React event injection: '{final_val}'")
-
-            print(f"[ats-form] FINAL country state: confirmed={country_confirmed} raw_value={final_val!r}")
-            if country_confirmed:
-                filled.append("country")
-            else:
-                errors.append("Country not confirmed selected (react-select gave no single-value confirmation)")
-                print("[ats-form] WARNING: country left unconfirmed — submit will likely be rejected for missing Country")
+        print(f"[ats-form] FINAL country state: confirmed={country_confirmed} raw_value={final_val!r}")
+        if country_confirmed:
+            filled.append("country")
+        else:
+            errors.append("Country not confirmed selected (react-select gave no single-value confirmation)")
+            print("[ats-form] WARNING: country left unconfirmed — submit will likely be rejected for missing Country")
     except Exception as e:
         print(f"[ats-form] Country field error: {e}")
 
