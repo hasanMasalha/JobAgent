@@ -859,6 +859,16 @@ async def _fill_greenhouse_form(
 
             fiber_succeeded = fiber_result.startswith("set via fiber:")
 
+            # Tracks whether an option was actually PICKED — never inferred
+            # from #country's raw .value, which fills up with plain typed
+            # filter text (from the char-by-char loop below) whether or not
+            # the dropdown ever opened or a selection ever landed. Trusting
+            # that raw value as "success" was the bug: it made every fallback
+            # below look unnecessary even when nothing had actually been
+            # selected, and Greenhouse's own post-submit page text confirmed
+            # it — "Country*" still showed as an unmet required field.
+            country_confirmed = fiber_succeeded
+
             if not fiber_succeeded:
                 # Fiber walk didn't find a settable Select component — React
                 # internals/prop shapes vary by version and build, so fall
@@ -900,7 +910,8 @@ async def _fill_greenhouse_form(
                         }"""
                     )
                     print(f"[ats-form] Option click: {result}")
-                    print(f"[ats-form] Country selected via char-by-char typing: {result.startswith('clicked:')}")
+                    country_confirmed = result.startswith("clicked:")
+                    print(f"[ats-form] Country selected via char-by-char typing: {country_confirmed}")
                 else:
                     # Typing never rendered a menu — fall back to the toggle
                     # button, but open it and read for "Israel" inside a
@@ -929,7 +940,8 @@ async def _fill_greenhouse_form(
                         }"""
                     )
                     print(f"[ats-form] JS toggle result: {result}")
-                    print(f"[ats-form] Country selected via toggle fallback: {result.startswith('js-clicked:')}")
+                    country_confirmed = result.startswith("js-clicked:")
+                    print(f"[ats-form] Country selected via toggle fallback: {country_confirmed}")
 
             # react-select-style widgets often keep the value that actually
             # gets submitted on a second, unlabeled sibling input (the
@@ -976,15 +988,43 @@ async def _fill_greenhouse_form(
             except Exception as e:
                 print(f"[ats-form] Could not dump inputs after country: {e}")
 
+            # Authoritative check, independent of what each attempt above
+            # self-reported: react-select only renders a "single value" chip
+            # (class contains "single-value"/"singleValue") once an option is
+            # genuinely selected — unlike #country's raw .value, which fills
+            # with plain typed filter text regardless of whether a selection
+            # ever landed. A "clicked:"/"js-clicked:" result above means we
+            # found the option and dispatched events at it, not that
+            # react-select's own state actually changed, so this is the real
+            # test.
+            async def _country_single_value_confirmed() -> bool:
+                count = await page.locator(
+                    '[class*="select__single-value"], [class*="singleValue"]'
+                ).filter(has_text="Israel").count()
+                return count > 0
+
+            if not country_confirmed:
+                country_confirmed = await _country_single_value_confirmed()
+            print(f"[ats-form] Country single-value chip confirms Israel: {country_confirmed}")
+
             final_val = await page.input_value("#country")
-            if not final_val:
+            print(f"[ats-form] Country raw input value (NOT proof of selection): {final_val!r}")
+
+            if not country_confirmed:
                 # Keyboard typing, the toggle button, and React-fiber
                 # manipulation have all failed to persist a selection on
                 # this board — fall back to driving the widget with real
                 # mouse events at the actual on-screen coordinates of the
                 # toggle button and the "Israel" option, instead of any more
-                # synthetic/JS-dispatched interaction.
-                print("[ats-form] Country still empty after all attempts — trying mouse-coordinate clicking")
+                # synthetic/JS-dispatched interaction. Gated on
+                # country_confirmed, not on final_val — final_val is always
+                # truthy once the char-by-char loop above has typed
+                # "Israel" into the box, which made this fallback (and the
+                # last-resort injection below) unreachable dead code before,
+                # even though no option had actually been picked and
+                # Greenhouse's own post-submit page still showed "Country*"
+                # as an unmet required field.
+                print("[ats-form] Country not confirmed selected — trying mouse-coordinate clicking")
                 try:
                     toggle = page.locator('button[aria-label="Toggle flyout"]').first
                     if await toggle.count() > 0:
@@ -1038,11 +1078,23 @@ async def _fill_greenhouse_form(
                     print(f"[ats-form] Mouse-coordinate country selection failed: {e}")
 
                 await page.wait_for_timeout(300)
+                country_confirmed = await _country_single_value_confirmed()
                 final_val = await page.input_value("#country")
-                print(f"[ats-form] Country after mouse-coordinate attempt: {final_val!r}")
+                print(
+                    f"[ats-form] Country after mouse-coordinate attempt: "
+                    f"confirmed={country_confirmed} raw={final_val!r}"
+                )
 
-            if not final_val:
-                # Last resort: fire React's native value setter + synthetic events
+            if not country_confirmed:
+                # Absolute last resort: fire React's native value setter +
+                # synthetic events on the raw input. This does NOT trigger
+                # react-select's onChange or update its internal selected
+                # state — it only fakes what #country's DOM value looks like
+                # — so it will not satisfy Greenhouse's actual "Country*"
+                # required-field check if that field truly depends on a real
+                # selection. Kept only in case some board variant reads the
+                # raw input value directly.
+                print("[ats-form] Country still not confirmed — falling back to raw value injection (unlikely to satisfy validation)")
                 await page.evaluate("""() => {
                     const input = document.getElementById('country');
                     if (!input) return;
@@ -1058,8 +1110,12 @@ async def _fill_greenhouse_form(
                 final_val = await page.input_value("#country")
                 print(f"[ats-form] Country after React event injection: '{final_val}'")
 
-            print(f"[ats-form] FINAL country value: '{final_val}'")
-            filled.append("country")
+            print(f"[ats-form] FINAL country state: confirmed={country_confirmed} raw_value={final_val!r}")
+            if country_confirmed:
+                filled.append("country")
+            else:
+                errors.append("Country not confirmed selected (react-select gave no single-value confirmation)")
+                print("[ats-form] WARNING: country left unconfirmed — submit will likely be rejected for missing Country")
     except Exception as e:
         print(f"[ats-form] Country field error: {e}")
 
