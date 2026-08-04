@@ -1027,9 +1027,11 @@ async def _fill_greenhouse_form(
                 print("[ats-form] Country not confirmed selected — trying mouse-coordinate clicking")
                 try:
                     toggle = page.locator('button[aria-label="Toggle flyout"]').first
-                    if await toggle.count() > 0:
+                    toggle_count = await toggle.count()
+                    print(f"[ats-form] Country toggle button count: {toggle_count}")
+                    if toggle_count > 0:
                         bbox = await toggle.bounding_box()
-                        print(f"[ats-form] Toggle bbox: {bbox}")
+                        print(f"[ats-form] Country toggle bbox: {bbox}")
 
                         if bbox:
                             await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
@@ -1039,25 +1041,26 @@ async def _fill_greenhouse_form(
                             await page.screenshot(path="/app/screenshots/dropdown_open.png")
 
                             menu = await page.locator('[class*="select__menu"]').count()
-                            print(f"[ats-form] Menu after mouse click: {menu}")
+                            print(f"[ats-form] Country menu count after mouse click: {menu}")
 
                             if menu > 0:
                                 menu_el = page.locator('[class*="select__menu"]').first
                                 menu_bbox = await menu_el.bounding_box()
-                                print(f"[ats-form] Menu bbox: {menu_bbox}")
+                                print(f"[ats-form] Country menu bbox: {menu_bbox}")
 
                                 opts = await page.locator('[class*="select__option"]').all()
+                                print(f"[ats-form] Country option count in menu: {len(opts)}")
                                 for i, opt in enumerate(opts[:10]):
                                     opt_bbox = await opt.bounding_box()
                                     opt_text = await opt.inner_text()
-                                    print(f"[ats-form] Opt {i}: {opt_text!r} at {opt_bbox}")
+                                    print(f"[ats-form] Country option {i}: {opt_text!r} at {opt_bbox}")
 
                                     if "Israel" in opt_text and opt_bbox:
                                         await page.mouse.click(
                                             opt_bbox["x"] + opt_bbox["width"] / 2,
                                             opt_bbox["y"] + opt_bbox["height"] / 2,
                                         )
-                                        print("[ats-form] Mouse clicked Israel")
+                                        print("[ats-form] Country: mouse-clicked Israel option")
                                         break
                             else:
                                 # Type to filter while the dropdown might still
@@ -1067,13 +1070,13 @@ async def _fill_greenhouse_form(
                                 await page.keyboard.type("Israel", delay=100)
                                 await page.wait_for_timeout(500)
                                 menu2 = await page.locator('[class*="select__menu"]').count()
-                                print(f"[ats-form] Menu after typing: {menu2}")
+                                print(f"[ats-form] Country menu count after typing: {menu2}")
                                 if menu2 > 0:
                                     await page.keyboard.press("Enter")
                         else:
-                            print("[ats-form] Toggle button has no bounding box — likely not visible")
+                            print("[ats-form] Country toggle button has no bounding box — likely not visible")
                     else:
-                        print("[ats-form] Toggle flyout button not found for mouse-coordinate attempt")
+                        print("[ats-form] Country toggle flyout button not found for mouse-coordinate attempt")
                 except Exception as e:
                     print(f"[ats-form] Mouse-coordinate country selection failed: {e}")
 
