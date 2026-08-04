@@ -852,7 +852,13 @@ async def _fill_greenhouse_form(
             ).filter(has_text="Israel").count()
             return count > 0
 
-        country_confirmed = False
+        # click_reported tracks what each step SAYS it did — logged for
+        # visibility only. It is deliberately never trusted as the final
+        # answer: earlier attempts in this block's history self-reported
+        # "clicked"/"success" while react-select's actual state never
+        # changed, so country_confirmed below is always computed from the
+        # chip check, independent of what these clicks claim.
+        click_reported = False
 
         toggle = page.get_by_role("button", name="Toggle flyout")
         toggle_count = await toggle.count()
@@ -876,23 +882,36 @@ async def _fill_greenhouse_form(
             print("[ats-form] Country: filled combobox with 'israel'")
 
             # Non-exact match is required — the accessible name is
-            # "Israel +<dial code>", so an exact=True match against
-            # "Israel" (what the previous attempt used) never matches.
+            # "🇮🇱 Israel +972" (flag emoji + dial code), so an exact=True
+            # match against "Israel" (what the previous attempt used) never
+            # matches.
             option = page.get_by_role("option", name="Israel", exact=False).first
             try:
                 await option.wait_for(state="visible", timeout=3000)
                 await option.click()
-                country_confirmed = True
-                print("[ats-form] Country: clicked Israel option (codegen sequence)")
+                click_reported = True
+                print("[ats-form] Country: clicked Israel option SUCCESS (codegen sequence)")
             except Exception as e:
                 print(f"[ats-form] Country: option click failed: {e}")
-                await page.keyboard.press("Enter")
-                print("[ats-form] Country: pressed Enter as fallback")
+                try:
+                    await page.get_by_text("+972", exact=False).first.click()
+                    click_reported = True
+                    print("[ats-form] Country: clicked via +972 text fallback")
+                except Exception as e2:
+                    print(f"[ats-form] Country: +972 text fallback failed: {e2}")
+                    await page.keyboard.press("Enter")
+                    print("[ats-form] Country: pressed Enter as fallback")
         else:
             print("[ats-form] Country: no combobox found by role or #country selector")
 
-        if not country_confirmed:
-            country_confirmed = await _country_single_value_confirmed()
+        print(f"[ats-form] Country click reported success: {click_reported}")
+
+        raw_chip_count = await page.locator(
+            ".select__single-value, [class*=\"single-value\"]"
+        ).count()
+        print(f"[ats-form] Country selection chip count (any value, not just Israel): {raw_chip_count}")
+
+        country_confirmed = await _country_single_value_confirmed()
         print(f"[ats-form] Country single-value chip confirms Israel: {country_confirmed}")
 
         final_val = ""
