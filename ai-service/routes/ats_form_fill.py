@@ -978,6 +978,70 @@ async def _fill_greenhouse_form(
 
             final_val = await page.input_value("#country")
             if not final_val:
+                # Keyboard typing, the toggle button, and React-fiber
+                # manipulation have all failed to persist a selection on
+                # this board — fall back to driving the widget with real
+                # mouse events at the actual on-screen coordinates of the
+                # toggle button and the "Israel" option, instead of any more
+                # synthetic/JS-dispatched interaction.
+                print("[ats-form] Country still empty after all attempts — trying mouse-coordinate clicking")
+                try:
+                    toggle = page.locator('button[aria-label="Toggle flyout"]').first
+                    if await toggle.count() > 0:
+                        bbox = await toggle.bounding_box()
+                        print(f"[ats-form] Toggle bbox: {bbox}")
+
+                        if bbox:
+                            await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
+                            await page.wait_for_timeout(500)
+
+                            os.makedirs("/app/screenshots", exist_ok=True)
+                            await page.screenshot(path="/app/screenshots/dropdown_open.png")
+
+                            menu = await page.locator('[class*="select__menu"]').count()
+                            print(f"[ats-form] Menu after mouse click: {menu}")
+
+                            if menu > 0:
+                                menu_el = page.locator('[class*="select__menu"]').first
+                                menu_bbox = await menu_el.bounding_box()
+                                print(f"[ats-form] Menu bbox: {menu_bbox}")
+
+                                opts = await page.locator('[class*="select__option"]').all()
+                                for i, opt in enumerate(opts[:10]):
+                                    opt_bbox = await opt.bounding_box()
+                                    opt_text = await opt.inner_text()
+                                    print(f"[ats-form] Opt {i}: {opt_text!r} at {opt_bbox}")
+
+                                    if "Israel" in opt_text and opt_bbox:
+                                        await page.mouse.click(
+                                            opt_bbox["x"] + opt_bbox["width"] / 2,
+                                            opt_bbox["y"] + opt_bbox["height"] / 2,
+                                        )
+                                        print("[ats-form] Mouse clicked Israel")
+                                        break
+                            else:
+                                # Type to filter while the dropdown might still
+                                # be focused — don't click anywhere else
+                                # first, that's exactly what closed the menu
+                                # in earlier attempts.
+                                await page.keyboard.type("Israel", delay=100)
+                                await page.wait_for_timeout(500)
+                                menu2 = await page.locator('[class*="select__menu"]').count()
+                                print(f"[ats-form] Menu after typing: {menu2}")
+                                if menu2 > 0:
+                                    await page.keyboard.press("Enter")
+                        else:
+                            print("[ats-form] Toggle button has no bounding box — likely not visible")
+                    else:
+                        print("[ats-form] Toggle flyout button not found for mouse-coordinate attempt")
+                except Exception as e:
+                    print(f"[ats-form] Mouse-coordinate country selection failed: {e}")
+
+                await page.wait_for_timeout(300)
+                final_val = await page.input_value("#country")
+                print(f"[ats-form] Country after mouse-coordinate attempt: {final_val!r}")
+
+            if not final_val:
                 # Last resort: fire React's native value setter + synthetic events
                 await page.evaluate("""() => {
                     const input = document.getElementById('country');
