@@ -720,6 +720,51 @@ async def _fill_greenhouse_form(
     await page.wait_for_load_state("networkidle")
     await page.wait_for_timeout(1000)
 
+    # Debug: check whether react-select has actually mounted on #country
+    # before we touch it. aria-expanded/aria-controls only appear once the
+    # library has attached its accessibility wiring to the input; if those
+    # are missing (and there's no __reactFiber*/__reactInternalInstance* key
+    # on the input or its select-ish ancestor either), every dropdown-open
+    # attempt downstream is racing a component that isn't mounted yet, not
+    # failing because of a wrong selector or event type.
+    await page.wait_for_load_state("networkidle")
+    await page.wait_for_timeout(3000)
+
+    init_check = await page.evaluate(
+        """() => {
+            const input = document.querySelector('#country');
+            if (!input) return 'no input';
+
+            const keys = Object.keys(input);
+            const reactKeys = keys.filter(k =>
+                k.includes('react') || k.includes('React')
+            );
+
+            const container = input.closest('[class*="select"]');
+            const containerKeys = container
+                ? Object.keys(container).filter(k =>
+                    k.includes('react') || k.includes('React')
+                )
+                : [];
+
+            return {
+                inputReactKeys: reactKeys,
+                containerReactKeys: containerKeys,
+                inputType: input.type,
+                inputRole: input.getAttribute('role'),
+                ariaExpanded: input.getAttribute('aria-expanded'),
+                ariaControls: input.getAttribute('aria-controls'),
+            };
+        }"""
+    )
+    print(f"[ats-form] Country React init check: {init_check}")
+
+    try:
+        os.makedirs("/app/screenshots", exist_ok=True)
+        await page.screenshot(path="/app/screenshots/form_initial.png")
+    except Exception as e:
+        print(f"[ats-form] Could not save initial-state screenshot: {e}")
+
     async def fill_field(selectors: list[str], value: str, field_name: str, react_sync: bool = False) -> bool:
         for selector in selectors:
             try:
