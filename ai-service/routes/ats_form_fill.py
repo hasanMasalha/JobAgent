@@ -1075,18 +1075,33 @@ async def _fill_greenhouse_form(
                     toggle_count = await toggle.count()
                     print(f"[ats-form] Country toggle button count: {toggle_count}")
                     if toggle_count > 0:
+                        # A prior run found the toggle button at a real bbox
+                        # (x=637, y=745, 24x24) but the menu still didn't open
+                        # after clicking those coordinates — the button may
+                        # have been outside the actually-scrolled viewport (a
+                        # bounding_box() call still returns page coordinates
+                        # for an off-screen element; page.mouse.click() at
+                        # those coordinates then clicks whatever real content
+                        # is at that point on the visible viewport, not the
+                        # button). Scroll it into view and re-read its bbox
+                        # before doing anything else.
+                        await toggle.scroll_into_view_if_needed()
+                        await page.wait_for_timeout(300)
+
                         bbox = await toggle.bounding_box()
-                        print(f"[ats-form] Country toggle bbox: {bbox}")
+                        print(f"[ats-form] Country toggle bbox after scroll: {bbox}")
 
                         if bbox:
+                            await page.mouse.move(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
+                            await page.wait_for_timeout(200)
                             await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
-                            await page.wait_for_timeout(500)
+                            await page.wait_for_timeout(800)
 
                             os.makedirs("/app/screenshots", exist_ok=True)
-                            await page.screenshot(path="/app/screenshots/dropdown_open.png")
+                            await page.screenshot(path="/app/screenshots/after_toggle_click.png", full_page=False)
 
                             menu = await page.locator('[class*="select__menu"]').count()
-                            print(f"[ats-form] Country menu count after mouse click: {menu}")
+                            print(f"[ats-form] Country menu count after scrolled click: {menu}")
 
                             if menu > 0:
                                 menu_el = page.locator('[class*="select__menu"]').first
