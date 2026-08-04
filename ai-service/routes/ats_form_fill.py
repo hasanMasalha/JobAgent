@@ -836,24 +836,15 @@ async def _fill_greenhouse_form(
         'input[id*="email"]',
     ], email, "email", react_sync=True)
 
-    # Country: react-select-style autocomplete. Eight prior attempts in this
-    # block's history (React-fiber onChange, char-by-char keyboard typing,
-    # JS-dispatched mousedown/click, real mouse-coordinate clicks with
-    # scroll-into-view) all failed to get a confirmed selection out of this
-    # widget. Trying Playwright's role-based combobox/option locators next —
-    # they auto-wait for actionability (visible, scrolled into view, not
-    # obscured) instead of us hand-computing bounding boxes, and are the
-    # documented Playwright pattern for ARIA comboboxes if this board
-    # actually exposes proper roles.
-    #
-    # NOTE: this deliberately uses combo.fill() where the original version of
-    # this comment block warned "fill() bypasses synthetic events and gets
-    # overwritten" for this exact input. That finding predates this attempt.
-    # The single-value-chip check below is kept as the one piece of prior
-    # diagnostics that's proven trustworthy (raw .value and each attempt's
-    # own self-reported "clicked" result both turned out to be false
-    # positives earlier) — if it comes back False here too, that's
-    # confirmation the original warning was right, not a fluke.
+    # Country: react-select-style autocomplete. Playwright Codegen against
+    # the live board recorded the actual working sequence, with one concrete
+    # new fact the previous role-based attempt didn't have: the rendered
+    # option's accessible name is "Israel +..." (it includes the dial code),
+    # not "Israel" alone — which is exactly why that attempt's exact=True
+    # role match always found zero options. Codegen's sequence also opens
+    # with a real click on the Toggle flyout button BEFORE touching the
+    # combobox at all, which no earlier attempt in this block's history
+    # tried as the first step.
     try:
         async def _country_single_value_confirmed() -> bool:
             count = await page.locator(
@@ -863,42 +854,40 @@ async def _fill_greenhouse_form(
 
         country_confirmed = False
 
+        toggle = page.get_by_role("button", name="Toggle flyout")
+        toggle_count = await toggle.count()
+        print(f"[ats-form] Country toggle flyout button count: {toggle_count}")
+        if toggle_count > 0:
+            await toggle.click()
+            await page.wait_for_timeout(500)
+            print("[ats-form] Country: clicked Toggle flyout")
+
         combo = page.get_by_role("combobox", name="Country")
         combo_count = await combo.count()
         print(f"[ats-form] Country combobox by role count: {combo_count}")
-
         if combo_count == 0:
             combo = page.locator("#country")
             combo_count = await combo.count()
             print(f"[ats-form] Country combobox by #country fallback count: {combo_count}")
 
         if combo_count > 0:
-            await combo.first.click()
-            await page.wait_for_timeout(300)
+            await combo.first.fill("israel")
+            await page.wait_for_timeout(500)
+            print("[ats-form] Country: filled combobox with 'israel'")
 
-            await combo.first.fill("Israel")
-            await page.wait_for_timeout(1000)
-
-            option = page.get_by_role("option", name="Israel", exact=True)
+            # Non-exact match is required — the accessible name is
+            # "Israel +<dial code>", so an exact=True match against
+            # "Israel" (what the previous attempt used) never matches.
+            option = page.get_by_role("option", name="Israel", exact=False).first
             try:
                 await option.wait_for(state="visible", timeout=3000)
                 await option.click()
                 country_confirmed = True
-                print("[ats-form] Country: clicked Israel option (exact role match)")
+                print("[ats-form] Country: clicked Israel option (codegen sequence)")
             except Exception as e:
-                print(f"[ats-form] Country: exact role option not found: {e}")
-                option_fuzzy = page.get_by_role("option", name="Israel", exact=False).first
-                try:
-                    await option_fuzzy.wait_for(state="visible", timeout=2000)
-                    await option_fuzzy.click()
-                    country_confirmed = True
-                    print("[ats-form] Country: clicked Israel option (fuzzy role match)")
-                except Exception as e2:
-                    print(f"[ats-form] Country: fuzzy role option not found either: {e2}")
-                    await combo.first.press("ArrowDown")
-                    await page.wait_for_timeout(200)
-                    await combo.first.press("Enter")
-                    print("[ats-form] Country: keyboard ArrowDown+Enter fallback")
+                print(f"[ats-form] Country: option click failed: {e}")
+                await page.keyboard.press("Enter")
+                print("[ats-form] Country: pressed Enter as fallback")
         else:
             print("[ats-form] Country: no combobox found by role or #country selector")
 
@@ -909,7 +898,7 @@ async def _fill_greenhouse_form(
         final_val = ""
         if await page.locator("#country").count() > 0:
             final_val = await page.input_value("#country")
-        print(f"[ats-form] Country raw input value (NOT proof of selection): {final_val!r}")
+        print(f"[ats-form] Country after codegen sequence (raw, NOT proof of selection): {final_val!r}")
 
         print(f"[ats-form] FINAL country state: confirmed={country_confirmed} raw_value={final_val!r}")
         if country_confirmed:
