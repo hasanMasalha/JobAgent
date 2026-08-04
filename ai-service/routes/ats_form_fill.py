@@ -796,366 +796,78 @@ async def _fill_greenhouse_form(
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
-            menu_opened_via_control = False
-
-            # New theory: typing into #country before opening the flyout may
-            # be what actually renders the (filtered) menu, rather than the
-            # toggle-button click alone. Try type-first; if no menu appears,
-            # clear back to empty before falling through to the toggle-click
-            # flow below so that flow starts from a clean, untyped field
-            # instead of double-typing "Israel" on top of this attempt.
+            # Earlier attempts opened the flyout and then did more Playwright
+            # actions (waits, additional locator calls) before touching the
+            # menu — each of those is a tick where an outside-click/blur
+            # handler on this widget can fire and close the menu again before
+            # we ever get to click an option. So: type one character at a
+            # time and check for the menu after every keystroke (react-select
+            # renders it as soon as the filtered input has any match), then
+            # select the option via a JS-dispatched mousedown+click in the
+            # very same evaluate() call — no intervening await that could let
+            # a close handler run first.
             await country_el.click()
             await page.wait_for_timeout(200)
-            await page.keyboard.type("Israel", delay=80)
-            await page.wait_for_timeout(500)
 
-            menu_after_typing = page.locator('[class*="select__menu"]')
-            menu_after_typing_count = await menu_after_typing.count()
-            print(f"[ats-form] Menu after typing: {menu_after_typing_count}")
+            for char in "Israel":
+                await page.keyboard.type(char)
+                count = await page.locator('[class*="select__menu"]').count()
+                if count > 0:
+                    print(f"[ats-form] Menu appeared after typing: {char!r}")
+                    break
+                await page.wait_for_timeout(150)
 
-            if menu_after_typing_count > 0:
-                opts = await page.locator('[class*="select__option"]').all()
-                print(f"[ats-form] Options in menu: {len(opts)}")
-                for opt in opts[:5]:
-                    try:
-                        opt_text = await opt.inner_text()
-                    except Exception:
-                        opt_text = "<unreadable>"
-                    try:
-                        opt_visible = await opt.is_visible()
-                    except Exception:
-                        opt_visible = "<unknown>"
-                    print(f"[ats-form]   Option: {opt_text!r} vis={opt_visible}")
+            await page.wait_for_timeout(300)
 
-                israel_from_typing = page.locator('[class*="select__option"]').filter(has_text="Israel").first
-                if await israel_from_typing.count() > 0:
-                    await israel_from_typing.click()
-                    print("[ats-form] Clicked Israel (menu appeared from typing alone)")
-                    menu_opened_via_control = True
-                else:
-                    print("[ats-form] Menu appeared from typing, but no Israel option found in it")
-            else:
-                # Typing alone didn't render a menu — clear the field before
-                # trying the toggle-button flow below, so it isn't typing
-                # "Israel" a second time on top of what's already there.
-                await page.keyboard.press("Control+a")
-                await page.keyboard.press("Backspace")
-                await page.wait_for_timeout(200)
+            menu_count = await page.locator('[class*="select__menu"]').count()
+            print(f"[ats-form] Menu after char-by-char: {menu_count}")
 
-            # Confirmed from the actual rendered HTML: this board's react-select
-            # dropdown opens via a dedicated toggle button
-            # (aria-label="Toggle flyout"), not generically from clicking
-            # anywhere in the .select__control container — try the real
-            # trigger first.
-            toggle_btn = page.locator('button[aria-label="Toggle flyout"]').first
-            if not menu_opened_via_control and await toggle_btn.count() > 0:
-                await toggle_btn.click()
-                await page.wait_for_timeout(800)
-
-                # The menu can exist in the DOM (confirmed via browser
-                # devtools) while Playwright's default wait_for_selector
-                # (state="visible") still times out on it — check attached
-                # vs. visible counts separately so we know which case we're
-                # actually in before falling back to anything.
-                menu_attached = await page.locator('[class*="select__menu"]').count()
-                menu_visible = await page.locator('[class*="select__menu"]').filter(visible=True).count()
-                print(f"[ats-form] Menu attached: {menu_attached}")
-                print(f"[ats-form] Menu visible: {menu_visible}")
-
-                menu_css = await page.evaluate(
+            if menu_count > 0:
+                result = await page.evaluate(
                     """() => {
-                        const menu = document.querySelector('[class*="select__menu"]');
-                        if (!menu) return 'NOT FOUND';
-                        return {
-                            class: menu.className,
-                            display: window.getComputedStyle(menu).display,
-                            visibility: window.getComputedStyle(menu).visibility,
-                            opacity: window.getComputedStyle(menu).opacity,
-                            zIndex: window.getComputedStyle(menu).zIndex,
-                            height: menu.offsetHeight,
-                            children: menu.children.length,
-                            text: menu.innerText.slice(0, 200),
-                        };
+                        const opts = document.querySelectorAll('[class*="select__option"]');
+                        console.log('options found:', opts.length);
+                        for (const opt of opts) {
+                            if (opt.innerText.trim().includes('Israel')) {
+                                opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                opt.click();
+                                return 'clicked: ' + opt.innerText;
+                            }
+                        }
+                        return 'not found. opts: ' + Array.from(opts).map(o => o.innerText).join('|');
                     }"""
                 )
-                print(f"[ats-form] Menu CSS: {menu_css}")
-
-                # react-select binds selection to onMouseDown (not onClick) so
-                # it can select before the input blurs — dispatch both events
-                # via JS regardless of CSS visibility, since a raw DOM click
-                # doesn't care whether Playwright considers the element
-                # "visible".
-                menu_js_click_result = None
-                if menu_attached > 0:
-                    menu_js_click_result = await page.evaluate(
-                        """() => {
-                            const opts = document.querySelectorAll('[class*="select__option"]');
-                            for (const opt of opts) {
-                                if (opt.innerText.includes('Israel')) {
-                                    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                    opt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                                    return 'clicked: ' + opt.innerText;
-                                }
-                            }
-                            return 'not found. Total opts: ' + opts.length;
-                        }"""
-                    )
-                    print(f"[ats-form] JS mousedown+click result: {menu_js_click_result}")
-
-                menu_js_click_succeeded = bool(
-                    menu_js_click_result and menu_js_click_result.startswith("clicked:")
+                print(f"[ats-form] Option click: {result}")
+                print(f"[ats-form] Country selected via char-by-char typing: {result.startswith('clicked:')}")
+            else:
+                # Typing never rendered a menu — fall back to the toggle
+                # button, but open it and read for "Israel" inside a single
+                # JS round trip below rather than clicking via Playwright and
+                # awaiting in between.
+                await page.evaluate(
+                    """() => {
+                        const btn = document.querySelector('button[aria-label="Toggle flyout"]');
+                        if (btn) {
+                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                        }
+                    }"""
                 )
-
-                if not menu_js_click_succeeded:
-                    try:
-                        await page.wait_for_selector(".select__menu", timeout=3000)
-                        print("[ats-form] Country menu opened")
-
-                        await page.keyboard.type("Israel", delay=50)
-                        await page.wait_for_timeout(800)
-
-                        # Prefer scoping by ARIA role first — a role="listbox"/
-                        # role="option" query only matches elements semantically
-                        # marked as part of THIS dropdown, so unlike a page-wide
-                        # class selector it can't accidentally match unrelated
-                        # content (which is exactly what happened a few commits
-                        # back with a broad class-based selector matching job-
-                        # description bullet points). Falls back to the
-                        # confirmed .select__option class below if this widget
-                        # doesn't expose those roles.
-                        option_clicked = False
-                        try:
-                            listbox = page.get_by_role("listbox")
-                            await listbox.wait_for(state="visible", timeout=2000)
-                            print("[ats-form] Listbox appeared (role-based)")
-                            role_option = listbox.get_by_role("option", name="Israel", exact=False)
-                            if await role_option.count() > 0:
-                                await role_option.first.click()
-                                print("[ats-form] Selected Israel via role-based listbox/option")
-                                option_clicked = True
-                            else:
-                                role_opts_text = await listbox.get_by_role("option").all_inner_texts()
-                                print(f"[ats-form] Listbox options (role-based): {role_opts_text[:5]}")
-                        except Exception as e:
-                            print(f"[ats-form] Role-based listbox not found: {e}")
-
-                        # A single count() check right after typing can catch the
-                        # menu mid-filter, before react-select has re-rendered the
-                        # matching option's text — wait_for(state="visible") lets
-                        # Playwright's own auto-waiting retry until it's actually
-                        # there instead of trusting one snapshot.
-                        if not option_clicked:
-                            israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-                            try:
-                                await israel_opt.wait_for(state="visible", timeout=2000)
-                                await israel_opt.click()
-                                print("[ats-form] Clicked Israel option")
-                            except Exception:
-                                opts = await page.locator(".select__option").all()
-                                print(f"[ats-form] Options available: {len(opts)}")
-                                for opt in opts[:5]:
-                                    try:
-                                        opt_text = await opt.inner_text()
-                                    except Exception:
-                                        opt_text = "<unreadable>"
-                                    print(f"[ats-form]   Option: {opt_text!r}")
-                                await page.keyboard.press("Enter")
-                                print("[ats-form] Pressed Enter for Israel (no exact option match found in time)")
-                    except Exception as e:
-                        # wait_for_selector's default state is "visible", not just
-                        # "attached" — if the menu exists in the DOM but fails
-                        # Playwright's visibility check (display:none during a
-                        # transition, zero-size, a hidden ancestor), this times
-                        # out even though the element is genuinely there and a
-                        # raw JS click on it would still work (React's synthetic
-                        # event system doesn't care about CSS visibility either).
-                        print(f"[ats-form] Menu error: {e}")
-                        try:
-                            menu_info = await page.evaluate(
-                                """() => {
-                                    const menus = document.querySelectorAll('[class*="select__menu"]');
-                                    return Array.from(menus).map(m => ({
-                                        class: m.className,
-                                        visible: m.offsetParent !== null,
-                                        display: window.getComputedStyle(m).display,
-                                        children: m.children.length,
-                                        text: m.innerText.slice(0, 200),
-                                    }));
-                                }"""
-                            )
-                            print(f"[ats-form] Menu info after toggle: {menu_info}")
-                        except Exception as e2:
-                            menu_info = None
-                            print(f"[ats-form] Could not inspect menu via JS: {e2}")
-
-                        clicked_via_js = False
-                        if menu_info:
-                            try:
-                                clicked = await page.evaluate(
-                                    """() => {
-                                        const options = document.querySelectorAll('[class*="select__option"]');
-                                        for (const opt of options) {
-                                            if (opt.innerText.includes('Israel')) {
-                                                opt.click();
-                                                return 'clicked: ' + opt.innerText;
-                                            }
-                                        }
-                                        return 'not found, options: ' + options.length;
-                                    }"""
-                                )
-                                print(f"[ats-form] JS click result: {clicked}")
-                                clicked_via_js = clicked.startswith("clicked:")
-                            except Exception as e3:
-                                print(f"[ats-form] JS option click failed: {e3}")
-
-                        if not clicked_via_js:
-                            await page.keyboard.press("Enter")
-
-                menu_opened_via_control = True
-            elif not menu_opened_via_control:
-                print("[ats-form] Toggle flyout button not found — trying select__control click")
-
-            # Screenshot evidence from an earlier attempt showed the
-            # react-select menu never opens from typing into #country alone —
-            # react-select opens its menu from a click on the "control" div
-            # (the whole widget's clickable surface), not necessarily from
-            # focusing/typing into the underlying input. Try that next if the
-            # toggle button above wasn't found.
-            country_control = page.locator('.select__control, [class*="select__control"]').first
-            if not menu_opened_via_control and await country_control.count() > 0:
-                await country_control.click()
-                await page.wait_for_timeout(500)
-                print("[ats-form] Clicked react-select control")
-
-                menu = page.locator(".select__menu")
-                if await menu.count() > 0:
-                    print("[ats-form] Menu opened after control click")
-                    menu_opened_via_control = True
-                    await page.keyboard.type("Israel", delay=50)
-                    await page.wait_for_timeout(500)
-
-                    israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-                    if await israel_opt.count() > 0:
-                        await israel_opt.click()
-                        print("[ats-form] Selected Israel via react-select control click")
-                    else:
-                        await page.keyboard.press("Enter")
-                        print(
-                            "[ats-form] Country: pressed Enter after control-click "
-                            "typing (no exact Israel option match)"
-                        )
-                else:
-                    print("[ats-form] Menu did not open after control click — falling back to input click + type")
-            elif not menu_opened_via_control:
-                print("[ats-form] No select__control found — using input-based approach")
-
-            if not menu_opened_via_control:
-                print("[ats-form] Country: clicking field")
-                await country_el.click()
                 await page.wait_for_timeout(300)
 
-                value_before_type = await country_el.input_value()
-                print(f"[ats-form] Country value before type: {value_before_type!r}")
-
-                await page.keyboard.press("Control+a")
-                await page.keyboard.press("Backspace")
-                await page.wait_for_timeout(200)
-                print("[ats-form] Country: typing Israel")
-                for char in "Israel":
-                    await page.keyboard.type(char, delay=80)
-                await page.wait_for_timeout(1500)
-
-                value_after_type = await country_el.input_value()
-                print(f"[ats-form] Country value after typing: {value_after_type!r}")
-
-                # The broad li/[class*="option"] selectors tried previously
-                # matched unrelated page content (job description bullet
-                # points are <li> elements too) — find every element that
-                # actually contains the text "Israel" anywhere on the page,
-                # independent of any selector guess, to identify what the
-                # real dropdown option looks like structurally.
-                try:
-                    israel_elements = await page.evaluate(
-                        """() => {
-                            const walker = document.createTreeWalker(
-                                document.body,
-                                NodeFilter.SHOW_TEXT,
-                                null
-                            );
-                            const results = [];
-                            let node;
-                            while (node = walker.nextNode()) {
-                                if (node.textContent.includes('Israel')) {
-                                    const el = node.parentElement;
-                                    results.push({
-                                        tag: el.tagName,
-                                        class: el.className,
-                                        role: el.getAttribute('role'),
-                                        text: node.textContent.trim().slice(0, 50),
-                                    });
-                                }
+                result = await page.evaluate(
+                    """() => {
+                        const opts = document.querySelectorAll('[class*="select__option"]');
+                        for (const opt of opts) {
+                            if (opt.innerText.includes('Israel')) {
+                                opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                return 'js-clicked: ' + opt.innerText;
                             }
-                            return results.slice(0, 10);
-                        }"""
-                    )
-                    print(f"[ats-form] Elements containing Israel: {israel_elements}")
-                except Exception as e:
-                    print(f"[ats-form] Could not scan for Israel text: {e}")
-
-                try:
-                    focused = await page.evaluate(
-                        """() => {
-                            const el = document.activeElement;
-                            return {
-                                tag: el.tagName,
-                                id: el.id,
-                                class: el.className,
-                                role: el.getAttribute('role'),
-                            };
-                        }"""
-                    )
-                    print(f"[ats-form] Focused element: {focused}")
-                except Exception as e:
-                    print(f"[ats-form] Could not read focused element: {e}")
-
-                try:
-                    os.makedirs("/app/screenshots", exist_ok=True)
-                    await page.screenshot(path="/app/screenshots/country_dropdown.png")
-                    print("[ats-form] Country dropdown screenshot saved")
-                except Exception as e:
-                    print(f"[ats-form] Could not save country dropdown screenshot: {e}")
-
-                try:
-                    await page.wait_for_selector(".select__menu, .select__menu-list", timeout=3000)
-                    print("[ats-form] React-select menu appeared")
-                except Exception:
-                    print("[ats-form] React-select menu timeout — .select__menu never appeared")
-
-                react_select_options = await page.locator(".select__option").all()
-                print(f"[ats-form] React-select options: {len(react_select_options)}")
-                for opt in react_select_options[:10]:
-                    try:
-                        opt_text = await opt.inner_text()
-                    except Exception:
-                        opt_text = "<unreadable>"
-                    print(f"[ats-form]   react-select option: {opt_text!r}")
-
-                option = None
-                israel_opt = page.locator(".select__option").filter(has_text="Israel").first
-                if await israel_opt.count() > 0:
-                    option = israel_opt
-                if option:
-                    await option.click()
-                    await page.wait_for_timeout(400)
-                    val = await page.input_value("#country")
-                    print(f"[ats-form] Country after dropdown click: '{val}'")
-                else:
-                    await page.keyboard.press("ArrowDown")
-                    await page.wait_for_timeout(200)
-                    await page.keyboard.press("Enter")
-                    await page.wait_for_timeout(400)
-                    val = await page.input_value("#country")
-                    print(f"[ats-form] Country after ArrowDown+Enter: '{val}'")
+                        }
+                        return 'opts found: ' + opts.length;
+                    }"""
+                )
+                print(f"[ats-form] JS toggle result: {result}")
+                print(f"[ats-form] Country selected via toggle fallback: {result.startswith('js-clicked:')}")
 
             # react-select-style widgets often keep the value that actually
             # gets submitted on a second, unlabeled sibling input (the
