@@ -796,78 +796,140 @@ async def _fill_greenhouse_form(
     try:
         country_el = await page.query_selector('#country, input[id="country"]')
         if country_el:
-            # Earlier attempts opened the flyout and then did more Playwright
-            # actions (waits, additional locator calls) before touching the
-            # menu — each of those is a tick where an outside-click/blur
-            # handler on this widget can fire and close the menu again before
-            # we ever get to click an option. So: type one character at a
-            # time and check for the menu after every keystroke (react-select
-            # renders it as soon as the filtered input has any match), then
-            # select the option via a JS-dispatched mousedown+click in the
-            # very same evaluate() call — no intervening await that could let
-            # a close handler run first.
-            await country_el.click()
-            await page.wait_for_timeout(200)
+            # Primary approach: skip the dropdown UI entirely and invoke
+            # react-select's own onChange handler directly, found by walking
+            # up the React fiber tree from the #country input. There's no
+            # menu to close if we never open one, so this sidesteps every
+            # outside-click/blur race the DOM-driven attempts below existed
+            # to work around.
+            fiber_result = await page.evaluate(
+                """() => {
+                    const input = document.querySelector('#country');
+                    if (!input) return 'no input';
 
-            for char in "Israel":
-                await page.keyboard.type(char)
-                count = await page.locator('[class*="select__menu"]').count()
-                if count > 0:
-                    print(f"[ats-form] Menu appeared after typing: {char!r}")
-                    break
-                await page.wait_for_timeout(150)
+                    const fiberKey = Object.keys(input).find(k =>
+                        k.startsWith('__reactFiber') ||
+                        k.startsWith('__reactInternalInstance')
+                    );
+                    if (!fiberKey) return 'no fiber';
 
-            await page.wait_for_timeout(300)
+                    let fiber = input[fiberKey];
+                    let attempts = 0;
 
-            menu_count = await page.locator('[class*="select__menu"]').count()
-            print(f"[ats-form] Menu after char-by-char: {menu_count}")
+                    while (fiber && attempts < 30) {
+                        attempts++;
+                        const props = fiber.memoizedProps;
 
-            if menu_count > 0:
-                result = await page.evaluate(
-                    """() => {
-                        const opts = document.querySelectorAll('[class*="select__option"]');
-                        console.log('options found:', opts.length);
-                        for (const opt of opts) {
-                            if (opt.innerText.trim().includes('Israel')) {
-                                opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                opt.click();
-                                return 'clicked: ' + opt.innerText;
+                        if (props && props.onChange && props.options !== undefined) {
+                            const options = props.options || [];
+                            const israel = options.find(o =>
+                                (o.label || '').includes('Israel') ||
+                                (o.value || '').includes('IL') ||
+                                (o.value || '').includes('il') ||
+                                (o.value || '').includes('Israel')
+                            );
+
+                            if (israel) {
+                                props.onChange(israel);
+                                return 'set via fiber: ' + JSON.stringify(israel);
                             }
+
+                            return 'options: ' +
+                                options.slice(0, 5).map(o => o.label + '=' + o.value).join(', ');
                         }
-                        return 'not found. opts: ' + Array.from(opts).map(o => o.innerText).join('|');
-                    }"""
-                )
-                print(f"[ats-form] Option click: {result}")
-                print(f"[ats-form] Country selected via char-by-char typing: {result.startswith('clicked:')}")
-            else:
-                # Typing never rendered a menu — fall back to the toggle
-                # button, but open it and read for "Israel" inside a single
-                # JS round trip below rather than clicking via Playwright and
-                # awaiting in between.
-                await page.evaluate(
-                    """() => {
-                        const btn = document.querySelector('button[aria-label="Toggle flyout"]');
-                        if (btn) {
-                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                        }
-                    }"""
-                )
+                        fiber = fiber.return;
+                    }
+                    return 'fiber walked ' + attempts + ' levels, no select found';
+                }"""
+            )
+            print(f"[ats-form] React fiber country: {fiber_result}")
+
+            await page.wait_for_timeout(500)
+            fiber_val = await page.locator('#country').input_value()
+            fiber_hidden_val = await page.evaluate(
+                """() => {
+                    const inputs = document.querySelectorAll('input');
+                    for (const inp of inputs) {
+                        if (!inp.id && inp.value) return inp.value;
+                    }
+                    return '';
+                }"""
+            )
+            print(f"[ats-form] After fiber: country={fiber_val!r} hidden={fiber_hidden_val!r}")
+
+            fiber_succeeded = fiber_result.startswith("set via fiber:")
+
+            if not fiber_succeeded:
+                # Fiber walk didn't find a settable Select component — React
+                # internals/prop shapes vary by version and build, so fall
+                # back to driving the visible dropdown. Type one character at
+                # a time and check for the menu after every keystroke
+                # (react-select renders it as soon as the filtered input has
+                # any match), then select the option via a JS-dispatched
+                # mousedown+click in the very same evaluate() call — no
+                # intervening await that could let a close handler run first.
+                await country_el.click()
+                await page.wait_for_timeout(200)
+
+                for char in "Israel":
+                    await page.keyboard.type(char)
+                    count = await page.locator('[class*="select__menu"]').count()
+                    if count > 0:
+                        print(f"[ats-form] Menu appeared after typing: {char!r}")
+                        break
+                    await page.wait_for_timeout(150)
+
                 await page.wait_for_timeout(300)
 
-                result = await page.evaluate(
-                    """() => {
-                        const opts = document.querySelectorAll('[class*="select__option"]');
-                        for (const opt of opts) {
-                            if (opt.innerText.includes('Israel')) {
-                                opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                return 'js-clicked: ' + opt.innerText;
+                menu_count = await page.locator('[class*="select__menu"]').count()
+                print(f"[ats-form] Menu after char-by-char: {menu_count}")
+
+                if menu_count > 0:
+                    result = await page.evaluate(
+                        """() => {
+                            const opts = document.querySelectorAll('[class*="select__option"]');
+                            console.log('options found:', opts.length);
+                            for (const opt of opts) {
+                                if (opt.innerText.trim().includes('Israel')) {
+                                    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                    opt.click();
+                                    return 'clicked: ' + opt.innerText;
+                                }
                             }
-                        }
-                        return 'opts found: ' + opts.length;
-                    }"""
-                )
-                print(f"[ats-form] JS toggle result: {result}")
-                print(f"[ats-form] Country selected via toggle fallback: {result.startswith('js-clicked:')}")
+                            return 'not found. opts: ' + Array.from(opts).map(o => o.innerText).join('|');
+                        }"""
+                    )
+                    print(f"[ats-form] Option click: {result}")
+                    print(f"[ats-form] Country selected via char-by-char typing: {result.startswith('clicked:')}")
+                else:
+                    # Typing never rendered a menu — fall back to the toggle
+                    # button, but open it and read for "Israel" inside a
+                    # single JS round trip below rather than clicking via
+                    # Playwright and awaiting in between.
+                    await page.evaluate(
+                        """() => {
+                            const btn = document.querySelector('button[aria-label="Toggle flyout"]');
+                            if (btn) {
+                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                            }
+                        }"""
+                    )
+                    await page.wait_for_timeout(300)
+
+                    result = await page.evaluate(
+                        """() => {
+                            const opts = document.querySelectorAll('[class*="select__option"]');
+                            for (const opt of opts) {
+                                if (opt.innerText.includes('Israel')) {
+                                    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                    return 'js-clicked: ' + opt.innerText;
+                                }
+                            }
+                            return 'opts found: ' + opts.length;
+                        }"""
+                    )
+                    print(f"[ats-form] JS toggle result: {result}")
+                    print(f"[ats-form] Country selected via toggle fallback: {result.startswith('js-clicked:')}")
 
             # react-select-style widgets often keep the value that actually
             # gets submitted on a second, unlabeled sibling input (the
