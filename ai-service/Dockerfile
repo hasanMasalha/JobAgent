@@ -39,12 +39,20 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
+# Xvfb virtual display — Chromium runs headed against :99 so portal/overlay
+# rendering (react-select, ITI) matches headed Codegen behavior exactly.
+RUN apt-get update && apt-get install -y xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy application code
 COPY . .
 
 # Create runtime directories
 RUN mkdir -p browser_profile screenshots
 
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/entrypoint.sh"]

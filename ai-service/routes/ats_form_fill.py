@@ -269,23 +269,15 @@ async def fill_ats_form(
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=True,
-                # Force the full Chromium binary (Playwright's "new" headless
-                # mode) instead of the default chromium-headless-shell it
-                # picks for headless launches since ~1.49 — the shell has
-                # weaker rendering fidelity for portals/overlays like
-                # react-select's country dropdown.
-                channel="chromium",
+                # Headed against the container's Xvfb :99 display (see
+                # entrypoint.sh) — full Chromium channel alone wasn't enough
+                # to render the react-select country portal correctly in
+                # headless mode.
+                headless=False,
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
-                    "--disable-accelerated-2d-canvas",
-                    "--no-first-run",
-                    "--no-zygote",
-                    "--disable-gpu",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--window-size=1920,1080",
                 ],
             )
 
