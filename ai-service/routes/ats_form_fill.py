@@ -278,6 +278,7 @@ async def fill_ats_form(
                     "--no-first-run",
                     "--no-zygote",
                     "--disable-gpu",
+                    "--disable-features=IsolateOrigins,site-per-process",
                     "--window-size=1920,1080",
                 ],
             )
@@ -846,11 +847,17 @@ async def _fill_greenhouse_form(
     # combobox at all, which no earlier attempt in this block's history
     # tried as the first step.
     try:
+        async def _country_chip_text() -> str:
+            chip = page.locator('.select__single-value, [class*="single-value"]')
+            return await chip.inner_text() if await chip.count() > 0 else ""
+
         async def _country_single_value_confirmed() -> bool:
-            count = await page.locator(
-                '[class*="select__single-value"], [class*="singleValue"]'
-            ).filter(has_text="Israel").count()
-            return count > 0
+            # The rendered chip after selection is "🇮🇱 +972" — it does NOT
+            # contain the word "Israel" — so confirmation has to key off the
+            # dial code, same as the option match below. A check that looked
+            # for "Israel" here would false-negative on a correct selection.
+            chip_text = await _country_chip_text()
+            return "+972" in chip_text
 
         # click_reported tracks what each step SAYS it did — logged for
         # visibility only. It is deliberately never trusted as the final
@@ -881,24 +888,26 @@ async def _fill_greenhouse_form(
             await page.wait_for_timeout(500)
             print("[ats-form] Country: filled combobox with 'israel'")
 
-            # Non-exact match is required — the accessible name is
-            # "🇮🇱 Israel +972" (flag emoji + dial code), so an exact=True
-            # match against "Israel" (what the previous attempt used) never
-            # matches.
-            option = page.get_by_role("option", name="Israel", exact=False).first
+            # Match on "+972", not "Israel": codegen confirms the rendered
+            # option's accessible name is "🇮🇱 Israel +972", but matching on
+            # "Israel" is fragile against boards where the option text order
+            # or emoji rendering differs. The dial code is the stable part.
+            option = page.get_by_role("option", name="+972", exact=False).first
+            option2 = page.locator('[role="option"]').filter(has_text="+972").first
             try:
                 await option.wait_for(state="visible", timeout=3000)
                 await option.click()
                 click_reported = True
-                print("[ats-form] Country: clicked Israel option SUCCESS (codegen sequence)")
+                print("[ats-form] Country: clicked +972 option")
             except Exception as e:
-                print(f"[ats-form] Country: option click failed: {e}")
+                print(f"[ats-form] Country: +972 option click failed: {e}")
                 try:
-                    await page.get_by_text("+972", exact=False).first.click()
+                    await option2.wait_for(state="visible", timeout=2000)
+                    await option2.click()
                     click_reported = True
-                    print("[ats-form] Country: clicked via +972 text fallback")
+                    print("[ats-form] Country: clicked +972 via filter")
                 except Exception as e2:
-                    print(f"[ats-form] Country: +972 text fallback failed: {e2}")
+                    print(f"[ats-form] Country: +972 filter fallback failed: {e2}")
                     await page.keyboard.press("Enter")
                     print("[ats-form] Country: pressed Enter as fallback")
         else:
@@ -906,13 +915,11 @@ async def _fill_greenhouse_form(
 
         print(f"[ats-form] Country click reported success: {click_reported}")
 
-        raw_chip_count = await page.locator(
-            ".select__single-value, [class*=\"single-value\"]"
-        ).count()
-        print(f"[ats-form] Country selection chip count (any value, not just Israel): {raw_chip_count}")
+        chip_text = await _country_chip_text()
+        print(f"[ats-form] Country chip: {chip_text!r}")
 
         country_confirmed = await _country_single_value_confirmed()
-        print(f"[ats-form] Country single-value chip confirms Israel: {country_confirmed}")
+        print(f"[ats-form] Country single-value chip confirms +972: {country_confirmed}")
 
         final_val = ""
         if await page.locator("#country").count() > 0:
