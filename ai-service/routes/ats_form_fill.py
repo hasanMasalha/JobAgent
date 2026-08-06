@@ -270,6 +270,12 @@ async def fill_ats_form(
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
+                # Force the full Chromium binary (Playwright's "new" headless
+                # mode) instead of the default chromium-headless-shell it
+                # picks for headless launches since ~1.49 — the shell has
+                # weaker rendering fidelity for portals/overlays like
+                # react-select's country dropdown.
+                channel="chromium",
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
