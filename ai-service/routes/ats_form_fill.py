@@ -279,11 +279,18 @@ async def fill_ats_form(
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",  # /dev/shm is too small in Docker's default config; use disk instead
                     "--disable-gpu",  # no real GPU behind Xvfb — force software rendering
+                    "--disable-gpu-sandbox",
                     "--disable-software-rasterizer",
                     "--disable-extensions",
                     "--no-first-run",
-                    "--no-zygote",  # paired with --single-process below to stop the zombie
-                    "--single-process",  # [chrome] <defunct> crashes under headed Xvfb in Docker
+                    # --no-zygote + --single-process (previously here to stop
+                    # the [chrome] <defunct> zombie crash) also broke Chrome's
+                    # rendering pipeline under Xvfb — the react-select country
+                    # menu never rendered (menuExists: False) with them on.
+                    # Dropped for correct rendering; the zombie-process issue
+                    # they were addressing is unresolved again and needs a
+                    # different fix (e.g. explicit browser.close()/process
+                    # reaping) if it recurs.
                     "--ignore-certificate-errors",
                 ],
             )
@@ -893,8 +900,16 @@ async def _fill_greenhouse_form(
         toggle_count = await toggle.count()
         print(f"[ats-form] Country toggle flyout button count: {toggle_count}")
         if toggle_count > 0:
+            # Focus the underlying input before opening the flyout — some
+            # react-select builds only mount/attach the menu portal once the
+            # control itself has focus, not just on the toggle button click.
+            country_input = page.locator("#country")
+            if await country_input.count() > 0:
+                await country_input.click()
+                await page.wait_for_timeout(300)
+
             await toggle.click()
-            await page.wait_for_timeout(500)
+            await page.wait_for_timeout(1000)  # Increase to 1s
             print("[ats-form] Country: clicked Toggle flyout")
 
         combo = page.get_by_role("combobox", name="Country")
