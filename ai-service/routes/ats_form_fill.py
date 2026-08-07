@@ -850,12 +850,25 @@ async def _fill_greenhouse_form(
             return await chip.inner_text() if await chip.count() > 0 else ""
 
         async def _country_single_value_confirmed() -> bool:
-            # The rendered chip after selection is "🇮🇱 +972" — it does NOT
-            # contain the word "Israel" — so confirmation has to key off the
-            # dial code, same as the option match below. A check that looked
-            # for "Israel" here would false-negative on a correct selection.
+            # The actual rendered single-value chip is:
+            #   <div class="iti__flag iti__il"></div><span>+ 972</span>
+            # Two consequences: (1) there's a SPACE between "+" and "972",
+            # so a plain "+972" substring match against chip_text always
+            # returned False even on a correct selection — that was the
+            # real bug, not react-select failing to select. (2) #country's
+            # own input_value() is ALWAYS empty for react-select (it never
+            # writes the selected value into the underlying input), so it
+            # can never be used as confirmation regardless of formatting —
+            # it's logged elsewhere purely for diagnostics, never checked
+            # here. The iti__il flag class is the sturdiest signal since
+            # it doesn't depend on text formatting at all; the chip-text
+            # check (space-normalized, plus an "israel" fallback) backs it
+            # up for boards that render the country control differently.
+            if await page.locator('.iti__il, .iti__flag.iti__il').count() > 0:
+                return True
             chip_text = await _country_chip_text()
-            return "+972" in chip_text
+            normalized = chip_text.replace(" ", "")
+            return "+972" in normalized or "israel" in chip_text.lower()
 
         # click_reported tracks what each step SAYS it did — logged for
         # visibility only. It is deliberately never trusted as the final
@@ -917,7 +930,7 @@ async def _fill_greenhouse_form(
         print(f"[ats-form] Country chip: {chip_text!r}")
 
         country_confirmed = await _country_single_value_confirmed()
-        print(f"[ats-form] Country single-value chip confirms +972: {country_confirmed}")
+        print(f"[ats-form] Country confirmed via iti__il flag / chip text: {country_confirmed}")
 
         final_val = ""
         if await page.locator("#country").count() > 0:
