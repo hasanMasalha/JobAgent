@@ -275,9 +275,16 @@ async def fill_ats_form(
                 # headless mode.
                 headless=False,
                 args=[
-                    "--no-sandbox",
+                    "--no-sandbox",  # required to run Chrome at all as root in Docker
                     "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
+                    "--disable-dev-shm-usage",  # /dev/shm is too small in Docker's default config; use disk instead
+                    "--disable-gpu",  # no real GPU behind Xvfb — force software rendering
+                    "--disable-software-rasterizer",
+                    "--disable-extensions",
+                    "--no-first-run",
+                    "--no-zygote",  # paired with --single-process below to stop the zombie
+                    "--single-process",  # [chrome] <defunct> crashes under headed Xvfb in Docker
+                    "--ignore-certificate-errors",
                 ],
             )
 
