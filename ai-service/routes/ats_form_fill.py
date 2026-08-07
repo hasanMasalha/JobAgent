@@ -885,7 +885,11 @@ async def _fill_greenhouse_form(
         # chip check, independent of what these clicks claim.
         click_reported = False
 
-        toggle = page.get_by_role("button", name="Toggle flyout")
+        # .first: the page renders 14 "Toggle flyout" buttons (one per
+        # react-select-style field, not just Country) — clicking the
+        # unscoped locator throws Playwright's strict-mode "multiple
+        # elements" error instead of ever reaching the country field.
+        toggle = page.get_by_role("button", name="Toggle flyout").first
         toggle_count = await toggle.count()
         print(f"[ats-form] Country toggle flyout button count: {toggle_count}")
         if toggle_count > 0:
@@ -1746,7 +1750,10 @@ async def _fill_greenhouse_form(
                 continue
 
             await dropdown.click()
-            await page.wait_for_timeout(500)
+            await page.wait_for_timeout(500)  # Wait for menu
+
+            opts = await page.locator('[role="option"], [class*="select__option"]').all()
+            print(f"[ats-form] EEO options after click: {len(opts)}")
 
             option_locator = page.locator(
                 'div[role="option"], li[role="option"], [class*="option"]'
