@@ -892,13 +892,23 @@ async def _fill_greenhouse_form(
         # chip check, independent of what these clicks claim.
         click_reported = False
 
-        # .first: the page renders 14 "Toggle flyout" buttons (one per
-        # react-select-style field, not just Country) — clicking the
-        # unscoped locator throws Playwright's strict-mode "multiple
-        # elements" error instead of ever reaching the country field.
-        toggle = page.get_by_role("button", name="Toggle flyout").first
+        # .phone-input__country would only be correct if this board reuses
+        # that container class for the Country (nationality) field too —
+        # nothing else in this file has ever observed that class, and by
+        # name it looks like the separate phone-number country-code picker
+        # (the ITI widget handled later in this function), not the
+        # standalone #country combobox this block is driving. Try it, but
+        # fall back to the already-proven unscoped "Toggle flyout".first
+        # (below) rather than trust an unverified selector and risk
+        # silently clicking the wrong widget.
+        toggle = page.locator('.phone-input__country button[aria-label="Toggle flyout"]').first
         toggle_count = await toggle.count()
-        print(f"[ats-form] Country toggle flyout button count: {toggle_count}")
+        print(f"[ats-form] Country toggle (.phone-input__country scoped) count: {toggle_count}")
+        if toggle_count == 0:
+            toggle = page.get_by_role("button", name="Toggle flyout").first
+            toggle_count = await toggle.count()
+            print(f"[ats-form] Country toggle (unscoped .first fallback) count: {toggle_count}")
+
         if toggle_count > 0:
             # Focus the underlying input before opening the flyout — some
             # react-select builds only mount/attach the menu portal once the
@@ -908,9 +918,47 @@ async def _fill_greenhouse_form(
                 await country_input.click()
                 await page.wait_for_timeout(300)
 
-            await toggle.click()
-            await page.wait_for_timeout(1000)  # Increase to 1s
-            print("[ats-form] Country: clicked Toggle flyout")
+            # Plain .click() dispatches a trusted-enough event for most
+            # sites, but this board's aria-expanded never flips — try a
+            # real mouse hover-then-click at the button's screen
+            # coordinates instead, which goes through the OS/CDP input
+            # pipeline rather than Playwright's element-dispatch path.
+            await toggle.scroll_into_view_if_needed()
+            await page.wait_for_timeout(300)
+
+            bbox = await toggle.bounding_box()
+            print(f"[ats-form] Toggle bbox: {bbox}")
+
+            if bbox:
+                center_x = bbox["x"] + bbox["width"] / 2
+                center_y = bbox["y"] + bbox["height"] / 2
+
+                await page.mouse.move(center_x, center_y)
+                await page.wait_for_timeout(200)
+
+                await page.mouse.click(center_x, center_y)
+                await page.wait_for_timeout(1000)
+            else:
+                print("[ats-form] Toggle bbox unavailable — falling back to element .click()")
+                await toggle.click()
+                await page.wait_for_timeout(1000)
+
+            print("[ats-form] Country: clicked Toggle flyout (mouse hover+click)")
+
+            expanded = await page.locator("#country").get_attribute("aria-expanded")
+            print(f"[ats-form] aria-expanded after mouse click: {expanded}")
+
+            dom_after_mouse_click = await page.evaluate(
+                """() => ({
+                    menuExists: !!document.querySelector('[class*="select__menu"]'),
+                    ariaExpanded: document.querySelector('#country')
+                        ?.getAttribute('aria-expanded'),
+                    optionCount: document.querySelectorAll('[role="option"]').length,
+                })"""
+            )
+            print(f"[ats-form] DOM after mouse click: {dom_after_mouse_click}")
+
+            await page.screenshot(path="/app/screenshots/after_mouse_click.png")
 
         combo = page.get_by_role("combobox", name="Country")
         combo_count = await combo.count()
