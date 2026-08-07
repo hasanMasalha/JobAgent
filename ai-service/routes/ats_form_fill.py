@@ -896,8 +896,28 @@ async def _fill_greenhouse_form(
 
         if combo_count > 0:
             await combo.first.fill("israel")
-            await page.wait_for_timeout(500)
+            await page.wait_for_timeout(800)
             print("[ats-form] Country: filled combobox with 'israel'")
+
+            # Diagnostic snapshot taken BEFORE any Enter-key fallback is
+            # pressed, so it captures react-select's actual post-fill state
+            # (menu open? options rendered?) rather than whatever state a
+            # keypress may have already changed.
+            await page.screenshot(path="/app/screenshots/country_after_fill.png")
+            print("[ats-form] Screenshot taken after fill")
+
+            dom_state = await page.evaluate(
+                """() => {
+                    return {
+                        menuExists: !!document.querySelector('[class*="select__menu"]'),
+                        optionCount: document.querySelectorAll('[role="option"]').length,
+                        singleValue: document.querySelector('.select__single-value')?.innerText || '',
+                        itiIL: !!document.querySelector('.iti__il'),
+                        ariaExpanded: document.querySelector('#country')?.getAttribute('aria-expanded'),
+                    }
+                }"""
+            )
+            print(f"[ats-form] DOM state after fill: {dom_state}")
 
             # Match on "+972", not "Israel": codegen confirms the rendered
             # option's accessible name is "🇮🇱 Israel +972", but matching on
