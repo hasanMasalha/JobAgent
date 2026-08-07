@@ -892,42 +892,23 @@ async def _fill_greenhouse_form(
         # chip check, independent of what these clicks claim.
         click_reported = False
 
-        # .phone-input__country would only be correct if this board reuses
-        # that container class for the Country (nationality) field too —
-        # nothing else in this file has ever observed that class, and by
-        # name it looks like the separate phone-number country-code picker
-        # (the ITI widget handled later in this function), not the
-        # standalone #country combobox this block is driving. Try it, but
-        # fall back to the already-proven unscoped "Toggle flyout".first
-        # (below) rather than trust an unverified selector and risk
-        # silently clicking the wrong widget.
-        toggle = page.locator('.phone-input__country button[aria-label="Toggle flyout"]').first
-        toggle_count = await toggle.count()
-        print(f"[ats-form] Country toggle (.phone-input__country scoped) count: {toggle_count}")
-        if toggle_count == 0:
-            toggle = page.get_by_role("button", name="Toggle flyout").first
-            toggle_count = await toggle.count()
-            print(f"[ats-form] Country toggle (unscoped .first fallback) count: {toggle_count}")
+        # The Toggle flyout button turned out to have tabindex="-1" — React
+        # ignores clicks on it entirely (confirmed by the previous mouse
+        # hover+click attempt: aria-expanded stayed false even going through
+        # the OS/CDP input pipeline instead of Playwright's element-dispatch
+        # path). React-Select's real click target is the input itself, so
+        # this replaces the toggle click with a direct click on #country.
+        selected_via_input_click = False
+        country_input = page.locator("#country")
+        country_input_count = await country_input.count()
+        print(f"[ats-form] Country input (#country) count: {country_input_count}")
 
-        if toggle_count > 0:
-            # Focus the underlying input before opening the flyout — some
-            # react-select builds only mount/attach the menu portal once the
-            # control itself has focus, not just on the toggle button click.
-            country_input = page.locator("#country")
-            if await country_input.count() > 0:
-                await country_input.click()
-                await page.wait_for_timeout(300)
-
-            # Plain .click() dispatches a trusted-enough event for most
-            # sites, but this board's aria-expanded never flips — try a
-            # real mouse hover-then-click at the button's screen
-            # coordinates instead, which goes through the OS/CDP input
-            # pipeline rather than Playwright's element-dispatch path.
-            await toggle.scroll_into_view_if_needed()
+        if country_input_count > 0:
+            await country_input.scroll_into_view_if_needed()
             await page.wait_for_timeout(300)
 
-            bbox = await toggle.bounding_box()
-            print(f"[ats-form] Toggle bbox: {bbox}")
+            bbox = await country_input.bounding_box()
+            print(f"[ats-form] Country input bbox: {bbox}")
 
             if bbox:
                 center_x = bbox["x"] + bbox["width"] / 2
@@ -935,31 +916,41 @@ async def _fill_greenhouse_form(
 
                 await page.mouse.move(center_x, center_y)
                 await page.wait_for_timeout(200)
-
                 await page.mouse.click(center_x, center_y)
-                await page.wait_for_timeout(1000)
+                await page.wait_for_timeout(500)
+
+                expanded = await country_input.get_attribute("aria-expanded")
+                print(f"[ats-form] aria-expanded after input click: {expanded}")
+
+                if expanded != "true":
+                    await page.mouse.dblclick(center_x, center_y)
+                    await page.wait_for_timeout(500)
+                    expanded = await country_input.get_attribute("aria-expanded")
+                    print(f"[ats-form] aria-expanded after dblclick: {expanded}")
+
+                if expanded == "true":
+                    print("[ats-form] Menu opened via input click!")
+                    await page.keyboard.type("israel", delay=50)
+                    await page.wait_for_timeout(500)
+                    option = page.get_by_role("option", name="Israel", exact=False).first
+                    if await option.count() > 0:
+                        await option.click()
+                        click_reported = True
+                        selected_via_input_click = True
+                        print("[ats-form] Country: clicked Israel option (input-click path)")
+                    else:
+                        print("[ats-form] Country: menu opened but no 'Israel' option found")
+                else:
+                    print("[ats-form] Country: menu still not open after input click + dblclick")
             else:
-                print("[ats-form] Toggle bbox unavailable — falling back to element .click()")
-                await toggle.click()
-                await page.wait_for_timeout(1000)
+                print("[ats-form] Country input bbox unavailable — cannot mouse-click")
+        else:
+            print("[ats-form] Country: #country input not found")
 
-            print("[ats-form] Country: clicked Toggle flyout (mouse hover+click)")
-
-            expanded = await page.locator("#country").get_attribute("aria-expanded")
-            print(f"[ats-form] aria-expanded after mouse click: {expanded}")
-
-            dom_after_mouse_click = await page.evaluate(
-                """() => ({
-                    menuExists: !!document.querySelector('[class*="select__menu"]'),
-                    ariaExpanded: document.querySelector('#country')
-                        ?.getAttribute('aria-expanded'),
-                    optionCount: document.querySelectorAll('[role="option"]').length,
-                })"""
-            )
-            print(f"[ats-form] DOM after mouse click: {dom_after_mouse_click}")
-
-            await page.screenshot(path="/app/screenshots/after_mouse_click.png")
-
+        # Fallback to the codegen-recorded combobox fill/option-click flow
+        # only if the direct input click above didn't already confirm a
+        # selection — re-running it after a successful input-click selection
+        # would re-type into an already-filled chip for no reason.
         combo = page.get_by_role("combobox", name="Country")
         combo_count = await combo.count()
         print(f"[ats-form] Country combobox by role count: {combo_count}")
@@ -968,7 +959,7 @@ async def _fill_greenhouse_form(
             combo_count = await combo.count()
             print(f"[ats-form] Country combobox by #country fallback count: {combo_count}")
 
-        if combo_count > 0:
+        if combo_count > 0 and not selected_via_input_click:
             await combo.first.fill("israel")
             await page.wait_for_timeout(800)
             print("[ats-form] Country: filled combobox with 'israel'")
@@ -1015,6 +1006,8 @@ async def _fill_greenhouse_form(
                     print(f"[ats-form] Country: +972 filter fallback failed: {e2}")
                     await page.keyboard.press("Enter")
                     print("[ats-form] Country: pressed Enter as fallback")
+        elif selected_via_input_click:
+            print("[ats-form] Country: already selected via direct input click — skipped combobox fallback")
         else:
             print("[ats-form] Country: no combobox found by role or #country selector")
 
