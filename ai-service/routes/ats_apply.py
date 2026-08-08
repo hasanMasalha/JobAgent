@@ -90,14 +90,14 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                         ats_platform=request_dict["ats_platform"],
                         user_data=request_dict["user_data"],
                     ),
-                    timeout=120,
+                    timeout=300,
                 )
             except asyncio.TimeoutError:
-                print("[ats-apply-bg] TIMEOUT after 120s — submit_via_ats did not complete")
+                print("[ats-apply-bg] TIMEOUT after 300s — submit_via_ats did not complete")
                 result = {
                     "success": False,
                     "error": "timeout",
-                    "message": "Apply timed out after 2 minutes",
+                    "message": "Apply timed out after 5 minutes",
                 }
             print(f"[ats-apply-bg] Step 2: got result: {result}")
 

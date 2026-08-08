@@ -927,49 +927,6 @@ async def _fill_greenhouse_form(
                 expanded = await page.locator("#country").get_attribute("aria-expanded")
                 print(f"[ats-form] aria-expanded after control click: {expanded}")
 
-                if expanded != "true":
-                    # The control's bbox and click coordinates were both
-                    # correct, yet react-select never saw the click —
-                    # elementFromPoint tells us what's actually receiving
-                    # it at those coordinates (an overlapping transparent
-                    # element would explain a geometrically-correct click
-                    # missing react-select's own handler entirely).
-                    element_at = await page.evaluate(
-                        """([cx, cy]) => {
-                            const el = document.elementFromPoint(cx, cy);
-                            if (!el) return 'nothing';
-                            return {
-                                tag: el.tagName,
-                                id: el.id,
-                                class: el.className,
-                                role: el.getAttribute('role'),
-                                ariaLabel: el.getAttribute('aria-label'),
-                            };
-                        }""",
-                        [center_x, center_y],
-                    )
-                    print(f"[ats-form] Element at click coords: {element_at}")
-
-                    # Playwright's own locator.click() runs actionability
-                    # checks and dispatches a trusted click through CDP,
-                    # rather than raw synthetic coordinates — try it before
-                    # giving up on clicking entirely.
-                    await control.click()
-                    await page.wait_for_timeout(300)
-                    expanded = await page.locator("#country").get_attribute("aria-expanded")
-                    print(f"[ats-form] aria-expanded after locator.click(): {expanded}")
-
-                if expanded != "true":
-                    # Focus the input directly and use the keyboard's own
-                    # "open the listbox" affordance (Space), same as a
-                    # native <select> — bypasses click handling entirely.
-                    await page.locator("#country").focus()
-                    await page.wait_for_timeout(200)
-                    await page.keyboard.press("Space")
-                    await page.wait_for_timeout(500)
-                    expanded = await page.locator("#country").get_attribute("aria-expanded")
-                    print(f"[ats-form] aria-expanded after Space: {expanded}")
-
                 if expanded == "true":
                     print("[ats-form] MENU OPENED!")
                     await page.keyboard.type("israel", delay=50)
@@ -1041,14 +998,14 @@ async def _fill_greenhouse_form(
             option = page.get_by_role("option", name="+972", exact=False).first
             option2 = page.locator('[role="option"]').filter(has_text="+972").first
             try:
-                await option.wait_for(state="visible", timeout=3000)
+                await option.wait_for(state="visible", timeout=1000)
                 await option.click()
                 click_reported = True
                 print("[ats-form] Country: clicked +972 option")
             except Exception as e:
                 print(f"[ats-form] Country: +972 option click failed: {e}")
                 try:
-                    await option2.wait_for(state="visible", timeout=2000)
+                    await option2.wait_for(state="visible", timeout=500)
                     await option2.click()
                     click_reported = True
                     print("[ats-form] Country: clicked +972 via filter")
