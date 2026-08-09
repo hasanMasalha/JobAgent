@@ -16,6 +16,13 @@ services:
     build: ./ai-service
     ports:
       - "8000:8000"
+    # Playwright/Chromium docs (https://playwright.dev/docs/docker) call
+    # ipc: host required — without it Chromium's shared-memory IPC starves
+    # under Docker's default limits and the renderer process gets OOM-killed,
+    # which is what the [chrome] <defunct> zombies and the country dropdown
+    # never opening (aria-expanded staying false mid-click) actually were.
+    ipc: host
+    shm_size: '2gb'
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

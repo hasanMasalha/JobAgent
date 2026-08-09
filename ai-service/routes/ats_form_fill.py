@@ -273,25 +273,20 @@ async def fill_ats_form(
                 # entrypoint.sh) — full Chromium channel alone wasn't enough
                 # to render the react-select country portal correctly in
                 # headless mode.
+                #
+                # Kept to just these three flags: --single-process/
+                # --no-zygote broke rendering (menuExists: False) and
+                # --disable-gpu/--disable-gpu-sandbox/etc. were compensating
+                # for a problem that was actually Chromium OOM-crashing
+                # without the container's shared memory properly sized —
+                # see docker-compose.yml's ipc: host + shm_size on the
+                # fastapi service, which is the real fix per
+                # https://playwright.dev/docs/docker.
                 headless=False,
                 args=[
                     "--no-sandbox",  # required to run Chrome at all as root in Docker
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",  # /dev/shm is too small in Docker's default config; use disk instead
-                    "--disable-gpu",  # no real GPU behind Xvfb — force software rendering
-                    "--disable-gpu-sandbox",
-                    "--disable-software-rasterizer",
-                    "--disable-extensions",
-                    "--no-first-run",
-                    # --no-zygote + --single-process (previously here to stop
-                    # the [chrome] <defunct> zombie crash) also broke Chrome's
-                    # rendering pipeline under Xvfb — the react-select country
-                    # menu never rendered (menuExists: False) with them on.
-                    # Dropped for correct rendering; the zombie-process issue
-                    # they were addressing is unresolved again and needs a
-                    # different fix (e.g. explicit browser.close()/process
-                    # reaping) if it recurs.
-                    "--ignore-certificate-errors",
                 ],
             )
 
