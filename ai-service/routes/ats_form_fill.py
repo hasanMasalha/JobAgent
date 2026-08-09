@@ -919,6 +919,16 @@ async def _fill_greenhouse_form(
                 await page.mouse.click(center_x, center_y)
                 await page.wait_for_timeout(500)
 
+                await page.screenshot(path="/app/screenshots/after_control_click.png")
+
+                country_html = await page.evaluate(
+                    """() => {
+                        const container = document.querySelector('.phone-input__country');
+                        return container ? container.innerHTML : 'not found';
+                    }"""
+                )
+                print(f"[ats-form] Country HTML after click: {country_html[:500]}")
+
                 expanded = await page.locator("#country").get_attribute("aria-expanded")
                 print(f"[ats-form] aria-expanded after control click: {expanded}")
 
