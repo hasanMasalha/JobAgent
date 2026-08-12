@@ -7,7 +7,6 @@ from urllib.parse import parse_qs, urlsplit
 
 import anthropic
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
 
 from captcha_solver import detect_and_solve_captcha
 
@@ -305,10 +304,28 @@ async def fill_ats_form(
             )
             page = await context.new_page()
 
-            # Apply stealth patches BEFORE any navigation so fingerprint checks
-            # during page load see a clean browser environment.
-            await stealth_async(page)
-            print("[ats-form] Stealth mode enabled")
+            # playwright_stealth==1.0.6's stealth_async() was removed: it injects
+            # ~16 patches via separate page.add_init_script() calls, but 12 of
+            # them reference a shared `opts`/`utils` binding declared in a
+            # DIFFERENT add_init_script() call. Its own docstring assumes
+            # Playwright combines all init scripts into one shared-scope
+            # script — that's not true for the installed Playwright version,
+            # so those scripts throw uncaught "opts/utils is not defined"
+            # ReferenceErrors the first time anything on the page reads a
+            # patched property (e.g. navigator.userAgent). On Greenhouse
+            # boards that broke the Country react-select entirely (menu never
+            # opened, aria-expanded stuck at "false") since something in its
+            # init path reads navigator.userAgent. Confirmed via bisection:
+            # disabling just that one property still left the same
+            # ReferenceError firing from the other 11 opts/utils-dependent
+            # scripts (proven via a stress-check reading every patched
+            # property directly) — so this isn't a single bad flag to
+            # disable, the library's multi-script injection is broken
+            # wholesale under this Playwright version. Only this one-line
+            # deletion doesn't depend on opts/utils and is independently
+            # confirmed to reliably hide navigator.webdriver on its own.
+            await page.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
+            print("[ats-form] navigator.webdriver hidden")
 
             # Lever job listing URLs need /apply appended to reach the form
             if "lever.co" in apply_url and not apply_url.rstrip("/").endswith("/apply"):
