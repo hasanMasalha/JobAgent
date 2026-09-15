@@ -44,6 +44,11 @@ RUN playwright install-deps chromium
 RUN apt-get update && apt-get install -y xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# Set as a real container env var so it reliably reaches the uvicorn
+# process (and Chrome underneath it) regardless of how the process is
+# started. entrypoint.sh also exports it, which is harmless belt-and-braces.
+ENV DISPLAY=:99
+
 # Copy application code
 COPY . .
 
