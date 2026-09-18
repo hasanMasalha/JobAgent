@@ -6,7 +6,9 @@ export const maxDuration = 60;
 
 function detectATS(url: string): string | null {
   const u = (url || "").toLowerCase();
-  if (u.includes("greenhouse.io")) return "greenhouse";
+  // gh_jid means Greenhouse is embedded on the company's own domain instead
+  // of greenhouse.io directly.
+  if (u.includes("greenhouse.io") || u.includes("gh_jid=")) return "greenhouse";
   if (u.includes("lever.co")) return "lever";
   if (u.includes("workable.com")) return "workable";
   if (u.includes("comeet.com")) return "comeet";

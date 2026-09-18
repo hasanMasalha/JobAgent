@@ -1,16 +1,81 @@
 import asyncio
 import os
 import random
+import re
 import tempfile
 import time
 from urllib.parse import parse_qs, urlsplit
 
 import anthropic
+import httpx
 from playwright.async_api import async_playwright
 
 from captcha_solver import detect_and_solve_captcha
 
 _claude_client = anthropic.Anthropic()
+
+_GH_JID_RE = re.compile(r"[?&]gh_jid=(\d+)")
+_GH_SLUG_STRIP_LABELS = {"www", "careers", "career", "jobs", "job", "apply"}
+
+
+async def _resolve_greenhouse_embed_url(apply_url: str) -> str | None:
+    """Many companies embed Greenhouse on their own domain instead of using
+    boards.greenhouse.io directly — the listing URL then carries Greenhouse's
+    gh_jid query param instead of a greenhouse.io hostname (e.g.
+    careers.appsflyer.com/jobs/position/8474373002?gh_jid=8474373002). The
+    company's own page does NOT contain the Greenhouse form anywhere in its
+    HTML in that case — it's injected client-side as a link to Greenhouse's
+    own embed page — so driving the company page directly can't work.
+
+    Reconstruct the canonical embed URL instead:
+    https://boards.greenhouse.io/embed/job_app?for=<board_token>&token=<gh_jid>
+    That page renders the full application form immediately (no 'Apply'
+    button to reveal it first, unlike job-boards.greenhouse.io listing
+    pages), with the same field IDs (first_name, last_name, email, ...)
+    _fill_greenhouse_form already targets.
+
+    The board token isn't in the URL, so it's guessed from the hostname and
+    confirmed against Greenhouse's public Boards API before use. Returns the
+    embed URL on success, the original URL unchanged if there's no gh_jid to
+    resolve, or None if a gh_jid is present but no board token guess could be
+    confirmed — callers must treat None as a hard failure, not fall back to
+    filling whatever form happens to be on the company's page.
+    """
+    if "greenhouse.io" in apply_url:
+        return apply_url
+
+    match = _GH_JID_RE.search(apply_url)
+    if not match:
+        return apply_url
+
+    gh_jid = match.group(1)
+    host = (urlsplit(apply_url).hostname or "").lower()
+    labels = [label for label in host.split(".")[:-1] if label and label not in _GH_SLUG_STRIP_LABELS]
+
+    slug_guesses = []
+    if labels:
+        slug_guesses.append("".join(labels).replace("-", ""))
+        slug_guesses.append("-".join(labels))
+    slug_guesses = list(dict.fromkeys(g for g in slug_guesses if g))
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        for slug in slug_guesses:
+            try:
+                resp = await client.get(
+                    f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs/{gh_jid}"
+                )
+            except Exception as exc:
+                print(f"[ats-form] Greenhouse board check failed for {slug!r}: {exc}")
+                continue
+            if resp.status_code == 200:
+                print(f"[ats-form] Resolved embedded Greenhouse board {slug!r} for gh_jid={gh_jid}")
+                return f"https://boards.greenhouse.io/embed/job_app?for={slug}&token={gh_jid}"
+
+    print(
+        f"[ats-form] Could not confirm Greenhouse board for {apply_url!r} "
+        f"(gh_jid={gh_jid}, tried {slug_guesses})"
+    )
+    return None
 
 
 def _fast_path_answer(label_text: str, profile: dict, linkedin_url: str) -> str | None:
@@ -259,6 +324,20 @@ async def fill_ats_form(
     print(f"[ats-form] cv_bytes length={len(cv_bytes)}")
     print(f"[ats-form] first_name={first_name} last_name={last_name} email={email}")
 
+    resolved_url = await _resolve_greenhouse_embed_url(apply_url)
+    if resolved_url is None:
+        return {
+            "success": False,
+            "error": "greenhouse_board_unresolved",
+            "message": (
+                "This job is hosted on an embedded Greenhouse board we "
+                "couldn't confirm automatically — please apply manually."
+            ),
+        }
+    if resolved_url != apply_url:
+        print(f"[ats-form] Rewrote embedded Greenhouse URL: {apply_url} -> {resolved_url}")
+        apply_url = resolved_url
+
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False, prefix="cv_") as tmp:
         tmp.write(cv_bytes)
         cv_path = tmp.name
@@ -360,7 +439,11 @@ async def fill_ats_form(
             # form but hide it behind an 'Apply' button (type=button, class='btn btn--pill').
             # Clicking it reveals the form INLINE — there is no page navigation.
             # Ignore 'Quick Apply with MyGreenhouse' — it requires a Greenhouse account.
-            if "greenhouse.io" in apply_url:
+            # /embed/job_app pages (reconstructed from gh_jid, see
+            # _resolve_greenhouse_embed_url) render the form directly with no
+            # button to click — the "Apply"-text match below would otherwise
+            # misfire on that page's "Autofill my application" button.
+            if "greenhouse.io" in apply_url and "/embed/job_app" not in apply_url:
                 apply_btn = None
                 candidates = await page.query_selector_all("button:not([type='submit'])")
                 for candidate in candidates:

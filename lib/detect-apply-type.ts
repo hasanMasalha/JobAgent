@@ -22,8 +22,9 @@ export function detectApplyType(job: {
   const url = (job.url ?? "").toLowerCase();
   const desc = (job.description ?? "").toLowerCase();
 
-  // Auto apply — known ATS
-  if (AUTO_ATS.some((ats) => url.includes(ats))) {
+  // Auto apply — known ATS. gh_jid means Greenhouse is embedded on the
+  // company's own domain, so the greenhouse.io hostname check above misses it.
+  if (AUTO_ATS.some((ats) => url.includes(ats)) || url.includes("gh_jid=")) {
     return "auto";
   }
 

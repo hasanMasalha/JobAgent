@@ -105,13 +105,21 @@ async def fetch_and_save_jobs(location: str | None = None):
             continue
 
         source = raw.get('source', '').lower()
+        url_lower = url.lower()
         ats_platform = None
         apply_type = 'external'
-        for key, platform in ATS_MAP.items():
-            if key in source or key in url.lower():
-                ats_platform = platform
-                apply_type = 'auto'
-                break
+        # Greenhouse is often embedded on a company's own domain — the URL
+        # then carries Greenhouse's gh_jid param instead of a greenhouse.io
+        # hostname, so 'greenhouse' never matches source/url substring below.
+        if 'gh_jid=' in url_lower:
+            ats_platform = 'greenhouse'
+            apply_type = 'auto'
+        else:
+            for key, platform in ATS_MAP.items():
+                if key in source or key in url_lower:
+                    ats_platform = platform
+                    apply_type = 'auto'
+                    break
 
         records.append({
             'id': str(uuid.uuid4()),

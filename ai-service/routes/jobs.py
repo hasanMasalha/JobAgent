@@ -40,7 +40,7 @@ def _detect_apply_type(job: dict) -> str:
     desc = job.get("description") or ""
     # apply_url is the confirmed ATS URL; prefer it over the listing URL
     check = apply_url or url
-    if any(ats in check for ats in _AUTO_ATS):
+    if any(ats in check for ats in _AUTO_ATS) or "gh_jid=" in check:
         return "auto"
     if _EMAIL_RE.search(desc):
         return "auto"
@@ -57,7 +57,10 @@ def _detect_ats(url: str, apply_url: str = "") -> str | None:
     if not check:
         return None
     u = check.lower()
-    if "greenhouse.io" in u:
+    # Many companies embed Greenhouse on their own domain instead of using
+    # greenhouse.io directly — the URL then carries Greenhouse's gh_jid
+    # query param instead of a greenhouse.io hostname.
+    if "greenhouse.io" in u or "gh_jid=" in u:
         return "greenhouse"
     if "lever.co" in u:
         return "lever"

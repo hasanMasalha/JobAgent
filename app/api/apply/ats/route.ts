@@ -8,7 +8,9 @@ type ATSPlatform = "greenhouse" | "lever" | "workable";
 
 function detectATS(url: string): ATSPlatform | null {
   const u = (url ?? "").toLowerCase();
-  if (u.includes("greenhouse.io")) return "greenhouse";
+  // gh_jid means Greenhouse is embedded on the company's own domain instead
+  // of greenhouse.io directly.
+  if (u.includes("greenhouse.io") || u.includes("gh_jid=")) return "greenhouse";
   if (u.includes("lever.co")) return "lever";
   if (u.includes("workable.com")) return "workable";
   return null;
