@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   sendApplicationConfirmationEmail,
-  sendNeedsSecurityCodeEmail,
   sendNeedsManualEmail,
 } from "@/lib/email";
 import { generateCVDocx } from "@/lib/generate-cv";
@@ -69,16 +68,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, skipped: "notifications_off" });
     }
 
-    if (row.status === "needs_security_code") {
-      await sendNeedsSecurityCodeEmail({
-        userEmail: row.user_email,
-        userName: row.user_name ?? "",
-        jobTitle: row.job_title,
-        company: row.company,
-        jobUrl: row.job_url,
-        applicationId: application_id,
-      });
-    } else if (row.status === "needs_manual") {
+    if (row.status === "needs_manual") {
       let cvAttachment: { filename: string; content: Buffer } | undefined;
       if (row.tailored_cv) {
         const cvRows = await db.$queryRaw<{ hyperlinks_json: string | null }[]>`

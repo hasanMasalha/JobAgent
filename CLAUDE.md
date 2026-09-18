@@ -1,13 +1,17 @@
 # Job Assistant App — Project Bible
 
 ## What this app does
-AI job assistant for the Israeli market. Scrapes jobs from Indeed Israel
-and LinkedIn, matches them to user CVs using vector embeddings (no LLM
-for matching), and lets users apply to LinkedIn Easy Apply jobs via
-Playwright automation — but ONLY when the user explicitly clicks Apply
-then confirms. Nothing is ever submi
-
-tted automatically.
+AI job assistant for the global market. Scrapes thousands of jobs daily
+from company career pages, LinkedIn, Indeed and more, matches them to
+user CVs using vector embeddings (no LLM for matching), and auto-applies
+on the user's behalf: a single "Apply" click submits directly to
+supported ATS platforms (Greenhouse, Lever, Workable, Ashby, Comeet,
+BambooHR) with no separate confirmation step, and batch auto-apply can
+submit to many matched jobs at once via email. A separate "Tailor CV &
+Apply" path still tailors the CV/cover letter and lets the user review
+before applying, for jobs that need more care. LinkedIn listings with no
+resolved ATS URL fall back to the browser extension or manual apply —
+they are not silently auto-submitted.
 
 ## Tech stack — do not deviate from this
 - Frontend + API routes: Next.js 14 (App Router), TypeScript, Tailwind CSS
@@ -79,7 +83,20 @@ draft → applied → interviewing → offer / rejected / cancelled
 - NEVER call the API per-job per-user for matching — use pgvector for that
 
 ## Apply flow rules — critical
-1. User clicks Apply → Claude tailors CV (draft saved, nothing submitted)
+There are two supported apply paths — know which one a change affects:
+
+**Quick / Auto Apply** (`/api/apply/quick`, `/api/apply/batch-auto`)
+1. User clicks Apply (single job) or triggers batch auto-apply (multiple jobs)
+2. For ATS-detected jobs (Greenhouse, Lever, Workable, Ashby, Comeet,
+   BambooHR) the application is submitted immediately — no review or
+   confirm step in this path
+3. Batch auto-apply sends a tailored application email per job directly
+4. If the job is a LinkedIn listing with no resolved ATS `apply_url` →
+   no automation here; return `needs_extension` and route to the
+   Tailor & Apply flow / browser extension instead
+
+**Tailor CV & Apply** (`/dashboard/apply/[jobId]`)
+1. User clicks "Tailor CV & Apply" → Claude tailors CV (draft saved, nothing submitted)
 2. User sees review screen → can edit cover letter → clicks Confirm
 3. Only after Confirm → Playwright opens LinkedIn Easy Apply and submits
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
@@ -88,6 +105,14 @@ draft → applied → interviewing → offer / rejected / cancelled
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved
   session in browser_profile/{user_id}/ — see the LinkedIn login flow in preferences.
+- Greenhouse's human-verification gate (its "security code" / "confirm
+  you're a human" step, with #security-input-0..7 boxes) is reCAPTCHA-driven
+  and ties the one-time code to the browser session that triggered it — our
+  server's headless browser, not the user's. There's no way to hand that
+  code to the user via a link, so this is treated as an ordinary
+  needs_manual outcome (apply manually) rather than a status of its own to
+  build a "finish" flow around. Verified manually — don't reintroduce a
+  dedicated needs_security_code status without solving that first.
 
 ## Linting
 

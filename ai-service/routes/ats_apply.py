@@ -102,17 +102,17 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Step 2: got result: {result}")
 
             print("[ats-apply-bg] Step 3: determining status")
-            if result.get("status") == "needs_security_code":
-                status = "needs_security_code"
-                print("[ats-apply-bg] Greenhouse security-code verification required")
-            elif result.get("success"):
+            if result.get("success"):
                 status = "applied"
             else:
                 # Everything else — real field errors, unsolved captcha, an
-                # unrecognized/unconfirmed page state, a timeout — collapses
-                # into one actionable bucket: the user has to go finish this
-                # one themselves. (Unhandled exceptions land here too, via
-                # the except block below.)
+                # unrecognized/unconfirmed page state, a timeout, or
+                # Greenhouse's security-code gate (its code goes to our
+                # server's browser session, not the user's, so there's
+                # nothing to build a "finish" flow around — see CLAUDE.md)
+                # — collapses into one actionable bucket: the user has to
+                # go finish this one themselves. (Unhandled exceptions land
+                # here too, via the except block below.)
                 status = "needs_manual"
                 reason = "captcha" if (result.get("captcha") or result.get("recaptcha")) else result.get("error", "unknown")
                 print(f"[ats-apply-bg] form fill did not complete: {reason}")
@@ -121,14 +121,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Step 5: updating DB -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
-                if status == "needs_manual":
-                    error_msg = result.get("message") or result.get("error")
-                elif status == "needs_security_code":
-                    error_msg = result.get("message") or (
-                        "Greenhouse emailed you a security code to finish verifying your application."
-                    )
-                else:
-                    error_msg = None
+                error_msg = (result.get("message") or result.get("error")) if status == "needs_manual" else None
                 await conn.execute(
                     'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
                     status,
@@ -139,8 +132,8 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             finally:
                 await conn.close()
 
-            # Every terminal outcome gets its own user email now — submitted,
-            # needs_security_code and needs_manual all have distinct templates.
+            # Both terminal outcomes get their own user email — applied and
+            # needs_manual have distinct templates.
             print("[ats-apply-bg] Step 7: sending outcome email")
             await _send_application_confirmation_email(request_dict["application_id"])
             print("[ats-apply-bg] Step 8: outcome email step complete")

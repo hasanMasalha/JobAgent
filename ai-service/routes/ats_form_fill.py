@@ -2203,9 +2203,16 @@ async def _fill_form_fields(
         url_indicates_success = path_changed or has_new_meaningful_query_param
 
         # ── Greenhouse security-code human-verification gate ──────────────────
-        # Greenhouse's own anti-bot gate — distinct from a generic "check your
-        # email" success message. Detected via its known page copy plus the
-        # #security-input-0..7 boxes it injects for the one-time code.
+        # Greenhouse's own anti-bot (reCAPTCHA-driven) gate. The one-time code
+        # it emails is tied to the browser session that triggered it — our
+        # server's headless browser, not the user's — so there's no "open
+        # this link and enter the code" flow that could ever work here
+        # (verified manually). Treated as an ordinary needs_manual outcome
+        # rather than a status of its own; see CLAUDE.md's Playwright caveats
+        # for why this wasn't built out further. Detection (known page copy
+        # plus the #security-input-0..7 boxes Greenhouse injects for the
+        # code) is kept so the error message is specific instead of a vague
+        # "unknown state".
         security_code_text_signals = [
             "verification code",
             "security code",
@@ -2217,14 +2224,14 @@ async def _fill_form_fields(
         text_signal_matched = any(s in page_text_lower for s in security_code_text_signals)
         if text_signal_matched or security_code_input_count > 0:
             print(
-                f"[ats-form] Greenhouse security-code gate detected "
+                f"[ats-form] Greenhouse security-code gate detected — can't be completed from here "
                 f"(text_match={text_signal_matched}, security_input_count={security_code_input_count})"
             )
             return {
-                "success": True,
-                "status": "needs_security_code",
+                "success": False,
+                "error": "security_code_required",
                 "filled": filled,
-                "message": "Greenhouse emailed you a security code to finish verifying your application.",
+                "message": "Greenhouse requires a security code sent to the browser session that filled this form — please apply manually.",
             }
 
         # ── URL contains confirmation path ────────────────────────────────────
