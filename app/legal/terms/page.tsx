@@ -62,7 +62,8 @@ export default function TermsOfServicePage() {
         <p>
           Paid subscriptions are billed in advance and renew automatically each billing period until
           cancelled. You can cancel at any time from your account settings; cancellation takes effect at
-          the end of the current billing period. Payments are processed by our payment provider, Paddle. See
+          the end of the current billing period. Payments are processed by our payment provider, Dodo
+          Payments. See
           our{" "}
           <Link href="/legal/refund" className="text-[#1a2e5e] dark:text-blue-400 underline">
             Refund Policy

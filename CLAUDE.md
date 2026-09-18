@@ -56,6 +56,13 @@ PYTHON_SERVICE_URL         http://localhost:8000
 GOOGLE_CLIENT_ID           Google OAuth 2.0 client ID
 GOOGLE_CLIENT_SECRET       Google OAuth 2.0 client secret
 GOOGLE_REDIRECT_URI        https://yourdomain.com/api/auth/google/callback
+DODO_PAYMENTS_API_KEY      Dodo Payments bearer token (dodo_test_... / dodo_live_...)
+DODO_PAYMENTS_WEBHOOK_KEY  Dodo Payments webhook signing secret
+DODO_PAYMENTS_ENVIRONMENT  test_mode or live_mode — defaults to test_mode if unset
+DODO_PRO_MONTHLY_PRODUCT_ID          Dodo product ID, Pro plan / monthly
+DODO_PRO_ANNUAL_PRODUCT_ID           Dodo product ID, Pro plan / annual
+DODO_UNLIMITED_MONTHLY_PRODUCT_ID    Dodo product ID, Unlimited plan / monthly
+DODO_UNLIMITED_ANNUAL_PRODUCT_ID     Dodo product ID, Unlimited plan / annual
 
 ## Database tables
 users          id, email, name, linkedin_session_path,
@@ -101,6 +108,26 @@ There are two supported apply paths — know which one a change affects:
 3. Only after Confirm → Playwright opens LinkedIn Easy Apply and submits
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
 5. Screenshot taken before every submit and stored
+
+## Billing (Dodo Payments)
+- Checkout: `/api/dodo/checkout` creates a hosted Dodo Checkout Session
+  server-side and returns `checkoutUrl` — the client just redirects
+  (`window.location.href`). No client-side SDK, no overlay. Called from both
+  `/pricing` and the onboarding plan-selection step.
+- Webhook: `/api/dodo/webhook` verifies the signature (`dodo.webhooks.unwrap`)
+  and updates `User.plan` / `planExpiresAt` on subscription events. Product ID
+  → plan mapping is env-var driven (`lib/plan-limits.ts`) since test and live
+  mode have entirely separate product catalogs.
+- **Known gap:** the webhook handler has no idempotency/dedup table — a
+  retried delivery just re-applies the same upsert, which is harmless today
+  because the handler only writes plan/customer/expiry fields with no other
+  side effects. If we ever add something non-idempotent on a webhook event
+  (an email, a charge, anything else with an external effect) this needs a
+  `webhook-id`-keyed claim table first (see the `webhook-integration` Dodo
+  skill's idempotency pattern) — otherwise a retried delivery double-fires it.
+- Paddle was the original processor; it rejected our account before going
+  live, so `lib/paddle.ts`, `lib/paddle-client.ts`, and `app/api/paddle/*`
+  were removed rather than kept as a second option.
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved

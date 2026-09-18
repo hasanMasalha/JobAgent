@@ -21,7 +21,7 @@ export default function PrivacyPolicyPage() {
             "Job preferences: titles, locations, work-mode and salary preferences, and job categories you select.",
             "Application data: which jobs you've saved, dismissed, or applied to, and the status of those applications.",
             "Connected-account tokens: if you choose to connect them, Google Calendar access tokens (for interview scheduling) and a LinkedIn session (for Easy Apply automation).",
-            "Billing information: handled by our payment processor, Paddle — we store your plan and subscription status, not your card details.",
+            "Billing information: handled by our payment processor, Dodo Payments — we store your plan and subscription status, not your card details.",
           ]}
         />
       </Section>
@@ -47,8 +47,8 @@ export default function PrivacyPolicyPage() {
               account credentials, CV, preferences, and application history are stored here.
             </>,
             <>
-              <strong>Paddle</strong> — our merchant of record for subscription billing. Paddle processes
-              your payment details directly; we never see or store your full card number.
+              <strong>Dodo Payments</strong> — our merchant of record for subscription billing. Dodo Payments
+              processes your payment details directly; we never see or store your full card number.
             </>,
             <>
               <strong>Anthropic (Claude)</strong> — used for CV extraction on upload, daily job-match

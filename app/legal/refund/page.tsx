@@ -39,7 +39,7 @@ export default function RefundPolicyPage() {
 
       <Section title="3. Processing Time">
         <p>
-          Approved refunds are processed by our payment provider, Paddle, within{" "}
+          Approved refunds are processed by our payment provider, Dodo Payments, within{" "}
           <strong>5–10 business days</strong> of approval. The funds will appear back on the payment method
           used for the original purchase; exact timing after that can depend on your bank or card issuer.
         </p>

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { openPaddleCheckout } from "@/lib/paddle-client";
 
 const NAVY = "#1a2e5e";
 
@@ -99,7 +98,7 @@ export default function PricingPage() {
     setCheckoutError("");
     setCheckoutLoading(tier.planKey);
     try {
-      const res = await fetch("/api/paddle/checkout", {
+      const res = await fetch("/api/dodo/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: tier.planKey, interval: billing }),
@@ -112,18 +111,9 @@ export default function PricingPage() {
       }
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.priceId) throw new Error(data.error ?? "Failed to start checkout");
+      if (!res.ok || !data.checkoutUrl) throw new Error(data.error ?? "Failed to start checkout");
 
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-      await openPaddleCheckout({
-        priceId: data.priceId,
-        customerId: data.customerId,
-        customerEmail: data.customerEmail,
-        userId: data.userId,
-        plan: data.plan,
-        interval: data.interval,
-        successUrl: `${appUrl}/dashboard?upgraded=true`,
-      });
+      window.location.href = data.checkoutUrl;
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
