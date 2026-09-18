@@ -102,36 +102,30 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Step 2: got result: {result}")
 
             print("[ats-apply-bg] Step 3: determining status")
-            if result.get("success") and result.get("status") == "pending_verification":
-                status = "pending_verification"
-                print("[ats-apply-bg] Greenhouse email verification required")
+            if result.get("status") == "needs_security_code":
+                status = "needs_security_code"
+                print("[ats-apply-bg] Greenhouse security-code verification required")
             elif result.get("success"):
                 status = "applied"
-            elif result.get("error") == "unknown_state":
-                # We couldn't find a confirmation signal, but we also have no
-                # positive evidence the submit failed (no field errors, no
-                # captcha, no exception) — don't tell the user it failed when
-                # it may well have gone through. Only actual errors map to
-                # 'failed' below.
-                status = "pending_verification"
-                print("[ats-apply-bg] Could not confirm outcome — treating as pending_verification, not failed")
             else:
-                status = "failed"
+                # Everything else — real field errors, unsolved captcha, an
+                # unrecognized/unconfirmed page state, a timeout — collapses
+                # into one actionable bucket: the user has to go finish this
+                # one themselves. (Unhandled exceptions land here too, via
+                # the except block below.)
+                status = "needs_manual"
                 reason = "captcha" if (result.get("captcha") or result.get("recaptcha")) else result.get("error", "unknown")
-                print(f"[ats-apply-bg] form fill failed: {reason}")
+                print(f"[ats-apply-bg] form fill did not complete: {reason}")
             print(f"[ats-apply-bg] Step 4: status determined: {status}")
 
             print(f"[ats-apply-bg] Step 5: updating DB -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
-                if status == "failed":
+                if status == "needs_manual":
                     error_msg = result.get("message") or result.get("error")
-                elif status == "pending_verification":
-                    # result["message"] already distinguishes "Greenhouse emailed you a
-                    # verification code" from "submitted but unconfirmed" — use it
-                    # instead of a single hardcoded message that only fit the former.
+                elif status == "needs_security_code":
                     error_msg = result.get("message") or (
-                        "Check your email for a verification code from Greenhouse to complete your application."
+                        "Greenhouse emailed you a security code to finish verifying your application."
                     )
                 else:
                     error_msg = None
@@ -145,10 +139,11 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             finally:
                 await conn.close()
 
-            if status in ("applied", "pending_verification"):
-                print("[ats-apply-bg] Step 7: sending confirmation email")
-                await _send_application_confirmation_email(request_dict["application_id"])
-                print("[ats-apply-bg] Step 8: confirmation email step complete")
+            # Every terminal outcome gets its own user email now — submitted,
+            # needs_security_code and needs_manual all have distinct templates.
+            print("[ats-apply-bg] Step 7: sending outcome email")
+            await _send_application_confirmation_email(request_dict["application_id"])
+            print("[ats-apply-bg] Step 8: outcome email step complete")
 
         loop.run_until_complete(_run())
         loop.close()
@@ -163,24 +158,27 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
         # Without this, a crash here leaves the Application stuck at
         # 'applying' forever — no status update, no way for the user to
         # know anything went wrong. Use a fresh event loop: the one above
-        # may be in an inconsistent state after the exception.
-        async def _mark_failed() -> None:
+        # may be in an inconsistent state after the exception. An exception
+        # is just another "could not complete" case, so it gets the same
+        # needs_manual status and outcome email as any other one.
+        async def _mark_needs_manual() -> None:
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
                 await conn.execute(
                     'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
-                    "failed",
+                    "needs_manual",
                     error_text,
                     request_dict["application_id"],
                 )
-                print(f"[ats-apply-bg] DB updated after exception: {request_dict['application_id']} -> failed")
+                print(f"[ats-apply-bg] DB updated after exception: {request_dict['application_id']} -> needs_manual")
             finally:
                 await conn.close()
+            await _send_application_confirmation_email(request_dict["application_id"])
 
         try:
             fail_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(fail_loop)
-            fail_loop.run_until_complete(_mark_failed())
+            fail_loop.run_until_complete(_mark_needs_manual())
             fail_loop.close()
         except Exception:
             print("[ats-apply-bg] Failed to update DB after exception (non-fatal)")

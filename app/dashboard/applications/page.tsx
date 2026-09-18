@@ -27,8 +27,13 @@ const STATUS_STYLES: Record<string, string> = {
   draft:                "bg-gray-100 text-gray-500",
   manual:               "bg-yellow-100 text-yellow-700",
   cancelled:            "bg-gray-100 text-gray-400",
+  // Legacy — 90 rows created before the three-outcome split below existed.
+  // Still displayed the same way; new applications never write this status.
   failed:               "bg-orange-100 text-orange-600",
   pending_verification: "bg-amber-100 text-amber-700",
+  // Current three ATS-automation outcomes.
+  needs_security_code:  "bg-amber-100 text-amber-700",
+  needs_manual:         "bg-orange-100 text-orange-600",
 };
 
 interface CalendarModalProps {
@@ -347,11 +352,14 @@ export default function ApplicationsPage() {
                     {app.status === "manual" && (
                       <option value="" disabled className="bg-white text-gray-400 font-normal">Action needed</option>
                     )}
-                    {app.status === "failed" && (
+                    {(app.status === "failed" || app.status === "needs_manual") && (
                       <option value="" disabled className="bg-white text-gray-400 font-normal">Manual apply needed</option>
                     )}
                     {app.status === "pending_verification" && (
                       <option value="" disabled className="bg-white text-amber-600 font-normal">Verify Email</option>
+                    )}
+                    {app.status === "needs_security_code" && (
+                      <option value="" disabled className="bg-white text-amber-600 font-normal">Security code needed</option>
                     )}
                     {ALLOWED_STATUSES.map((s) => (
                       <option key={s} value={s} className="bg-white text-gray-800 font-normal">
@@ -363,6 +371,16 @@ export default function ApplicationsPage() {
                 {app.status === "pending_verification" && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
                     Check your email for a verification code from Greenhouse to complete this application.
+                  </p>
+                )}
+                {app.status === "needs_security_code" && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                    Filled and waiting — Greenhouse emailed you a security code to finish verifying this application.
+                  </p>
+                )}
+                {app.status === "needs_manual" && (
+                  <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mt-2">
+                    We couldn&apos;t complete this application automatically — check your email for the link to apply yourself.
                   </p>
                 )}
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
@@ -380,7 +398,16 @@ export default function ApplicationsPage() {
                     >
                       Verify Email →
                     </a>
-                  ) : app.status === "manual" || app.status === "failed" ? (
+                  ) : app.status === "needs_security_code" ? (
+                    <a
+                      href={app.job_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Enter Code →
+                    </a>
+                  ) : app.status === "manual" || app.status === "failed" || app.status === "needs_manual" ? (
                     <a
                       href={app.job_url}
                       target="_blank"
@@ -464,7 +491,7 @@ export default function ApplicationsPage() {
                             Action needed — update after applying
                           </option>
                         )}
-                        {app.status === "failed" && (
+                        {(app.status === "failed" || app.status === "needs_manual") && (
                           <option value="" disabled className="bg-white text-gray-400 font-normal">
                             Manual apply needed
                           </option>
@@ -472,6 +499,11 @@ export default function ApplicationsPage() {
                         {app.status === "pending_verification" && (
                           <option value="" disabled className="bg-white text-amber-600 font-normal">
                             Verify Email — check inbox
+                          </option>
+                        )}
+                        {app.status === "needs_security_code" && (
+                          <option value="" disabled className="bg-white text-amber-600 font-normal">
+                            Security code needed — check inbox
                           </option>
                         )}
                         {ALLOWED_STATUSES.map((s) => (
@@ -493,7 +525,17 @@ export default function ApplicationsPage() {
                           >
                             Verify Email →
                           </a>
-                        ) : app.status === "manual" || app.status === "failed" ? (
+                        ) : app.status === "needs_security_code" ? (
+                          <a
+                            href={app.job_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white w-28 h-9 px-3 py-2 rounded-lg transition-colors text-center"
+                            title="Greenhouse emailed you a security code — check your inbox"
+                          >
+                            Enter Code →
+                          </a>
+                        ) : app.status === "manual" || app.status === "failed" || app.status === "needs_manual" ? (
                           <a
                             href={app.job_url}
                             target="_blank"

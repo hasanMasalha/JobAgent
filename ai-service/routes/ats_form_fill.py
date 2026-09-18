@@ -2202,22 +2202,29 @@ async def _fill_form_fields(
         )
         url_indicates_success = path_changed or has_new_meaningful_query_param
 
-        # ── Greenhouse email verification challenge ───────────────────────────
-        verification_signals = [
-            "security code",
+        # ── Greenhouse security-code human-verification gate ──────────────────
+        # Greenhouse's own anti-bot gate — distinct from a generic "check your
+        # email" success message. Detected via its known page copy plus the
+        # #security-input-0..7 boxes it injects for the one-time code.
+        security_code_text_signals = [
             "verification code",
-            "enter the code",
-            "copy and paste this code",
-            "check your email",
-            "sent you a code",
+            "security code",
+            "confirm you're a human",
         ]
-        if any(s in page_text_lower for s in verification_signals):
-            print("[ats-form] Greenhouse email verification step detected")
+        security_code_input_count = await page.locator(
+            ", ".join(f"#security-input-{i}" for i in range(8))
+        ).count()
+        text_signal_matched = any(s in page_text_lower for s in security_code_text_signals)
+        if text_signal_matched or security_code_input_count > 0:
+            print(
+                f"[ats-form] Greenhouse security-code gate detected "
+                f"(text_match={text_signal_matched}, security_input_count={security_code_input_count})"
+            )
             return {
                 "success": True,
-                "status": "pending_verification",
+                "status": "needs_security_code",
                 "filled": filled,
-                "message": "Greenhouse sent a verification code to your email. Check your inbox and enter the code to complete your application.",
+                "message": "Greenhouse emailed you a security code to finish verifying your application.",
             }
 
         # ── URL contains confirmation path ────────────────────────────────────
@@ -2303,9 +2310,9 @@ async def _fill_form_fields(
 
         # ── Unknown state — no confirmation signals found ─────────────────────
         # A bare "?" URL change with no path change and no meaningful query
-        # value lands here rather than being guessed as a success — genuinely
-        # inconclusive outcomes surface as pending_verification (not failed)
-        # via ats_apply.py's unknown_state handling instead.
+        # value lands here rather than being guessed as a success — this
+        # `success: False` surfaces as needs_manual via ats_apply.py, same as
+        # any other unresolved outcome.
         print("[ats-form] No confirmation signals found — unknown state")
         return {
             "success": False,
