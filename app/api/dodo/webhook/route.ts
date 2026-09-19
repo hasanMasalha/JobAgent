@@ -119,7 +119,24 @@ export async function POST(req: NextRequest) {
         await handleSubscriptionDowngrade(event.data);
         break;
 
+      case "refund.succeeded": {
+        // Deliberately no plan change. A refund doesn't cancel the Dodo subscription, so it
+        // keeps billing and the next subscription.renewed would restore the plan anyway.
+        // Whether to revoke access (and cancel the subscription) is a manual decision.
+        const refund = event.data;
+        console.warn(
+          "[dodo/webhook] refund.succeeded — NO plan change made, manual review needed",
+          { refundId: refund.refund_id, paymentId: refund.payment_id, customerId: refund.customer.customer_id, amount: refund.amount }
+        );
+        break;
+      }
+
       default:
+        // Acknowledged (200) but not acted on — log so gaps like this stay visible.
+        console.warn("[dodo/webhook] received event with no handler", {
+          type: event.type,
+          webhookId: headers["webhook-id"],
+        });
         break;
     }
   } catch (err) {

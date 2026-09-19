@@ -129,6 +129,16 @@ export default function OnboardingPage() {
   // Plan step
   const [planActionLoading, setPlanActionLoading] = useState<string | null>(null);
   const [planError, setPlanError] = useState("");
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/plan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { plan?: string } | null) => {
+        if (d?.plan) setCurrentPlan(d.plan);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -325,7 +335,14 @@ export default function OnboardingPage() {
           body: JSON.stringify({ plan: tier.key, interval: "monthly" }),
         });
         const data = await checkoutRes.json().catch(() => ({}));
-        if (!checkoutRes.ok || !data.checkoutUrl) throw new Error(data.error ?? "Failed to start checkout");
+        if (!checkoutRes.ok) throw new Error(data.error ?? "Failed to start checkout");
+
+        if (data.changed) {
+          // Existing subscriber: plan was changed in place, no checkout needed.
+          router.push("/dashboard");
+          return;
+        }
+        if (!data.checkoutUrl) throw new Error("Failed to start checkout");
 
         window.location.href = data.checkoutUrl;
         return;
@@ -777,7 +794,16 @@ export default function OnboardingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-start">
-            {PLAN_TIERS.map((tier) => (
+            {PLAN_TIERS.map((tier) => {
+              const isCurrent = currentPlan !== null && tier.key === currentPlan;
+              const isPaidUser = currentPlan === "pro" || currentPlan === "unlimited";
+              const rank = (k: string) => (k === "unlimited" ? 2 : k === "pro" ? 1 : 0);
+              const ctaLabel = isCurrent
+                ? "Current plan"
+                : isPaidUser && tier.key !== "free"
+                ? rank(tier.key) > rank(currentPlan) ? "Upgrade" : "Downgrade"
+                : tier.ctaLabel;
+              return (
               <div
                 key={tier.key}
                 className={`relative rounded-2xl p-6 flex flex-col h-full ${
@@ -812,17 +838,18 @@ export default function OnboardingPage() {
 
                 <button
                   type="button"
-                  disabled={planActionLoading !== null}
+                  disabled={planActionLoading !== null || isCurrent}
                   onClick={() => handlePlanChoice(tier)}
                   className={`mt-6 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
                     tier.highlighted ? "text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   }`}
                   style={tier.highlighted ? { background: "#1a2e5e" } : undefined}
                 >
-                  {planActionLoading === tier.key ? "…" : tier.ctaLabel}
+                  {planActionLoading === tier.key ? "…" : ctaLabel}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {planError && <p className="text-red-600 text-sm text-center">{planError}</p>}

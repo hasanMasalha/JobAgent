@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const NAVY = "#1a2e5e";
 
 type Billing = "monthly" | "annual";
+type PlanKey = "free" | "pro" | "unlimited";
+
+const PLAN_RANK: Record<PlanKey, number> = { free: 0, pro: 1, unlimited: 2 };
+
+interface CurrentPlan {
+  plan: PlanKey;
+  interval: Billing | null;
+}
 
 interface Tier {
   name: string;
@@ -92,10 +100,36 @@ export default function PricingPage() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutNotice, setCheckoutNotice] = useState("");
+  // null = not loaded yet, or logged out — buttons then behave as for a new customer.
+  const [current, setCurrent] = useState<CurrentPlan | null>(null);
+
+  useEffect(() => {
+    fetch("/api/plan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: CurrentPlan | null) => {
+        if (d?.plan) setCurrent(d);
+      })
+      .catch(() => {});
+  }, []);
+
+  // What the button for `tier` should do given the user's current plan.
+  function ctaFor(tier: Tier): { label: string; disabled: boolean } {
+    const key = tier.planKey;
+    if (!key || !current || current.plan === "free") return { label: tier.ctaLabel, disabled: false };
+    if (key === current.plan) {
+      if (current.interval === null || current.interval === billing) return { label: "Current plan", disabled: true };
+      return { label: billing === "annual" ? "Switch to annual" : "Switch to monthly", disabled: false };
+    }
+    return PLAN_RANK[key] > PLAN_RANK[current.plan]
+      ? { label: "Upgrade", disabled: false }
+      : { label: "Downgrade", disabled: false };
+  }
 
   async function handleUpgrade(tier: Tier) {
     if (!tier.planKey) return;
     setCheckoutError("");
+    setCheckoutNotice("");
     setCheckoutLoading(tier.planKey);
     try {
       const res = await fetch("/api/dodo/checkout", {
@@ -111,7 +145,18 @@ export default function PricingPage() {
       }
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.checkoutUrl) throw new Error(data.error ?? "Failed to start checkout");
+      if (!res.ok) throw new Error(data.error ?? "Failed to start checkout");
+
+      if (data.changed) {
+        // Existing subscriber: the subscription was changed in place, no checkout.
+        setCheckoutNotice(
+          data.effective === "immediately"
+            ? "Your plan is being updated — this can take a moment to show."
+            : "Your plan will change at the start of your next billing period."
+        );
+        return;
+      }
+      if (!data.checkoutUrl) throw new Error("Failed to start checkout");
 
       window.location.href = data.checkoutUrl;
     } catch (err) {
@@ -202,6 +247,7 @@ export default function PricingPage() {
           {TIERS.map((tier) => {
             const price = billing === "monthly" ? tier.monthly : tier.annual;
             const savings = savingsPercent(tier.monthly, tier.annual);
+            const cta = ctaFor(tier);
 
             return (
               <div
@@ -253,7 +299,7 @@ export default function PricingPage() {
                 {tier.planKey ? (
                   <button
                     type="button"
-                    disabled={checkoutLoading !== null}
+                    disabled={checkoutLoading !== null || cta.disabled}
                     onClick={() => handleUpgrade(tier)}
                     className={`mt-8 w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
                       tier.highlighted
@@ -262,7 +308,7 @@ export default function PricingPage() {
                     }`}
                     style={tier.highlighted ? { background: NAVY } : undefined}
                   >
-                    {checkoutLoading === tier.planKey ? "Redirecting…" : tier.ctaLabel}
+                    {checkoutLoading === tier.planKey ? "Working…" : cta.label}
                   </button>
                 ) : (
                   <Link
@@ -282,6 +328,9 @@ export default function PricingPage() {
           })}
         </div>
 
+        {checkoutNotice && (
+          <p className="text-center text-sm text-green-700 dark:text-green-400 mt-6">{checkoutNotice}</p>
+        )}
         {checkoutError && (
           <p className="text-center text-sm text-red-600 dark:text-red-400 mt-6">{checkoutError}</p>
         )}

@@ -57,3 +57,21 @@ export function planFromProductId(productId: string | null | undefined): PaidPla
   }
   return null;
 }
+
+const PLAN_RANK: Record<PlanKey, number> = { free: 0, pro: 1, unlimited: 2 };
+
+export function planRank(plan: PlanKey): number {
+  return PLAN_RANK[plan];
+}
+
+// Reverse lookup of the billing interval for a Dodo product ID, or null if it isn't one of ours.
+export function intervalFromProductId(productId: string | null | undefined): BillingInterval | null {
+  if (!productId) return null;
+  if (productId === process.env.DODO_PRO_MONTHLY_PRODUCT_ID || productId === process.env.DODO_UNLIMITED_MONTHLY_PRODUCT_ID) {
+    return "monthly";
+  }
+  if (productId === process.env.DODO_PRO_ANNUAL_PRODUCT_ID || productId === process.env.DODO_UNLIMITED_ANNUAL_PRODUCT_ID) {
+    return "annual";
+  }
+  return null;
+}

@@ -125,6 +125,17 @@ There are two supported apply paths — know which one a change affects:
   (an email, a charge, anything else with an external effect) this needs a
   `webhook-id`-keyed claim table first (see the `webhook-integration` Dodo
   skill's idempotency pattern) — otherwise a retried delivery double-fires it.
+- Existing subscribers never get a second checkout: `/api/dodo/checkout`
+  calls `subscriptions.changePlan` (`prorated_immediately`; upgrades and
+  monthly→annual apply now, downgrades and annual→monthly at the next billing
+  date) and rejects a request for the plan they already have with 409.
+  `User.plan` is still updated only by the `subscription.plan_changed` webhook.
+- **Known gap:** no double-click / in-flight guard on checkout — a free user
+  double-clicking a plan button can still create two Checkout Sessions.
+- `refund.succeeded` is deliberately log-only (no plan change): a refund doesn't
+  cancel the Dodo subscription, so a downgrade would be undone by the next
+  `subscription.renewed`. Revoking access is a manual decision. Any other
+  event type without a handler logs a `received event with no handler` warning.
 - Paddle was the original processor; it rejected our account before going
   live, so `lib/paddle.ts`, `lib/paddle-client.ts`, and `app/api/paddle/*`
   were removed rather than kept as a second option.
