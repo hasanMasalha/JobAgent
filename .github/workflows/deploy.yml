@@ -201,7 +201,7 @@ jobs:
               "RAPIDAPI_KEY=${{ secrets.RAPIDAPI_KEY }}" \
               "DODO_PAYMENTS_API_KEY=${{ secrets.DODO_PAYMENTS_API_KEY }}" \
               "DODO_PAYMENTS_WEBHOOK_KEY=${{ secrets.DODO_PAYMENTS_WEBHOOK_KEY }}" \
-              "DODO_PAYMENTS_ENVIRONMENT=live_mode" \
+              "DODO_PAYMENTS_ENVIRONMENT=${{ secrets.DODO_PAYMENTS_ENVIRONMENT }}" \
               "DODO_PRO_MONTHLY_PRODUCT_ID=${{ secrets.DODO_PRO_MONTHLY_PRODUCT_ID }}" \
               "DODO_PRO_ANNUAL_PRODUCT_ID=${{ secrets.DODO_PRO_ANNUAL_PRODUCT_ID }}" \
               "DODO_UNLIMITED_MONTHLY_PRODUCT_ID=${{ secrets.DODO_UNLIMITED_MONTHLY_PRODUCT_ID }}" \
