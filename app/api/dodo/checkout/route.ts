@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
-import { dodo } from "@/lib/dodo";
+import { getDodo } from "@/lib/dodo";
 import { productIdFor, type BillingInterval, type PaidPlan } from "@/lib/plan-limits";
 
 export async function POST(req: NextRequest) {
@@ -20,6 +20,12 @@ export async function POST(req: NextRequest) {
     }
     if (interval !== "monthly" && interval !== "annual") {
       return NextResponse.json({ error: "interval must be 'monthly' or 'annual'" }, { status: 400 });
+    }
+
+    const dodo = getDodo();
+    if (!dodo) {
+      console.error("[dodo/checkout] DODO_PAYMENTS_API_KEY is not configured");
+      return NextResponse.json({ error: "Billing is not configured" }, { status: 500 });
     }
 
     const productId = productIdFor(plan as PaidPlan, interval as BillingInterval);

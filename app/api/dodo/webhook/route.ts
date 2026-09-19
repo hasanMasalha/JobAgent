@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import DodoPayments from "dodopayments";
 import { db } from "@/lib/db";
-import { dodo } from "@/lib/dodo";
+import { getDodo } from "@/lib/dodo";
 import { planFromProductId, type PaidPlan } from "@/lib/plan-limits";
 
 type Subscription = DodoPayments.Subscription;
@@ -68,6 +68,12 @@ async function handleSubscriptionDowngrade(sub: Subscription) {
 export async function POST(req: NextRequest) {
   if (!process.env.DODO_PAYMENTS_WEBHOOK_KEY) {
     console.error("[dodo/webhook] DODO_PAYMENTS_WEBHOOK_KEY is not configured");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
+  const dodo = getDodo();
+  if (!dodo) {
+    console.error("[dodo/webhook] DODO_PAYMENTS_API_KEY is not configured");
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
