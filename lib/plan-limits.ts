@@ -33,6 +33,28 @@ export function normalizePlan(plan: string | null | undefined): PlanKey {
   return plan === "pro" || plan === "unlimited" ? plan : "free";
 }
 
+export const PLAN_DISPLAY_NAMES: Record<PaidPlan, string> = {
+  pro: "Pro",
+  unlimited: "Unlimited",
+};
+
+function formatLimit(value: number): string {
+  return value >= 999999 ? "Unlimited" : value.toLocaleString();
+}
+
+// Human-readable bullets for plan confirmation emails, derived from
+// PLAN_LIMITS so the copy can't drift from the actual entitlements.
+export function planFeatureHighlights(plan: PaidPlan): string[] {
+  const limits = PLAN_LIMITS[plan];
+  return [
+    `${formatLimit(limits.jobMatchesPerDay)} AI job matches per day`,
+    `${formatLimit(limits.autoAppliesPerMonth)} auto-applies per month`,
+    `${formatLimit(limits.cvTailoringPerMonth)} CV tailoring requests per month`,
+    `${formatLimit(limits.savedJobsMax)} saved jobs`,
+    `${limits.cvVersionsMax} CV version${limits.cvVersionsMax > 1 ? "s" : ""}`,
+  ];
+}
+
 export function productIdFor(plan: PaidPlan, interval: BillingInterval): string | undefined {
   const map: Record<string, string | undefined> = {
     "pro:monthly": process.env.DODO_PRO_MONTHLY_PRODUCT_ID,

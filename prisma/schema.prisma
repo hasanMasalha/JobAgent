@@ -182,6 +182,19 @@ model MatchCache {
   @@map("match_cache")
 }
 
+// Idempotency claim for Dodo webhook deliveries — see the plan/cancellation
+// confirmation emails sent from app/api/dodo/webhook/route.ts. Dodo retries
+// deliveries, so the webhook-id must be claimed before any side effect
+// (email, external call) that a retried delivery must not repeat.
+model WebhookEvent {
+  id        String   @id @default(uuid())
+  webhookId String   @unique
+  eventType String
+  createdAt DateTime @default(now())
+
+  @@map("webhook_events")
+}
+
 model UserJobInteraction {
   id      String @id @default(uuid())
   user_id String

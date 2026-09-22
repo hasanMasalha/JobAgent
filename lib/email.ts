@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { PLAN_DISPLAY_NAMES, planFeatureHighlights, type PaidPlan } from "@/lib/plan-limits";
 
 interface JobMatch {
   title: string;
@@ -293,5 +294,171 @@ export async function sendNeedsManualEmail(params: {
     subject: `Action needed — finish applying to ${jobTitle} at ${company}`,
     html,
     attachments: cvAttachment ? [{ filename: cvAttachment.filename, content: cvAttachment.content }] : undefined,
+  });
+}
+
+function featureListHtml(features: string[]): string {
+  return `
+    <ul style="margin:0 0 24px; padding:0 0 0 20px; color:#374151; font-size:14px; line-height:1.9;">
+      ${features.map((feature) => `<li>${feature}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function dashboardButtonHtml(label: string, color = "#1d4ed8"): string {
+  return `
+    <div style="text-align:center; margin:8px 0 0;">
+      <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard"
+         style="display:inline-block; background:${color}; color:white;
+                padding:12px 28px; border-radius:8px; text-decoration:none;
+                font-weight:600; font-size:14px;">
+        ${label}
+      </a>
+    </div>
+  `;
+}
+
+function billingEmailShell(params: { headerLabel: string; bodyHtml: string; footerNote: string }): string {
+  const { headerLabel, bodyHtml, footerNote } = params;
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="margin:0; padding:0; background:#f9fafb; font-family:Arial,sans-serif;">
+      <div style="max-width:560px; margin:40px auto; background:white;
+                  border-radius:12px; overflow:hidden;
+                  box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+        <!-- Header -->
+        <div style="background:#1d4ed8; padding:28px 32px;">
+          <div style="color:white; font-size:20px; font-weight:700;">JobAgent</div>
+          <div style="color:#bfdbfe; font-size:13px; margin-top:4px;">${headerLabel}</div>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:32px;">
+          ${bodyHtml}
+        </div>
+
+        <!-- Footer -->
+        <div style="padding:20px 32px; background:#f9fafb;
+                    border-top:1px solid #f3f4f6; text-align:center;">
+          <p style="margin:0; color:#9ca3af; font-size:12px;">
+            ${footerNote}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+export async function sendSubscriptionWelcomeEmail(params: {
+  userEmail: string;
+  userName: string;
+  plan: PaidPlan;
+}) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { userEmail, userName, plan } = params;
+  const firstName = userName?.split(" ")[0] || "there";
+  const planName = PLAN_DISPLAY_NAMES[plan];
+
+  const bodyHtml = `
+    <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">
+      Welcome to JobAgent ${planName}, ${firstName} 👋
+    </p>
+    <p style="margin:0 0 20px; color:#6b7280; font-size:14px; line-height:1.6;">
+      Your subscription is active. Here's what's included with your plan:
+    </p>
+    ${featureListHtml(planFeatureHighlights(plan))}
+    ${dashboardButtonHtml("Go to dashboard →")}
+  `;
+
+  const html = billingEmailShell({
+    headerLabel: `Welcome to ${planName}`,
+    bodyHtml,
+    footerNote: "JobAgent · Manage your subscription anytime from your dashboard",
+  });
+
+  await resend.emails.send({
+    from: "JobAgent <notifications@jobagent.uk>",
+    to: userEmail,
+    subject: `Welcome to JobAgent ${planName}`,
+    html,
+  });
+}
+
+export async function sendPlanChangedEmail(params: {
+  userEmail: string;
+  userName: string;
+  plan: PaidPlan;
+}) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { userEmail, userName, plan } = params;
+  const firstName = userName?.split(" ")[0] || "there";
+  const planName = PLAN_DISPLAY_NAMES[plan];
+
+  const bodyHtml = `
+    <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">
+      Hi ${firstName} 👋
+    </p>
+    <p style="margin:0 0 20px; color:#6b7280; font-size:14px; line-height:1.6;">
+      Your JobAgent plan changed to <strong style="color:#111827;">${planName}</strong>.
+      Here's what's included now:
+    </p>
+    ${featureListHtml(planFeatureHighlights(plan))}
+    ${dashboardButtonHtml("Go to dashboard →")}
+  `;
+
+  const html = billingEmailShell({
+    headerLabel: "Plan changed",
+    bodyHtml,
+    footerNote: "JobAgent · Manage your subscription anytime from your dashboard",
+  });
+
+  await resend.emails.send({
+    from: "JobAgent <notifications@jobagent.uk>",
+    to: userEmail,
+    subject: `Your plan changed to ${planName}`,
+    html,
+  });
+}
+
+export async function sendSubscriptionCancelledEmail(params: {
+  userEmail: string;
+  userName: string;
+  accessUntil: Date;
+}) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { userEmail, userName, accessUntil } = params;
+  const firstName = userName?.split(" ")[0] || "there";
+  const accessUntilFormatted = accessUntil.toLocaleDateString("en-US", { dateStyle: "long" });
+
+  const bodyHtml = `
+    <p style="margin:0 0 8px; color:#111827; font-size:16px; font-weight:600;">
+      Hi ${firstName} 👋
+    </p>
+    <p style="margin:0 0 24px; color:#6b7280; font-size:14px; line-height:1.6;">
+      Your JobAgent subscription is cancelled. You keep full access until
+      <strong style="color:#111827;">${accessUntilFormatted}</strong>, after which your
+      account moves to the free plan.
+    </p>
+    ${dashboardButtonHtml("Go to dashboard →", "#374151")}
+  `;
+
+  const html = billingEmailShell({
+    headerLabel: "Subscription cancelled",
+    bodyHtml,
+    footerNote: "JobAgent · Changed your mind? You can resubscribe anytime from your dashboard",
+  });
+
+  await resend.emails.send({
+    from: "JobAgent <notifications@jobagent.uk>",
+    to: userEmail,
+    subject: "Your subscription is cancelled",
+    html,
   });
 }
