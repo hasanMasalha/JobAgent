@@ -67,11 +67,16 @@ export default function MyCVPage() {
     try {
       const res = await fetch(`/api/cv/download-generated?cv_id=${cvId}`);
       if (!res.ok) return;
+      // Could be the user's own uploaded file (any extension) or our
+      // generated .docx — take the real filename from the response rather
+      // than assuming .docx.
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "My_CV.docx";
+      a.download = filenameMatch?.[1] ?? "My_CV.docx";
       a.click();
       URL.revokeObjectURL(url);
     } finally {

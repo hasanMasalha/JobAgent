@@ -78,6 +78,18 @@ model CV {
   hyperlinks_json String?                     @default("[]")
   updated_at      DateTime                    @updatedAt
 
+  // Provenance of raw_text — set by whichever of /api/cv/upload,
+  // /api/cv/generate or /api/cv/improve last wrote this row.
+  // "uploaded": raw_text is extracted-for-matching-only; original_file is
+  //   the actual bytes the user gave us and must be sent byte-for-byte
+  //   wherever a CV file is attached or submitted — never re-rendered.
+  // "generated": raw_text is AI-authored (built from scratch or an AI
+  //   rewrite of an upload) — free to render into the designed PDF/DOCX.
+  source              String  @default("uploaded")
+  original_file       Bytes?
+  original_filename   String?
+  original_mime_type  String?
+
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id])

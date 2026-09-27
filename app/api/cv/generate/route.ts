@@ -192,17 +192,23 @@ export async function POST(req: NextRequest) {
     }
     const hyperlinksJson = JSON.stringify(builtHyperlinks)
 
-    // Upsert CV row
+    // Upsert CV row. source='generated' + clearing original_file: this text is
+    // AI-authored from the builder form, not a user upload, so it's free to be
+    // rendered into the designed PDF/DOCX (and there is no original file to keep).
     await db.$executeRaw`
-      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, hyperlinks_json, updated_at)
+      INSERT INTO "CV" (id, user_id, raw_text, skills_json, clean_summary, embedding, hyperlinks_json, source, original_file, original_filename, original_mime_type, updated_at)
       VALUES (gen_random_uuid(), ${user.id}, ${cvText}, ${JSON.stringify(skills_json)}::jsonb,
-              ${clean_summary}, ${JSON.stringify(embedding)}::vector, ${hyperlinksJson}, now())
+              ${clean_summary}, ${JSON.stringify(embedding)}::vector, ${hyperlinksJson}, 'generated', NULL, NULL, NULL, now())
       ON CONFLICT (user_id) DO UPDATE
         SET raw_text = EXCLUDED.raw_text,
             skills_json = EXCLUDED.skills_json,
             clean_summary = EXCLUDED.clean_summary,
             embedding = EXCLUDED.embedding,
             hyperlinks_json = EXCLUDED.hyperlinks_json,
+            source = 'generated',
+            original_file = NULL,
+            original_filename = NULL,
+            original_mime_type = NULL,
             updated_at = now()
     `;
 

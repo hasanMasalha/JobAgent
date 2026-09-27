@@ -19,15 +19,38 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "cv_id is required" }, { status: 400 });
     }
 
-    const rows = await db.$queryRaw<{ raw_text: string; skills_json: { skills?: string[] } | null; hyperlinks_json: string | null }[]>`
-      SELECT raw_text, skills_json, hyperlinks_json FROM "CV" WHERE id = ${cvId} AND user_id = ${user.id} LIMIT 1
+    const rows = await db.$queryRaw<{
+      raw_text: string;
+      skills_json: { skills?: string[] } | null;
+      hyperlinks_json: string | null;
+      source: string;
+      original_file: Buffer | null;
+      original_filename: string | null;
+      original_mime_type: string | null;
+    }[]>`
+      SELECT raw_text, skills_json, hyperlinks_json, source, original_file, original_filename, original_mime_type
+      FROM "CV" WHERE id = ${cvId} AND user_id = ${user.id} LIMIT 1
     `;
 
     if (!rows.length || !rows[0].raw_text) {
       return NextResponse.json({ error: "No CV found" }, { status: 404 });
     }
 
-    const { raw_text, skills_json, hyperlinks_json } = rows[0];
+    const { raw_text, skills_json, hyperlinks_json, source, original_file, original_filename, original_mime_type } = rows[0];
+
+    // Uploaded CV — send the user's own file back exactly as they gave it to
+    // us, never re-rendered. (Pre-migration uploads have no original_file on
+    // file; those fall through to the generated-style render below rather
+    // than claim a design we can't verify came from AI-authored text.)
+    if (source === "uploaded" && original_file && original_filename) {
+      return new NextResponse(new Uint8Array(original_file), {
+        status: 200,
+        headers: {
+          "Content-Type": original_mime_type ?? "application/octet-stream",
+          "Content-Disposition": `attachment; filename="${original_filename.replace(/"/g, "")}"`,
+        },
+      });
+    }
 
     // Derive job title from skills_json or first line of CV
     const firstLine = raw_text.split("\n").find((l: string) => l.trim()) ?? "CV";

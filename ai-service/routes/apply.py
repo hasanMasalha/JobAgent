@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
 
-from utils.cv_pdf import generate_cv_pdf
+from utils.cv_pdf import generate_cv_pdf, resolve_cv_file
 
 _anthropic = anthropic.Anthropic()
 
@@ -21,21 +21,6 @@ class ApplyRequest(BaseModel):
     job_url: str
     application_id: str
     user_id: str
-
-
-def _build_cv_pdf(tailored_cv: str, output_path: str) -> None:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-
-    doc = SimpleDocTemplate(output_path, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
-    for line in tailored_cv.split("\n"):
-        if line.strip():
-            story.append(Paragraph(line.strip(), styles["Normal"]))
-            story.append(Spacer(1, 6))
-    doc.build(story)
 
 
 # ── shared helpers ────────────────────────────────────────────────────────────
@@ -915,7 +900,8 @@ async def apply_to_job(req: ApplyRequest):
             req.user_id,
         )
         cv = await conn.fetchrow(
-            'SELECT skills_json FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            'SELECT skills_json, raw_text, source, original_file, original_filename, original_mime_type '
+            'FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
             req.user_id,
         )
     finally:
@@ -954,11 +940,23 @@ async def apply_to_job(req: ApplyRequest):
     tailored_cv = application["tailored_cv"] or ""
     cover_letter = application["cover_letter"] or ""
 
-    pdf_path = os.path.join(tempfile.gettempdir(), f"{req.application_id}_cv.pdf")
-    try:
-        _build_cv_pdf(tailored_cv, pdf_path)
-    except Exception as e:
-        return {"status": "failed", "message": f"PDF generation failed: {e}"}
+    resolved_cv = resolve_cv_file(tailored_cv or None, dict(cv) if cv else None)
+    if resolved_cv is None:
+        # Defensive only — this route only runs after /api/apply/prepare has
+        # already populated tailored_cv, so this shouldn't be reachable in
+        # practice. If it is, land as "manual" (this route's existing
+        # terminal-state vocabulary) rather than crash or silently proceed
+        # with a guess. See resolve_cv_file() for why we refuse to guess.
+        return {
+            "status": "manual",
+            "message": "We've upgraded how CV files are handled — please re-upload your CV or use Improve/Generate once, then apply again.",
+        }
+    cv_bytes, cv_filename = resolved_cv
+
+    cv_suffix = os.path.splitext(cv_filename)[1] or ".pdf"
+    pdf_path = os.path.join(tempfile.gettempdir(), f"{req.application_id}_cv{cv_suffix}")
+    with open(pdf_path, "wb") as f:
+        f.write(cv_bytes)
 
     profile_dir = os.path.join("browser_profile", req.user_id)
     os.makedirs(profile_dir, exist_ok=True)

@@ -2,7 +2,6 @@ import asyncio
 import base64
 import os
 import sys
-import tempfile
 import traceback
 import threading
 
@@ -11,7 +10,7 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from routes.apply import _build_cv_pdf
+from utils.cv_pdf import resolve_cv_file
 
 # Python fully-buffers stdout by default when it isn't attached to a TTY
 # (true under uvicorn/Docker) — a slow background thread's print()s can sit
@@ -199,16 +198,19 @@ async def ats_apply(req: ATSApplyRequest):
         tailored_cv = row["tailored_cv"] or ""
         cover_letter = row["cover_letter"] or ""
 
+        # Quick-apply path: no tailored CV yet — fall back to the user's CV row.
+        # Fetched unconditionally (not just when tailored_cv is missing) because
+        # resolve_cv_file() below needs source/original_file to decide whether
+        # an uploaded CV must be passed through byte-for-byte.
+        cv_row = await conn.fetchrow(
+            'SELECT raw_text, source, original_file, original_filename, original_mime_type '
+            'FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+            req.user_id,
+        )
         if not tailored_cv:
-            # Quick-apply path: no tailored CV yet — fall back to the user's raw uploaded CV
-            cv_row = await conn.fetchrow(
-                'SELECT raw_text FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
-                req.user_id,
-            )
             if not cv_row or not cv_row["raw_text"]:
                 return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
-            tailored_cv = cv_row["raw_text"]
-            print(f"[ats-apply] Quick-apply: using raw CV ({len(tailored_cv)} chars)")
+            print(f"[ats-apply] Quick-apply: using CV on file (source={cv_row['source']})")
 
         # Structured "Easy Apply defaults" — used to answer common custom
         # questions (sponsorship, work authorization, salary, etc.) without
@@ -224,19 +226,46 @@ async def ats_apply(req: ATSApplyRequest):
     finally:
         await conn.close()
 
-    pdf_path = os.path.join(tempfile.gettempdir(), f"ats_{req.application_id}.pdf")
-    try:
-        _build_cv_pdf(tailored_cv, pdf_path)
-    except Exception as exc:
-        return {"success": False, "error": f"PDF generation failed: {exc}"}
+    cv_row_dict = dict(cv_row) if cv_row else None
+    resolved_cv = resolve_cv_file(tailored_cv or None, cv_row_dict)
+    if resolved_cv is None:
+        # A pre-migration CV row with no confirmed source — we can't prove
+        # raw_text isn't the user's own uploaded words, so we refuse to guess
+        # rather than risk silently re-rendering a real upload. This lands as
+        # needs_manual with the normal confirmation email, not a silent
+        # synchronous failure, and the dashboard also banners this state
+        # (see /api/profile's cvNeedsReconfirmation).
+        print(f"[ats-apply] CV can't be safely resolved for user {req.user_id} — landing as needs_manual")
+        reup_conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            await reup_conn.execute(
+                'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
+                "needs_manual",
+                "We've upgraded how CV files are handled — please re-upload your CV or use Improve/Generate once, then apply again.",
+                req.application_id,
+            )
+        finally:
+            await reup_conn.close()
+        await _send_application_confirmation_email(req.application_id)
+        return {"success": True, "status": "needs_manual", "message": "Please re-upload or regenerate your CV to continue auto-applying."}
 
-    with open(pdf_path, "rb") as f:
-        cv_bytes = f.read()
+    cv_bytes, cv_filename = resolved_cv
     cv_base64 = base64.b64encode(cv_bytes).decode("ascii")
-    print(f"[ats-apply] PDF size={len(cv_bytes)} bytes, base64 length={len(cv_base64)}")
+    print(f"[ats-apply] CV file size={len(cv_bytes)} bytes, base64 length={len(cv_base64)}, filename={cv_filename}")
 
-    name_part = f"{req.first_name}_{req.last_name}".strip("_").replace(" ", "_") or "applicant"
-    cv_filename = f"{name_part}_cv.pdf"
+    # An uploaded CV passed through byte-for-byte keeps its own filename —
+    # anything else (tailored or AI-generated) gets our naming convention.
+    is_passthrough = bool(
+        cv_row_dict and cv_row_dict.get("source") == "uploaded" and cv_row_dict.get("original_file") and not tailored_cv
+    )
+    if not is_passthrough:
+        name_part = f"{req.first_name}_{req.last_name}".strip("_").replace(" ", "_") or "applicant"
+        ext = os.path.splitext(cv_filename)[1] or ".pdf"
+        cv_filename = f"{name_part}_cv{ext}"
+
+    # Best-effort text representation for any "paste your resume" style
+    # fields — independent of which file is actually attached above.
+    cv_text_for_fields = tailored_cv or (cv_row_dict.get("raw_text") if cv_row_dict else "") or ""
 
     request_dict = {
         "apply_url": req.apply_url,
@@ -252,7 +281,7 @@ async def ats_apply(req: ATSApplyRequest):
             "cv_filename": cv_filename,
             "cover_letter": cover_letter,
             "profile": profile,
-            "cv_text": tailored_cv,
+            "cv_text": cv_text_for_fields,
         },
     }
 

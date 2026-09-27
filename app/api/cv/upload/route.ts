@@ -87,6 +87,9 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await cvFile.arrayBuffer());
+    const mimeType = isPdf
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     let rawText: string;
     const allLinks: { text: string; url: string; context: string }[] = [];
 
@@ -137,13 +140,20 @@ export async function POST(req: NextRequest) {
     `;
 
     const hyperlinksJson = JSON.stringify(allLinks);
+    // source='uploaded' + the original bytes: this is the user's own file, verbatim.
+    // Nothing downstream may re-render it — it must be sent byte-for-byte wherever
+    // a CV file is attached or submitted. See prisma/schema.prisma CV model comment.
     await db.$executeRaw`
-      INSERT INTO "CV" (id, user_id, raw_text, hyperlinks_json, updated_at)
-      VALUES (gen_random_uuid(), ${user.id}, ${rawText}, ${hyperlinksJson}, now())
+      INSERT INTO "CV" (id, user_id, raw_text, hyperlinks_json, source, original_file, original_filename, original_mime_type, updated_at)
+      VALUES (gen_random_uuid(), ${user.id}, ${rawText}, ${hyperlinksJson}, 'uploaded', ${buffer}, ${cvFile.name}, ${mimeType}, now())
       ON CONFLICT (user_id) DO UPDATE
-        SET raw_text      = EXCLUDED.raw_text,
-            hyperlinks_json = EXCLUDED.hyperlinks_json,
-            updated_at    = now()
+        SET raw_text            = EXCLUDED.raw_text,
+            hyperlinks_json     = EXCLUDED.hyperlinks_json,
+            source              = 'uploaded',
+            original_file       = EXCLUDED.original_file,
+            original_filename   = EXCLUDED.original_filename,
+            original_mime_type  = EXCLUDED.original_mime_type,
+            updated_at          = now()
     `;
 
     const titles: string[] = JSON.parse(titlesRaw ?? "[]");

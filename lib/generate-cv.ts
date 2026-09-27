@@ -39,7 +39,7 @@ interface LinkMatch {
 function linkifyLine(
   lineText: string,
   hyperlinks: CVHyperlink[],
-  runStyle: { font: string; size: number; color: string }
+  runStyle: { font: string; size: number; color: string; bold?: boolean }
 ): (TextRun | ExternalHyperlink)[] {
   const matches: LinkMatch[] = []
 
@@ -90,6 +90,7 @@ function linkifyLine(
         text: match.displayText,
         font: runStyle.font,
         size: runStyle.size,
+        bold: runStyle.bold,
         color: '1D4ED8',
         underline: { type: UnderlineType.SINGLE },
       })],
@@ -103,96 +104,246 @@ function linkifyLine(
   return runs
 }
 
+// ── design tokens ────────────────────────────────────────────────────────
+// One accent colour (deep navy), used only for the name, section headings
+// and the hairline rules under them — everything else stays near-black/grey.
+const FONT = 'Calibri'
+const ACCENT_NAVY = '1B3A5C'
+const COLOR_ROLE = '1F2937'    // role/school titles (bold)
+const COLOR_BODY = '374151'    // paragraph and bullet text
+const COLOR_MUTED = '6B7280'   // contact line, role dates
+
+// Canonical ATS-safe section names. Anything not in this map keeps its own
+// (title-cased) text rather than being forced into one of these — we only
+// normalize the headings parsers are told to expect, never invent new ones.
+const CANONICAL_SECTIONS: Record<string, string> = {
+  'summary': 'Summary', 'professional summary': 'Summary', 'objective': 'Summary', 'profile': 'Summary',
+  'work experience': 'Experience', 'experience': 'Experience', 'employment': 'Experience',
+  'employment history': 'Experience', 'professional experience': 'Experience',
+  'education': 'Education', 'academic background': 'Education',
+  'skills': 'Skills', 'technical skills': 'Skills', 'core competencies': 'Skills', 'competencies': 'Skills',
+  'projects': 'Projects', 'portfolio': 'Projects', 'personal projects': 'Projects',
+  'certifications': 'Certifications', 'certificates': 'Certifications', 'awards': 'Awards',
+  'languages': 'Languages', 'publications': 'Publications', 'references': 'References',
+}
+
+function sectionKey(line: string): string {
+  return line.trim().replace(/:$/, '').toLowerCase()
+}
+
+function isSectionHeader(line: string): boolean {
+  return sectionKey(line) in CANONICAL_SECTIONS
+}
+
+function canonicalSectionText(line: string): string {
+  const key = sectionKey(line)
+  if (CANONICAL_SECTIONS[key]) return CANONICAL_SECTIONS[key]
+  const trimmed = line.trim().replace(/:$/, '')
+  return trimmed.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+}
+
+// A section header we don't recognize by name (e.g. "Hackathons",
+// "Volunteering") — not a CANONICAL_SECTIONS keyword, so we keep its own
+// wording rather than forcing it into one of the five. Short,
+// punctuation/digit-free, title-cased; confirmed by generateCVDocx only
+// when the next line is a bullet or role header, so an ordinary short
+// sentence never gets mistaken for a heading.
+function isBareHeadingCandidate(line: string): boolean {
+  const trimmed = line.trim().replace(/:$/, '')
+  if (!trimmed || trimmed.length > 30) return false
+  if (/[.,;()@|]/.test(trimmed)) return false
+  if (/\d/.test(trimmed)) return false
+  const words = trimmed.split(/\s+/)
+  if (words.length === 0 || words.length > 4) return false
+  return words.every((w) => !/[a-zA-Z]/.test(w[0]) || w[0] === w[0].toUpperCase())
+}
+
+function isBullet(line: string): boolean {
+  return line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ') || line.startsWith('o ') || line.startsWith('○ ') || line.startsWith('● ')
+}
+
+// Trailing date/range detection, e.g. "... Acme Corp - 2021 - Present" or
+// "... MIT (2016 - 2020)" — anchored at end-of-line so a stray 4-digit number
+// mid-sentence ("2000+ GitHub stars") never gets mistaken for a date.
+const MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?'
+const DATE_TOKEN = `(?:${MONTH}\\s+)?\\d{4}`
+const DATE_RANGE_RE = new RegExp(`\\(?\\s*(?:${DATE_TOKEN}|Present|Current)\\s*[-–—]\\s*(?:${DATE_TOKEN}|Present|Current|Now)\\s*\\)?\\s*$`, 'i')
+const SINGLE_DATE_RE = new RegExp(`\\(?\\s*(?:${DATE_TOKEN})\\s*\\)?\\s*$`)
+
+function splitRoleHeader(line: string): { left: string; date: string } {
+  const m = DATE_RANGE_RE.exec(line) ?? SINGLE_DATE_RE.exec(line)
+  if (!m || m.index === undefined) return { left: line.trim(), date: '' }
+  const date = line.slice(m.index).trim().replace(/^\(|\)\s*$/g, '').trim()
+  const left = line.slice(0, m.index).replace(/[\s\-–—|·,]+$/, '').trim()
+  return { left: left || line.trim(), date }
+}
+
+function isRoleHeader(line: string): boolean {
+  if (isBullet(line) || isSectionHeader(line)) return false
+  const hasSeparator = ['·', '–', '—', '|'].some((s) => line.includes(s)) || / at /i.test(line)
+  const hasTrailingDate = DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line)
+  return hasSeparator || hasTrailingDate
+}
+
+// Narrow, scoped check used only to decide whether the line immediately
+// after the name (when separated by a blank line) is a contact line —
+// NOT a general "does this look contact-y" test applied everywhere, which
+// previously false-positived on any line with a 3+ digit run (e.g. a role
+// header's "2021"), swallowing it before isRoleHeader ever ran.
+function looksLikeContactLine(line: string): boolean {
+  return line.includes('@') || line.includes('|') || line.includes('+') || /\d{3}/.test(line)
+}
+
+// Merge hard line-wraps from the source PDF/DOCX text extraction back into
+// logical lines. Extracted text commonly hard-breaks mid-sentence at
+// wherever the original document happened to wrap — without this, a
+// bullet's wrapped continuation renders as its own orphaned, unindented
+// paragraph instead of flowing under the bullet it belongs to. A line
+// starts a new logical line if it looks like a bullet/heading/role header,
+// or if the previous logical line already looks "closed" (ends in
+// sentence-terminal punctuation); otherwise it's appended to the previous
+// one. name/contact lines are never a merge source or target.
+function reflowLines(rawLines: string[], nameIdx: number | null, contactIdx: number | null): string[] {
+  const protectedCount = (nameIdx !== null ? 1 : 0) + (contactIdx !== null ? 1 : 0)
+  const result: string[] = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trim()
+    if (!line) continue
+    if (i === nameIdx || i === contactIdx) {
+      result.push(line)
+      continue
+    }
+
+    const startsNewBlock =
+      isBullet(line) || isSectionHeader(line) || isRoleHeader(line) || isBareHeadingCandidate(line)
+    if (!startsNewBlock && result.length > protectedCount) {
+      const prev = result[result.length - 1]
+      const prevIsOpen = !/[.!?:]\s*$/.test(prev) && !isSectionHeader(prev)
+      if (prevIsOpen) {
+        result[result.length - 1] = `${prev} ${line}`
+        continue
+      }
+    }
+    result.push(line)
+  }
+  return result
+}
+
+// "Languages: Python, Go, TypeScript" -> bold "Languages:" label, plain rest.
+// Lets "Skills grouped by category" fall out of normal "Label: values" text
+// without inventing categories that aren't in the source content.
+const LABEL_RE = /^([A-Za-z][A-Za-z0-9 /&+-]{0,30}:)\s*(.+)$/
+
+function labelRuns(
+  text: string,
+  hyperlinks: CVHyperlink[],
+  runStyle: { font: string; size: number; color: string }
+): (TextRun | ExternalHyperlink)[] | null {
+  const m = LABEL_RE.exec(text)
+  if (!m) return null
+  const [, label, rest] = m
+  return [
+    new TextRun({ text: `${label} `, font: runStyle.font, size: runStyle.size, bold: true, color: runStyle.color }),
+    ...linkifyLine(rest, hyperlinks, runStyle),
+  ]
+}
+
 export async function generateCVDocx(
   cvText: string,
   _jobTitle: string = 'CV',
   hyperlinks: CVHyperlink[] = []
 ): Promise<Buffer> {
 
-  const FONT = 'Calibri'
-  const COLOR_NAME = '1F2937'      // near black
-  const COLOR_SECTION = '1F2937'   // near black for section headers
-  const COLOR_BODY = '374151'      // dark gray for body text
-  const COLOR_CONTACT = '6B7280'   // medium gray for contact line
-
   const children: Paragraph[] = []
 
-  const lines = cvText.split('\n').map(l => l.trim()).filter(Boolean)
+  const rawLines = cvText.split('\n').map((l) => l.trim())
+  const rawNonEmptyIdx: number[] = []
+  rawLines.forEach((l, i) => { if (l) rawNonEmptyIdx.push(i) })
 
-  const SECTION_HEADERS = [
-    'summary', 'work experience', 'experience', 'education',
-    'skills', 'projects', 'languages', 'certifications',
-    'achievements', 'contact'
-  ]
+  const rawNameIdx = rawNonEmptyIdx.length ? rawNonEmptyIdx[0] : null
+  let rawContactIdx: number | null = null
+  if (rawNameIdx !== null) {
+    const rest = rawNonEmptyIdx.filter((i) => i > rawNameIdx)
+    if (rest.length && (rest[0] === rawNameIdx + 1 || looksLikeContactLine(rawLines[rest[0]]))) {
+      rawContactIdx = rest[0]
+    }
+  }
 
-  const isSectionHeader = (line: string) =>
-    SECTION_HEADERS.some(h => line.toLowerCase() === h ||
-      line.toLowerCase().startsWith(h + ':'))
+  const lines = reflowLines(rawLines, rawNameIdx, rawContactIdx)
+  const nameIdx = lines.length ? 0 : null
+  const contactIdx = rawContactIdx !== null && lines.length > 1 ? 1 : null
 
-  const isBullet = (line: string) =>
-    line.startsWith('- ') || line.startsWith('• ') ||
-    line.startsWith('* ') || line.startsWith('o ')
-
-  const isContactLine = (line: string) =>
-    line.includes('@') || line.includes('|') ||
-    line.includes('+') || !!line.match(/\d{3}/)
-
-  let isFirstLine = true
-  let isSecondLine = false
-  let nameAdded = false
+  // Headings not in CANONICAL_SECTIONS (e.g. "Hackathons") still get the
+  // heading treatment if the line looks heading-shaped AND is immediately
+  // followed by a bullet or role header — otherwise a short sentence could
+  // be mistaken for one.
+  const bareHeadingIndices = new Set<number>()
+  for (let i = 0; i < lines.length; i++) {
+    if (i === nameIdx || i === contactIdx) continue
+    const line = lines[i]
+    if (isSectionHeader(line) || isBullet(line) || !isBareHeadingCandidate(line)) continue
+    const next = lines[i + 1]
+    if (next !== undefined && (isBullet(next) || isRoleHeader(next))) {
+      bareHeadingIndices.add(i)
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    // First line = candidate name — large, bold, centered (never a link)
-    if (isFirstLine) {
+    // First line = candidate name — large, bold, accent colour, centered (never a link)
+    if (i === nameIdx) {
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 0, after: 40 },
         children: [new TextRun({
           text: line,
           font: FONT,
-          size: 32,
+          size: 40,
           bold: true,
-          color: COLOR_NAME,
+          color: ACCENT_NAVY,
         })]
       }))
-      isFirstLine = false
-      isSecondLine = true
-      nameAdded = true
       continue
     }
 
-    // Contact line (email, phone, LinkedIn)
-    if (isSecondLine || (nameAdded && isContactLine(line))) {
+    // Contact line (email, phone, LinkedIn) — pipe-separated, muted grey.
+    if (i === contactIdx) {
+      const parts = line.split('|').map((p) => p.trim()).filter(Boolean)
+      const contactRuns: (TextRun | ExternalHyperlink)[] = []
+      parts.forEach((part, idx) => {
+        if (idx > 0) contactRuns.push(new TextRun({ text: '  |  ', font: FONT, size: 18, color: COLOR_MUTED }))
+        contactRuns.push(...linkifyLine(part, hyperlinks, { font: FONT, size: 18, color: COLOR_MUTED }))
+      })
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 120 },
-        children: linkifyLine(line, hyperlinks, { font: FONT, size: 18, color: COLOR_CONTACT }),
+        spacing: { before: 0, after: 200 },
+        children: contactRuns.length ? contactRuns : linkifyLine(line, hyperlinks, { font: FONT, size: 18, color: COLOR_MUTED }),
       }))
-      isSecondLine = false
       continue
     }
 
-    // Section headers — never links
-    if (isSectionHeader(line)) {
+    // Section headers — canonical ATS-safe names, accent colour, hairline rule under — never links
+    if (isSectionHeader(line) || bareHeadingIndices.has(i)) {
+      const headingText = isSectionHeader(line) ? canonicalSectionText(line) : line.replace(/:$/, '')
       children.push(new Paragraph({
-        spacing: { before: 160, after: 0 },
+        spacing: { before: 220, after: 0 },
+        keepNext: true, // never let Word strand a heading alone at the bottom of a page
         border: {
           bottom: {
-            color: COLOR_SECTION,
+            color: ACCENT_NAVY,
             style: BorderStyle.SINGLE,
             size: 6,
             space: 4,
           }
         },
         children: [new TextRun({
-          text: line.toUpperCase(),
+          text: headingText.toUpperCase(),
           font: FONT,
-          size: 20,
+          size: 21,
           bold: true,
-          color: COLOR_SECTION,
-          characterSpacing: 40,
+          color: ACCENT_NAVY,
+          characterSpacing: 20,
         })]
       }))
       continue
@@ -200,41 +351,38 @@ export async function generateCVDocx(
 
     // Bullet points
     if (isBullet(line)) {
-      const text = line.replace(/^[-•*o]\s+/, '')
+      const text = line.replace(/^[-•*o○●]\s+/, '')
+      const labeled = labelRuns(text, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY })
       children.push(new Paragraph({
         numbering: { reference: 'cv-bullets', level: 0 },
-        spacing: { before: 0, after: 40 },
-        children: linkifyLine(text, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
+        spacing: { before: 0, after: 60 },
+        children: labeled ?? linkifyLine(text, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
       }))
       continue
     }
 
-    // Job title lines — detect by pattern (Title, Company · Date)
-    const isRoleHeader = line.includes('·') || line.includes('–') ||
-      (line.includes('-') && !!line.match(/\d{4}/))
-
-    if (isRoleHeader) {
-      const parts = line.split(/[·–]/)
-      const runParts = parts.flatMap((part, idx) => [
-        new TextRun({
-          text: idx === 0 ? part.trim() : ' · ' + part.trim(),
-          font: FONT,
-          size: 19,
-          bold: idx === 0,
-          color: idx === 0 ? COLOR_NAME : COLOR_CONTACT,
-        })
-      ])
+    // Role/entry header — "Title, Company · Dates" — bold title+company, then
+    // the date inline in muted grey. Not right-aligned: a wide gap makes text
+    // extractors (and so ATS parsers) treat the date as a separate column and
+    // attach it to the wrong line.
+    if (isRoleHeader(line)) {
+      const { left, date } = splitRoleHeader(line)
+      const roleRuns: TextRun[] = [new TextRun({ text: left, font: FONT, size: 20, bold: true, color: COLOR_ROLE })]
+      if (date) {
+        roleRuns.push(new TextRun({ text: ` | ${date}`, font: FONT, size: 19, color: COLOR_MUTED }))
+      }
       children.push(new Paragraph({
-        spacing: { before: 100, after: 20 },
-        children: runParts,
+        spacing: { before: 160, after: 40 },
+        children: roleRuns,
       }))
       continue
     }
 
-    // Regular body text
+    // Regular body text — supports "Label: value" bolding (skills grouped by category, etc.)
+    const labeled = labelRuns(line, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY })
     children.push(new Paragraph({
-      spacing: { before: 0, after: 40 },
-      children: linkifyLine(line, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
+      spacing: { before: 0, after: 60 },
+      children: labeled ?? linkifyLine(line, hyperlinks, { font: FONT, size: 19, color: COLOR_BODY }),
     }))
   }
 
@@ -250,7 +398,7 @@ export async function generateCVDocx(
           style: {
             paragraph: {
               indent: { left: 360, hanging: 180 },
-              spacing: { before: 0, after: 40 },
+              spacing: { before: 0, after: 60 },
             },
             run: {
               font: FONT,

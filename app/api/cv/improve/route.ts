@@ -51,10 +51,17 @@ export async function POST() {
       return NextResponse.json({ error: "Claude returned empty CV" }, { status: 500 });
     }
 
-    // Save improved CV back to DB (upsert)
+    // Save improved CV back to DB. This is Claude's rewrite, not the user's
+    // original words, so it becomes 'generated' and any original upload bytes
+    // are cleared — the text they applied to no longer reflects that file.
     await db.$executeRaw`
       UPDATE "CV"
-      SET raw_text = ${improvedText}, updated_at = now()
+      SET raw_text = ${improvedText},
+          source = 'generated',
+          original_file = NULL,
+          original_filename = NULL,
+          original_mime_type = NULL,
+          updated_at = now()
       WHERE id = ${cvId}
     `;
 

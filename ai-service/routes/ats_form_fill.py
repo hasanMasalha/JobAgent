@@ -338,7 +338,11 @@ async def fill_ats_form(
         print(f"[ats-form] Rewrote embedded Greenhouse URL: {apply_url} -> {resolved_url}")
         apply_url = resolved_url
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False, prefix="cv_") as tmp:
+    # cv_filename's real extension matters here — a passed-through uploaded CV
+    # can be a .docx, and uploading it to the ATS form under a .pdf-suffixed
+    # temp file would mislabel its type to any client-side validation.
+    cv_suffix = os.path.splitext(cv_filename)[1] or ".pdf"
+    with tempfile.NamedTemporaryFile(suffix=cv_suffix, delete=False, prefix="cv_") as tmp:
         tmp.write(cv_bytes)
         cv_path = tmp.name
 
