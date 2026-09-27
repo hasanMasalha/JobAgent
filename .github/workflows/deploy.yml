@@ -32,7 +32,7 @@ jobs:
         run: |
           cd ai-service
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio ruff
+          pip install pytest pytest-asyncio ruff pymupdf  # pymupdf: test-only PDF text extraction (tests/test_cv_pdf.py)
 
       - name: Python lint
         run: |
