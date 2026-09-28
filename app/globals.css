@@ -12,14 +12,97 @@
   --foreground: #ededed;
 }
 
+/*
+ * Design tokens. Values are space-separated RGB channels so Tailwind's
+ * opacity modifiers work (bg-brand/10). Consumed via tailwind.config.ts —
+ * pages should use the semantic names (bg-surface, text-ink-muted, …),
+ * never raw hex. Brand navy #1B3A5C matches the accent in generated CVs
+ * (lib/generate-cv.ts, ai-service/utils/cv_pdf.py).
+ */
+:root {
+  /* Surfaces */
+  --c-canvas: 244 246 249;       /* #F4F6F9 page background, cool paper */
+  --c-surface: 255 255 255;      /* #FFFFFF cards, inputs */
+  --c-surface-sunken: 237 241 246; /* #EDF1F6 wells, table headers, skeletons */
+  --c-line: 218 225 234;         /* #DAE1EA borders */
+  --c-line-strong: 135 149 167;  /* #8795A7 input borders — 3:1 on surface (WCAG 1.4.11) */
+
+  /* Text */
+  --c-ink: 19 37 58;             /* #13253A body text — navy-black */
+  --c-ink-muted: 84 99 118;      /* #546376 secondary text, 6.1:1 on white */
+  --c-ink-subtle: 94 108 126;    /* #5E6C7E meta text, ≥4.7:1 on every light surface */
+
+  /* Brand */
+  --c-brand: 27 58 92;           /* #1B3A5C primary actions, active nav */
+  --c-brand-hover: 20 45 72;     /* #142D48 */
+  --c-brand-text: 27 58 92;      /* links / brand-coloured text */
+  --c-brand-soft: 230 237 245;   /* #E6EDF5 selected rows, brand tint */
+  --c-on-brand: 255 255 255;
+  --c-ring: 47 107 170;          /* #2F6BAA focus ring */
+
+  /* Accent — brass. Used in one place per screen at most:
+     the top match score, the featured plan. */
+  --c-accent: 183 134 43;        /* #B7862B fills, rules */
+  --c-accent-soft: 248 239 219;  /* #F8EFDB */
+  --c-accent-text: 122 85 18;    /* #7A5512 text on soft, 6.3:1 */
+
+  /* Semantic tones: -soft background, -text foreground, base = solid/border */
+  --c-info: 36 118 179;          --c-info-soft: 229 241 250;     --c-info-text: 22 84 132;
+  --c-progress: 104 76 184;      --c-progress-soft: 239 235 250; --c-progress-text: 82 56 158;
+  --c-success: 30 132 87;        --c-success-soft: 225 243 234;  --c-success-text: 20 99 64;
+  --c-waiting: 191 138 12;       --c-waiting-soft: 252 244 220;  --c-waiting-text: 126 88 0;
+  --c-attention: 214 98 28;      --c-attention-soft: 253 236 224; --c-attention-text: 158 60 6;
+  --c-danger: 196 50 50;         --c-danger-soft: 251 232 232;   --c-danger-text: 158 30 30;
+
+  --shadow-color: 19 37 58;
+  --c-scrim: 12 20 31;           /* modal backdrop — dark in both themes */
+}
+
+.dark {
+  --c-canvas: 12 20 31;          /* #0C141F */
+  --c-surface: 20 31 46;         /* #141F2E */
+  --c-surface-sunken: 16 26 39;  /* #101A27 */
+  --c-line: 38 54 75;            /* #26364B */
+  --c-line-strong: 94 115 144;   /* #5E7390 */
+
+  --c-ink: 230 236 243;          /* #E6ECF3 */
+  --c-ink-muted: 163 178 196;    /* #A3B2C4 */
+  --c-ink-subtle: 132 148 168;   /* #8494A8, 5.2:1 on surface */
+
+  /* Navy disappears on a navy canvas, so dark mode lifts it to a mid blue
+     that still carries white text at >4.5:1. */
+  --c-brand: 58 114 172;         /* #3A72AC — white text 5.0:1, 3.3:1 against surface */
+  --c-brand-hover: 50 100 152;
+  --c-brand-text: 146 186 228;   /* #92BAE4 */
+  --c-brand-soft: 29 48 72;      /* #1D3048 */
+  --c-ring: 120 168 222;
+
+  --c-accent: 217 174 90;        /* #D9AE5A */
+  --c-accent-soft: 52 42 22;
+  --c-accent-text: 230 194 122;
+
+  --c-info: 88 160 214;          --c-info-soft: 22 44 64;        --c-info-text: 142 196 236;
+  --c-progress: 150 126 226;     --c-progress-soft: 40 34 68;    --c-progress-text: 190 172 245;
+  --c-success: 64 176 124;       --c-success-soft: 18 50 38;     --c-success-text: 128 214 170;
+  --c-waiting: 222 172 56;       --c-waiting-soft: 54 42 12;     --c-waiting-text: 238 198 104;
+  --c-attention: 236 132 66;     --c-attention-soft: 60 34 16;   --c-attention-text: 246 168 116;
+  --c-danger: 226 96 96;         --c-danger-soft: 60 24 26;      --c-danger-text: 244 150 150;
+
+  --shadow-color: 0 0 0;
+  --c-scrim: 0 0 0;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .numerals {
+    font-variant-numeric: tabular-nums lining-nums;
   }
 }

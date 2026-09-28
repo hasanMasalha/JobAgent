@@ -7,13 +7,13 @@ export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="w-8 h-8" />;
+  if (!mounted) return <div className="w-9 h-9" />;
 
   return (
     <button
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
-      aria-label="Toggle theme"
+      className="w-9 h-9 flex items-center justify-center rounded-control text-ink-muted hover:text-ink hover:bg-surface-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {resolvedTheme === "dark" ? (
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import SavedSearchCard from "./components/SavedSearchCard"
 import EditSearchModal from "./components/EditSearchModal"
+import { Button, Card, CardHeader, EmptyState, Meter, PageHeader, Skeleton, buttonStyles } from "@/app/components/ui"
 
 interface SavedSearch {
   id: string
@@ -43,67 +44,56 @@ function metricUsed(m: UsageMetric): number {
 }
 
 function UsageRow({ label, metric }: { label: string; metric: UsageMetric }) {
-  const used = metricUsed(metric)
-  const pct = metric.limit ? Math.min(100, Math.round((used / metric.limit) * 100)) : 100
-  const barColor = pct >= 80 ? "bg-red-500" : pct >= 50 ? "bg-yellow-500" : "bg-green-500"
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
-        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-          {used} / {metric.limit}
-        </p>
-      </div>
-      <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-      </div>
+    <Meter label={label} used={metricUsed(metric)} limit={metric.limit}>
       {metric.remaining <= 0 && (
-        <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+        <span className="text-danger-text">
           You&apos;ve reached this limit.{" "}
-          <Link href="/pricing" className="underline font-medium">Upgrade your plan</Link>
-        </p>
+          <Link href="/pricing" className="font-semibold underline underline-offset-2 hover:no-underline">
+            Upgrade your plan
+          </Link>
+        </span>
       )}
-    </div>
+    </Meter>
   )
 }
 
 function UnlimitedRow({ label, metric }: { label: string; metric: UsageMetric }) {
-  return (
-    <p className="text-sm text-gray-700 dark:text-gray-300">
-      <span className="font-medium">{label}:</span> {metricUsed(metric)}{" "}
-      <span className="text-gray-400 dark:text-gray-500">(unlimited)</span>
-    </p>
-  )
+  return <Meter label={label} used={metricUsed(metric)} limit={null} />
 }
 
 function UsageBanner({ usage }: { usage: UsageSummary }) {
   const { plan, usage: metrics } = usage
 
   return (
-    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold text-gray-900 dark:text-white">{PLAN_LABELS[plan]}</p>
-        {plan === "free" && (
-          <Link href="/pricing" className="text-sm font-medium text-violet-600 hover:text-violet-700">
-            Upgrade to Pro →
-          </Link>
-        )}
-      </div>
+    <Card as="section" aria-label="Plan usage" className="mb-section">
+      <CardHeader
+        title={PLAN_LABELS[plan]}
+        action={
+          plan === "free" && (
+            <Link
+              href="/pricing"
+              className="rounded-sm text-body-sm font-semibold text-brand-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Upgrade to Pro
+            </Link>
+          )
+        }
+      />
 
       {plan === "unlimited" ? (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <UnlimitedRow label="Auto-applies" metric={metrics.autoApplies} />
           <UnlimitedRow label="CV tailoring" metric={metrics.cvTailoring} />
         </div>
       ) : (
         <div className="space-y-4">
-          {plan === "free" && <UsageRow label="AI Matches today" metric={metrics.jobMatches} />}
-          <UsageRow label="Auto-applies/month" metric={metrics.autoApplies} />
-          <UsageRow label="CV tailoring/month" metric={metrics.cvTailoring} />
+          {plan === "free" && <UsageRow label="AI matches today" metric={metrics.jobMatches} />}
+          <UsageRow label="Auto-applies this month" metric={metrics.autoApplies} />
+          <UsageRow label="CV tailoring this month" metric={metrics.cvTailoring} />
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -134,23 +124,22 @@ function LimitReachedModal({
   const upgradeLabel = plan === "pro" ? "Upgrade to Unlimited" : "Upgrade to Pro - $24/month"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{title}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{body}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/60 px-gutter">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="limit-modal-title"
+        className="w-full max-w-sm rounded-overlay bg-surface p-6 text-center shadow-overlay"
+      >
+        <h2 id="limit-modal-title" className="mb-2 text-title-card text-ink">{title}</h2>
+        <p className="mb-6 text-body-sm text-ink-muted">{body}</p>
         <div className="flex flex-col gap-2">
-          <Link
-            href="/pricing"
-            className="bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
-          >
+          <Link href="/pricing" className={buttonStyles({ block: true })}>
             {upgradeLabel}
           </Link>
-          <button
-            onClick={onDismiss}
-            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 py-2"
-          >
+          <Button variant="ghost" block onClick={onDismiss}>
             Maybe later
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -234,7 +223,17 @@ export default function DashboardPage() {
       : null
 
   return (
-    <div className="max-w-2xl mx-auto w-full">
+    <div className="mx-auto w-full max-w-2xl">
+      <PageHeader
+        title="Saved searches"
+        description="Rerun a search to pull the latest matching jobs."
+        actions={
+          <Button onClick={handleNewSearch}>
+            <PlusIcon />
+            New search
+          </Button>
+        }
+      />
       {usage && <UsageBanner usage={usage} />}
       {usage && limitReachedFeature && !dismissedLimitModal && (
         <LimitReachedModal
@@ -244,52 +243,38 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Saved Searches</h1>
-        <button
-          onClick={handleNewSearch}
-          className="text-sm font-medium px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
-        >
-          + New Search
-        </button>
-      </div>
-
       {/* Body */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-3" aria-busy="true" aria-label="Loading saved searches">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 animate-pulse"
-            >
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
-            </div>
+            <Card key={i} className="flex items-center justify-between gap-4">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-8 w-20" />
+            </Card>
           ))}
         </div>
       ) : searches.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-gray-500 dark:text-gray-400 mb-4">No saved searches yet</p>
-          <button
-            onClick={handleNewSearch}
-            className="text-violet-600 hover:underline text-sm"
-          >
-            Create your first search →
-          </button>
-        </div>
+        <EmptyState
+          icon={<SearchIcon />}
+          title="No saved searches yet"
+          action={<Button onClick={handleNewSearch}>Create your first search</Button>}
+        >
+          Pick a job category, keywords and locations once, then rerun the search whenever you want fresh jobs.
+        </EmptyState>
       ) : (
-        <div className="space-y-3">
+        <ul className="space-y-3">
           {searches.map((search) => (
-            <SavedSearchCard
-              key={search.id}
-              search={search}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onSearch={handleSearch}
-              deleteConfirm={deleteConfirm}
-            />
+            <li key={search.id}>
+              <SavedSearchCard
+                search={search}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onSearch={handleSearch}
+                deleteConfirm={deleteConfirm}
+              />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       <EditSearchModal
@@ -300,5 +285,22 @@ export default function DashboardPage() {
         existingCategories={searches.map((s) => s.category)}
       />
     </div>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M8 3.5v9M3.5 8h9" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <circle cx="8.75" cy="8.75" r="5.25" />
+      <path d="M12.75 12.75L16.5 16.5" strokeLinecap="round" />
+    </svg>
   )
 }

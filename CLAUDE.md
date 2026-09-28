@@ -152,6 +152,22 @@ There are two supported apply paths — know which one a change affects:
   build a "finish" flow around. Verified manually — don't reintroduce a
   dedicated needs_security_code status without solving that first.
 
+## Design system
+- Tokens: `app/globals.css` (CSS variables, light + `.dark`) mapped to
+  semantic Tailwind names in `tailwind.config.ts` — use `bg-surface`,
+  `text-ink-muted`, `bg-brand` etc., not raw hex or `gray-*`/`blue-*`.
+- Shared components: `app/components/ui/` (Button, Card, Field/Input,
+  Badge/StatusPill, Notice, Meter, EmptyState, Spinner/Skeleton,
+  PageHeader, MatchScore). Application status labels/colours live only in
+  `lib/application-status.ts`.
+- Reference page: `/dev/design-system` (404s in production).
+- Fonts are bundled in `app/fonts` (Public Sans, Source Serif 4), not
+  fetched via `next/font/google` — a Google Fonts outage must not break
+  the Docker build.
+- **Known inconsistency:** the logo (`public/logo.png`) is a brighter royal
+  blue than the brand navy `#1B3A5C` used in the UI and generated CVs.
+  Left as is for now; revisit with a recoloured logo.
+
 ## Linting
 
 Run these before committing:
