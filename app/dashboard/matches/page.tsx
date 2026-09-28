@@ -350,6 +350,7 @@ export default function MatchesPage() {
         });
         const data = await res.json();
         if (res.ok) showToast(`Sent ${data.count} auto application${data.count !== 1 ? "s" : ""}!`, "success");
+        else if (data.error === "limit_reached") showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
       }
       if (extensionJobs.length > 0) {
         const res = await fetch("/api/apply/batch-mark-pending", {
@@ -358,10 +359,17 @@ export default function MatchesPage() {
           body: JSON.stringify({ jobIds: extensionJobs.map((j) => j.id) }),
         });
         const data = await res.json();
+        if (res.status === 403 && data.error === "limit_reached") {
+          showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
+          return;
+        }
         if (!res.ok || !data.results?.length) {
           showToast("Failed to prepare applications. Please try again.", "error");
           return;
         }
+        // Some jobs weren't queued because the monthly limit ran out mid-batch.
+        const skipped: number = data.limitReached?.length ?? 0;
+        const skippedNote = skipped > 0 ? ` ${skipped} not queued — monthly auto-apply limit reached.` : "";
         const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
           id: r.applicationId,
           url: r.jobUrl,
@@ -379,13 +387,13 @@ export default function MatchesPage() {
             const err = (window as any).chrome?.runtime?.lastError;
             if (err) {
               if (err.message.includes("port closed") || err.message.includes("message port closed")) {
-                showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+                showToast(`Starting extension apply for ${queueJobs.length} job${queueJobs.length !== 1 ? "s" : ""}…${skippedNote}`, "success");
                 return;
               }
               showToast(`Extension error: ${err.message}`, "error");
             } else {
               console.log("batch response:", response);
-              showToast(`Starting extension apply for ${extensionJobs.length} job${extensionJobs.length !== 1 ? "s" : ""}…`, "success");
+              showToast(`Starting extension apply for ${queueJobs.length} job${queueJobs.length !== 1 ? "s" : ""}…${skippedNote}`, "success");
             }
           }
         );

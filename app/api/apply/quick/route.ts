@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { normalizePlan } from "@/lib/plan-limits";
+import {
+  AUTO_APPLY_LIMIT_RESPONSE,
+  checkAndIncrementAutoApply,
+  refundAutoApply,
+  refundAutoApplyForApplication,
+} from "@/lib/usage";
 
 export const maxDuration = 60;
 
@@ -18,6 +25,10 @@ function detectATS(url: string): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // Set once an auto-apply credit is taken, so the catch block can give it
+  // back if anything after that throws.
+  let chargedUserId: string | null = null;
+  let chargedApplicationId: string | null = null;
   try {
     const supabase = createServerClient();
     const {
@@ -77,13 +88,25 @@ export async function POST(req: NextRequest) {
     const atsPlatform = detectATS(applyUrl);
 
     if (atsPlatform) {
+      // JobAgent is about to submit for the user: this is an auto-apply and
+      // spends a monthly credit, same as batch. Checked before the
+      // Application row exists, so a blocked request leaves nothing behind.
+      // External / LinkedIn / no-ATS jobs returned above and aren't charged.
+      const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+      const { allowed } = await checkAndIncrementAutoApply(user.id, normalizePlan(dbUser?.plan));
+      if (!allowed) return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
+      chargedUserId = user.id;
+
       // Create application record before calling Python
       const appRows = await db.$queryRaw<{ id: string }[]>`
-        INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
-        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'applying', now())
+        INSERT INTO "Application" (id, user_id, job_id, status, applied_at, auto_apply_charged)
+        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'applying', now(), true)
         RETURNING id
       `;
       const applicationId = appRows[0].id;
+      chargedApplicationId = applicationId;
+      // Nothing was submitted: give the credit back.
+      const refund = () => refundAutoApplyForApplication(applicationId, user.id);
 
       const pythonUrl = `${process.env.PYTHON_SERVICE_URL}/ats-apply`;
       console.log("[apply/quick] calling Python:", {
@@ -122,6 +145,7 @@ export async function POST(req: NextRequest) {
         await db.$executeRaw`
           UPDATE "Application" SET status = 'failed', error_message = ${`Python service error (${pythonRes.status})`} WHERE id = ${applicationId}
         `;
+        await refund();
         return NextResponse.json(
           { success: false, error: `ATS service error (${pythonRes.status})` },
           { status: 500 }
@@ -144,6 +168,7 @@ export async function POST(req: NextRequest) {
         await db.$executeRaw`
           UPDATE "Application" SET status = 'manual' WHERE id = ${applicationId}
         `;
+        await refund();
         return NextResponse.json({
           success: false,
           captcha: true,
@@ -157,6 +182,7 @@ export async function POST(req: NextRequest) {
         await db.$executeRaw`
           UPDATE "Application" SET status = 'failed', error_message = ${result.error ?? "ATS apply failed"} WHERE id = ${applicationId}
         `;
+        await refund();
         return NextResponse.json(
           { success: false, error: result.error ?? "ATS apply failed" },
           { status: 500 }
@@ -194,6 +220,16 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[apply/quick]", err);
+    // Charged but the submission didn't complete: refund. Via the
+    // application when it exists (at most once), otherwise directly.
+    if (chargedUserId) {
+      try {
+        if (chargedApplicationId) await refundAutoApplyForApplication(chargedApplicationId, chargedUserId);
+        else await refundAutoApply(chargedUserId);
+      } catch (refundErr) {
+        console.error("[apply/quick] auto-apply refund failed", refundErr);
+      }
+    }
     const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

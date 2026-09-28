@@ -102,6 +102,19 @@ There are two supported apply paths — know which one a change affects:
    no automation here; return `needs_extension` and route to the
    Tailor & Apply flow / browser extension instead
 
+**Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
+where JobAgent submits for the user spends one credit via
+`checkAndIncrementAutoApply` (atomic): quick apply's ATS branch, batch email
+auto-apply, extension jobs queued by `batch-mark-pending`, and the `jobId`
+branch of `mark-pending-extension`. A submission that doesn't go through
+refunds via `refundAutoApplyForApplication`, keyed on
+`Application.auto_apply_charged` so it refunds at most once: quick apply
+refunds inline on ATS error / CAPTCHA / rejection; extension applies refund
+when `/api/applications/update-status` receives `manual` or `failed`.
+External jobs, LinkedIn jobs routed to the extension from quick apply, and
+Tailor & Apply are not charged — Tailor & Apply is capped by
+`cvTailoringPerMonth` at the same numbers. Any new submit path must charge.
+
 **Tailor CV & Apply** (`/dashboard/apply/[jobId]`)
 1. User clicks "Tailor CV & Apply" → Claude tailors CV (draft saved, nothing submitted)
 2. User sees review screen → can edit cover letter → clicks Confirm

@@ -110,27 +110,67 @@ export async function checkAndIncrementBrowseJobs(
   return { allowed: true, remaining: Math.max(0, limit - updated.browseJobsToday), granted };
 }
 
+// Takes one monthly auto-apply credit if one is left. Every path where
+// JobAgent submits for the user charges here: quick apply (ATS), batch email
+// auto-apply, and extension applies queued from the dashboard. Tailor & Apply
+// doesn't — it's already capped by cvTailoringPerMonth at the same numbers.
+//
+// The check and the increment are one conditional UPDATE, so two concurrent
+// requests can't both spend the last credit.
 export async function checkAndIncrementAutoApply(
   userId: string,
   plan: PlanKey
 ): Promise<{ allowed: boolean; remaining: number }> {
-  const usage = await resetMonthlyCounters(userId);
+  await resetMonthlyCounters(userId);
   const limit = PLAN_LIMITS[plan].autoAppliesPerMonth;
 
-  if (usage.autoAppliesThisMonth >= limit) {
-    return { allowed: false, remaining: 0 };
-  }
-
-  const updated = await db.userUsage.update({
-    where: { userId },
+  const { count } = await db.userUsage.updateMany({
+    where: { userId, autoAppliesThisMonth: { lt: limit } },
     data: {
       autoAppliesThisMonth: { increment: 1 },
       totalAutoApplies: { increment: 1 },
     },
   });
+  if (count === 0) return { allowed: false, remaining: 0 };
 
-  return { allowed: true, remaining: Math.max(0, limit - updated.autoAppliesThisMonth) };
+  const updated = await db.userUsage.findUnique({ where: { userId } });
+  return { allowed: true, remaining: Math.max(0, limit - (updated?.autoAppliesThisMonth ?? limit)) };
 }
+
+// Gives back one auto-apply credit. Never takes the counter below zero (a
+// monthly reset can land between the charge and the refund).
+export async function refundAutoApply(userId: string): Promise<void> {
+  await db.userUsage.updateMany({
+    where: { userId, autoAppliesThisMonth: { gt: 0 } },
+    data: {
+      autoAppliesThisMonth: { decrement: 1 },
+      totalAutoApplies: { decrement: 1 },
+    },
+  });
+}
+
+// Refunds the credit an application holds, if it holds one. Clearing
+// auto_apply_charged and refunding are tied together by the conditional
+// UPDATE, so repeated failure reports refund at most once, and applications
+// that were never charged (Tailor & Apply) are never refunded.
+export async function refundAutoApplyForApplication(applicationId: string, userId: string): Promise<boolean> {
+  const cleared = await db.$queryRaw<{ id: string }[]>`
+    UPDATE "Application" SET auto_apply_charged = false
+    WHERE id = ${applicationId} AND user_id = ${userId} AND auto_apply_charged = true
+    RETURNING id
+  `;
+  if (cleared.length === 0) return false;
+  await refundAutoApply(userId);
+  return true;
+}
+
+/** The 403 body every auto-apply route returns when the monthly limit is spent. */
+export const AUTO_APPLY_LIMIT_RESPONSE = {
+  error: "limit_reached",
+  feature: "autoApply",
+  message: "You've reached your monthly auto-apply limit.",
+  upgrade_url: "/pricing",
+} as const;
 
 export async function checkAndIncrementCvTailoring(
   userId: string,
