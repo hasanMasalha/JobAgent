@@ -7,24 +7,18 @@ export const PLAN_LIMITS = {
     jobMatchesPerDay: 10, // AI matches shown per day
     autoAppliesPerMonth: 5, // auto-apply submissions
     cvTailoringPerMonth: 5, // CV tailoring requests
-    savedJobsMax: 20, // saved/bookmarked jobs
-    cvVersionsMax: 1, // number of CV versions
     browseJobsPerDay: 0, // Browse All Jobs — not available on Free
   },
   pro: {
     jobMatchesPerDay: 100, // matches per day
     autoAppliesPerMonth: 100, // auto-apply per month
     cvTailoringPerMonth: 100, // CV tailoring per month
-    savedJobsMax: 500, // saved jobs
-    cvVersionsMax: 3, // CV versions
     browseJobsPerDay: 100, // Browse All Jobs — same cap as matches
   },
   unlimited: {
     jobMatchesPerDay: 999999, // unlimited
     autoAppliesPerMonth: 999999, // unlimited
     cvTailoringPerMonth: 999999, // unlimited
-    savedJobsMax: 999999, // unlimited
-    cvVersionsMax: 10, // multiple CVs
     browseJobsPerDay: 999999, // unlimited
   },
 } as const satisfies Record<PlanKey, Record<string, number>>;
@@ -57,9 +51,8 @@ const isUnlimited = (value: number) => value >= 999999;
 /**
  * Plan bullets for /pricing, the onboarding plan picker and confirmation
  * emails — generated from PLAN_LIMITS so the copy can't drift from what's
- * enforced. Only limits that lib/usage.ts actually checks are listed:
- * savedJobsMax and cvVersionsMax aren't enforced anywhere, so advertising
- * them would promise something the product doesn't do.
+ * enforced. PLAN_LIMITS holds only limits lib/usage.ts checks — keep it
+ * that way, so nothing here can promise a limit the product doesn't apply.
  */
 export function planFeatureList(plan: PlanKey): string[] {
   const l = PLAN_LIMITS[plan];

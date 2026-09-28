@@ -132,6 +132,14 @@ There are two supported apply paths — know which one a change affects:
   `User.plan` is still updated only by the `subscription.plan_changed` webhook.
 - **Known gap:** no double-click / in-flight guard on checkout — a free user
   double-clicking a plan button can still create two Checkout Sessions.
+- Plan limits: `PLAN_LIMITS` in `lib/plan-limits.ts` lists only limits that
+  `lib/usage.ts` enforces (matches/day, auto-applies/month, CV tailoring/month,
+  Browse All Jobs listings/day). Plan bullets on `/pricing`, the onboarding
+  plan picker and confirmation emails are generated from it by
+  `planFeatureList()`, and prices live in `PLAN_PRICES_USD` — never hardcode
+  either. `savedJobsMax` and `cvVersionsMax` were removed (2026-09-28) because
+  nothing enforced them; they aren't part of the offer, so don't reintroduce
+  them without enforcement.
 - `refund.succeeded` is deliberately log-only (no plan change): a refund doesn't
   cancel the Dodo subscription, so a downgrade would be undone by the next
   `subscription.renewed`. Revoking access is a manual decision. Any other

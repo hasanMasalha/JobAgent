@@ -23,9 +23,9 @@ describe("planFeatureList", () => {
     expect(planFeatureList("free").join(" ")).not.toMatch(/Browse/);
   });
 
-  // savedJobsMax and cvVersionsMax aren't enforced by lib/usage.ts, so no
-  // surface may advertise them.
-  it("never advertises unenforced limits", () => {
+  // Saved-job and CV-version caps were removed from PLAN_LIMITS as
+  // unenforced (see CLAUDE.md); no surface may advertise them.
+  it("never advertises saved-job or CV-version caps", () => {
     for (const plan of ["free", "pro", "unlimited"] as const) {
       expect(planFeatureList(plan).join(" ")).not.toMatch(/saved jobs|CV version/i);
     }
