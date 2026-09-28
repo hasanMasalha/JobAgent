@@ -144,6 +144,10 @@ model Application {
   cover_letter  String?
   error_message String?
   applied_at    DateTime @default(now())
+  /// True while this application holds one of the user's monthly auto-apply
+  /// credits (quick apply / extension batch). Cleared when the credit is
+  /// refunded, so a failure can refund at most once. See lib/usage.ts.
+  auto_apply_charged Boolean @default(false)
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)

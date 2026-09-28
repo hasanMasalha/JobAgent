@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { refundAutoApplyForApplication } from "@/lib/usage";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +26,12 @@ export async function POST(req: NextRequest) {
     const allowed = ["applied", "manual", "failed"];
     if (!allowed.includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+
+    // The extension couldn't submit: give back the auto-apply credit the
+    // application holds, if any (at most once — see refundAutoApplyForApplication).
+    if (status !== "applied") {
+      await refundAutoApplyForApplication(applicationId, userId);
     }
 
     console.log("[update-status] updating:", applicationId, "to:", status, "for user:", userId);
