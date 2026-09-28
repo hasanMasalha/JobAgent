@@ -23,6 +23,9 @@ async function syncAuth() {
       await chrome.storage.local.set({
         userId: user.id,
         userEmail: user.email,
+        // Signed, short-lived proof of identity for API calls from the
+        // service worker, which can't send the site's session cookie.
+        extensionToken: user.extensionToken,
         isLoggedIn: true,
         lastChecked: Date.now(),
         serverUrl: window.location.origin
@@ -30,6 +33,7 @@ async function syncAuth() {
       console.log('JobAgent: user info saved to extension storage')
     } else {
       await chrome.storage.local.set({ isLoggedIn: false })
+      await chrome.storage.local.remove(['extensionToken'])
     }
   } catch (e) {
     console.error('JobAgent auth-sync error:', e)

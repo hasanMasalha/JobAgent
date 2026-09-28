@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase.server";
+import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { db } from "@/lib/db";
 
 // Handles both URL formats:
@@ -17,16 +17,13 @@ function extractJobId(url: string): string | null {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session, or the extension's signed token. A userId query param is
+  // ignored — it used to be trusted, which let anyone read another user's
+  // profile data.
+  const userId = await getSessionOrExtensionUserId(request);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-
-  // Accept userId as query param when cross-site cookies are blocked (extension context)
-  const userId = user?.id ?? searchParams.get("userId");
-  if (!userId) return NextResponse.json({ pending: false });
 
   const jobIdParam = searchParams.get("jobId");
   const jobUrl = searchParams.get("jobUrl");

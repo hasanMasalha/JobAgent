@@ -1,3 +1,9 @@
+// Signed token from /api/auth/me (stored by auth-sync.js). The API no longer
+// accepts a bare userId from the extension.
+function authHeader(stored) {
+  return stored && stored.extensionToken ? { Authorization: `Bearer ${stored.extensionToken}` } : {}
+}
+
 // Background service worker
 // Handles messages from content script and popup
 // Communicates with JobAgent server
@@ -158,12 +164,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Passes jobId or jobUrl so check-pending can look up the pending application.
     ;(async () => {
       try {
-        const stored = await chrome.storage.local.get(['userId'])
+        const stored = await chrome.storage.local.get(['userId', 'extensionToken'])
         const serverUrl = await getServerUrl()
         const jobId = message.jobId || extractJobId(message.jobUrl || '')
         const param = jobId
-          ? `jobId=${jobId}&userId=${stored.userId}`
-          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}&userId=${stored.userId}`
+          ? `jobId=${jobId}`
+          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}`
         const fullUrl = `${serverUrl}/api/apply/check-pending?${param}`
 
         console.log('[JobAgent bg] GET_PENDING_APPLICATION — userId:', stored.userId)
@@ -171,7 +177,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[JobAgent bg] calling:', fullUrl)
 
         const res = await fetch(fullUrl, {
-          headers: { 'User-Agent': getRandomUserAgent() }
+          headers: { 'User-Agent': getRandomUserAgent(), ...authHeader(stored) }
         })
         const data = await res.json()
         console.log('[JobAgent bg] check-pending response:', data)
@@ -216,13 +222,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SAVE_ANSWER') {
     ;(async () => {
       try {
-        const stored = await chrome.storage.local.get(['userId'])
+        const stored = await chrome.storage.local.get(['extensionToken'])
         const serverUrl = await getServerUrl()
         await fetch(`${serverUrl}/api/apply/answers`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent() },
+          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...authHeader(stored) },
           body: JSON.stringify({
-            userId: stored.userId,
             question: message.question,
             answer: message.answer,
           }),
@@ -253,24 +258,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Content script cannot make cross-origin fetches on LinkedIn (CSP) so it
-  // delegates the status update here. We use userId from storage instead of
-  // credentials:include because SameSite=Lax blocks cookies in SW context.
+  // delegates the status update here. The service worker can't send the
+  // site's session cookie, so it authenticates with the signed extensionToken.
   if (message.type === 'REPORT_APPLICATION_COMPLETE') {
     ;(async () => {
       try {
         const stored = await chrome.storage.local.get([
-          'userId', 'activeApplyTab'
+          'extensionToken', 'activeApplyTab'
         ])
         const url = await getServerUrl()
         const status = message.status || 'applied'
         console.log('[JobAgent bg] updating status:', message.applicationId, '→', status)
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent() },
+          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...authHeader(stored) },
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
-            userId: stored.userId,
           }),
         })
         const resText = await res.text()
