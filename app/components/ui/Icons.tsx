@@ -1,0 +1,64 @@
+import { cn } from "@/lib/cn";
+
+// One stroke icon set for the app: 16px grid, 1.5 stroke, round caps, drawn
+// in currentColor. Decorative by default — the text beside them carries the
+// meaning, so they're aria-hidden.
+
+type IconProps = { className?: string };
+
+function Svg({ className, children, fill = "none" }: IconProps & { children: React.ReactNode; fill?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill={fill}
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("h-4 w-4 shrink-0", className)}
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Straight to the company's ATS: an arrow that lands on a wall. */
+export const DirectIcon = (p: IconProps) => <Svg {...p}><path d="M2.5 8h8M8 5l3 3-3 3M13.5 3v10" /></Svg>;
+/** Browser extension: a plug. */
+export const ExtensionIcon = (p: IconProps) => <Svg {...p}><path d="M6 2v3M10 2v3M4 5h8v3a4 4 0 0 1-8 0V5zM8 12v2" /></Svg>;
+/** Sent for you by email: a paper plane. */
+export const AutoIcon = (p: IconProps) => <Svg {...p}><path d="M14 2L7 9M14 2l-4.5 12-2.5-5-5-2.5L14 2z" /></Svg>;
+/** Leaves JobAgent for the company's own site. */
+export const ExternalIcon = (p: IconProps) => <Svg {...p}><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5" /></Svg>;
+
+export const RefreshIcon = (p: IconProps) => <Svg {...p}><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3" /></Svg>;
+export const ArrowRightIcon = (p: IconProps) => <Svg {...p}><path d="M3 8h10M9 4l4 4-4 4" /></Svg>;
+export const PenIcon = (p: IconProps) => <Svg {...p}><path d="M3 13l2.5-.5L13 5l-2-2-7.5 7.5z" /></Svg>;
+export const FilterIcon = (p: IconProps) => <Svg {...p}><path d="M2 4h12M4 8h8M6 12h4" /></Svg>;
+export const ChevronDownIcon = (p: IconProps) => <Svg {...p}><path d="M4 6l4 4 4-4" /></Svg>;
+export const CloseIcon = (p: IconProps) => <Svg {...p}><path d="M4 4l8 8M12 4l-8 8" /></Svg>;
+export const SearchIcon = (p: IconProps) => <Svg {...p}><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></Svg>;
+export const BookmarkIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+  <Svg {...p} fill={filled ? "currentColor" : "none"}><path d="M4 2.5h8v11l-4-3-4 3z" /></Svg>
+);
+
+/** "Why it fits" bullet. */
+export function FitMark({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={cn("h-4 w-4 shrink-0", className)}>
+      <circle cx="8" cy="8" r="7" className="fill-success-soft stroke-success/40" strokeWidth={1} />
+      <path d="M5 8.2l2 2 4-4.2" fill="none" className="stroke-success-text" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** "Gaps" bullet. */
+export function GapMark({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={cn("h-4 w-4 shrink-0", className)}>
+      <circle cx="8" cy="8" r="7" className="fill-attention-soft stroke-attention/40" strokeWidth={1} />
+      <path d="M8 4.8v3.8M8 11v.2" fill="none" className="stroke-attention-text" strokeWidth={1.7} strokeLinecap="round" />
+    </svg>
+  );
+}

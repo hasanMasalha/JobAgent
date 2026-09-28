@@ -40,11 +40,24 @@
   --c-on-brand: 255 255 255;
   --c-ring: 47 107 170;          /* #2F6BAA focus ring */
 
-  /* Accent — brass. Used in one place per screen at most:
-     the top match score, the featured plan. */
+  /* Accent — brass. The only accent, and it always means "strong match /
+     your best next step": a strong match score, the Apply for it, the batch
+     apply, the featured plan. Never decoration. */
   --c-accent: 183 134 43;        /* #B7862B fills, rules */
+  --c-accent-hover: 165 120 36;  /* #A57824 */
   --c-accent-soft: 248 239 219;  /* #F8EFDB */
   --c-accent-text: 122 85 18;    /* #7A5512 text on soft, 6.3:1 */
+  --c-on-accent: 19 37 58;       /* #13253A on brass fill, 4.7:1 */
+
+  /* Raised surface — the one featured card that sits over the hero band */
+  --c-surface-raised: 255 255 255;
+
+  /* Hero band — deep navy in both themes; text on it uses on-hero */
+  --c-hero-from: 11 29 49;       /* #0B1D31 */
+  --c-hero-via: 21 48 79;        /* #15304F */
+  --c-hero-to: 29 64 100;        /* #1D4064 */
+  --c-on-hero: 255 255 255;
+  --c-on-hero-muted: 185 200 218; /* #B9C8DA, 7.9:1 on hero-via */
 
   /* Semantic tones: -soft background, -text foreground, base = solid/border */
   --c-info: 36 118 179;          --c-info-soft: 229 241 250;     --c-info-text: 22 84 132;
@@ -78,8 +91,18 @@
   --c-ring: 120 168 222;
 
   --c-accent: 217 174 90;        /* #D9AE5A */
+  --c-accent-hover: 227 189 114;
   --c-accent-soft: 52 42 22;
   --c-accent-text: 230 194 122;
+  --c-on-accent: 26 19 5;        /* #1A1305 on brass, 9.6:1 */
+
+  --c-surface-raised: 22 35 58;  /* #16233A — lifted above surface */
+
+  --c-hero-from: 6 13 23;        /* #060D17 */
+  --c-hero-via: 13 27 45;        /* #0D1B2D */
+  --c-hero-to: 20 42 69;         /* #142A45 */
+  --c-on-hero: 255 255 255;
+  --c-on-hero-muted: 163 178 196;
 
   --c-info: 88 160 214;          --c-info-soft: 22 44 64;        --c-info-text: 142 196 236;
   --c-progress: 150 126 226;     --c-progress-soft: 40 34 68;    --c-progress-text: 190 172 245;

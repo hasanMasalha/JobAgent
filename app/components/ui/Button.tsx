@@ -4,12 +4,14 @@ import { Spinner } from "./Loading";
 
 export type ButtonVariant =
   | "primary"    // the one main action in a view
+  | "accent"     // brass: the best next step — applying to a strong match, upgrading. Rare by design.
   | "secondary"  // everything else that's still a button
   | "ghost"      // low-emphasis, toolbar/inline actions
   | "danger"     // destructive
   | "attention"  // the user must act to unblock something (Apply manually)
   | "waiting"    // the user must confirm something external (Verify email)
-  | "current";   // a state, not an action — e.g. "Current plan" on pricing
+  | "current"    // a state, not an action — e.g. "Current plan" on pricing
+  | "done";      // an action that has completed — e.g. "✓ Submitted"
 
 export type ButtonSize = "sm" | "md" | "lg";
 
@@ -21,6 +23,8 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   primary:
     "bg-brand text-brand-on hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed",
+  accent:
+    "bg-accent text-accent-on hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed",
   secondary:
     "bg-surface text-ink border border-line-strong hover:bg-surface-sunken disabled:opacity-50 disabled:cursor-not-allowed",
   ghost:
@@ -34,6 +38,8 @@ const variants: Record<ButtonVariant, string> = {
   // Stays fully legible when disabled — it's information, not a dead button.
   current:
     "bg-brand-soft text-brand-text border border-brand/30 cursor-default",
+  done:
+    "bg-success-soft text-success-text border border-success/30 cursor-default",
 };
 
 const sizes: Record<ButtonSize, string> = {

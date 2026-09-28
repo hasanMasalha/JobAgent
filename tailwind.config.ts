@@ -22,7 +22,9 @@ const config: Config = {
         foreground: "var(--foreground)",
 
         canvas: token("canvas"),
-        surface: { DEFAULT: token("surface"), sunken: token("surface-sunken") },
+        surface: { DEFAULT: token("surface"), sunken: token("surface-sunken"), raised: token("surface-raised") },
+        hero: { from: token("hero-from"), via: token("hero-via"), to: token("hero-to") },
+        "on-hero": { DEFAULT: token("on-hero"), muted: token("on-hero-muted") },
         line: { DEFAULT: token("line"), strong: token("line-strong") },
         ink: { DEFAULT: token("ink"), muted: token("ink-muted"), subtle: token("ink-subtle") },
         brand: {
@@ -34,7 +36,7 @@ const config: Config = {
         },
         ring: token("ring"),
         scrim: token("scrim"),
-        accent: tone("accent"),
+        accent: { ...tone("accent"), hover: token("accent-hover"), on: token("on-accent") },
         info: tone("info"),
         progress: tone("progress"),
         success: tone("success"),
@@ -59,6 +61,13 @@ const config: Config = {
         "title-page": ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.01em", fontWeight: "600" }], // 28/34
         "title-page-sm": ["1.5rem", { lineHeight: "1.875rem", letterSpacing: "-0.01em", fontWeight: "600" }], // 24/30
         figure: ["2.5rem", { lineHeight: "2.75rem", letterSpacing: "-0.02em", fontWeight: "600" }], // 40/44
+        // Serif display scale — page heroes and the featured job. Weight 500:
+        // the size carries the confidence, not the stroke.
+        display: ["4.5rem", { lineHeight: "1", letterSpacing: "-0.025em", fontWeight: "500" }],              // 72
+        "display-sm": ["2.75rem", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "500" }],     // 44
+        feature: ["2.5rem", { lineHeight: "1.08", letterSpacing: "-0.02em", fontWeight: "500" }],             // 40
+        "feature-sm": ["1.75rem", { lineHeight: "1.12", letterSpacing: "-0.015em", fontWeight: "500" }],      // 28
+        "title-serif": ["1.375rem", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "500" }],     // 22
       },
       spacing: {
         // Layout rhythm. Everything else stays on Tailwind's 4px grid.
@@ -76,6 +85,10 @@ const config: Config = {
         // Cards sit flat on a border; only floating layers get shadow.
         raised: "0 1px 2px rgb(var(--shadow-color) / 0.06), 0 1px 1px rgb(var(--shadow-color) / 0.04)",
         overlay: "0 12px 32px -8px rgb(var(--shadow-color) / 0.24), 0 2px 6px rgb(var(--shadow-color) / 0.08)",
+        // The featured card lifted over the hero band.
+        dossier: "0 1px 2px rgb(var(--shadow-color) / 0.06), 0 28px 56px -24px rgb(var(--shadow-color) / 0.42)",
+        // Hover lift for ordinary cards.
+        lift: "0 1px 2px rgb(var(--shadow-color) / 0.05), 0 16px 32px -18px rgb(var(--shadow-color) / 0.32)",
       },
       keyframes: {
         // Toast.tsx already references animate-fade-in, which was never defined.
@@ -83,9 +96,27 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(4px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "lift-in": {
+          from: { opacity: "0", transform: "translateY(16px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        // ScoreRing: draws from empty to its value. --ring-c is set inline.
+        "ring-draw": {
+          from: { strokeDashoffset: "var(--ring-c)" },
+        },
+        shimmer: {
+          from: { backgroundPosition: "120% 0" },
+          to: { backgroundPosition: "-120% 0" },
+        },
       },
       animation: {
         "fade-in": "fade-in 160ms ease-out",
+        "lift-in": "lift-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
+        "ring-draw": "ring-draw 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) 150ms both",
+        shimmer: "shimmer 1.8s ease-in-out infinite",
+      },
+      transitionTimingFunction: {
+        calm: "cubic-bezier(0.2, 0.7, 0.2, 1)",
       },
     },
   },

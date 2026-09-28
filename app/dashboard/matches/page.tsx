@@ -5,6 +5,28 @@ import { useRouter } from "next/navigation";
 import JobCard, { Job } from "@/app/dashboard/JobCard";
 import JobFilters, { DEFAULT_FILTERS, Filters } from "@/app/components/JobFilters";
 import { showToast } from "@/app/components/Toast";
+import { cn } from "@/lib/cn";
+import {
+  Button,
+  buttonStyles,
+  inputStyles,
+  Spinner,
+  PageHero,
+  HeroTabs,
+  heroControlStyles,
+  StatePanel,
+  RefreshIcon,
+  SearchIcon,
+  ChevronDownIcon,
+  ExtensionIcon,
+  AutoIcon,
+  ExternalIcon,
+  BrokenRouteIllustration,
+  HorizonIllustration,
+  FunnelIllustration,
+  LockedStackIllustration,
+  EmptySearchIllustration,
+} from "@/app/components/ui";
 
 function timeAgo(date: Date): string {
   const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
@@ -91,13 +113,73 @@ interface BrowseJob {
   scraped_at: string;
 }
 
-function SkeletonCard() {
+const FEATURED_LABEL: Record<Filters["sortBy"], string> = {
+  score: "Top match",
+  newest: "Newest",
+  salary: "Highest salary",
+};
+
+const APPLY_TYPE_TABS = [
+  { id: "all", label: "All", Icon: null },
+  { id: "extension", label: "Extension", Icon: ExtensionIcon },
+  { id: "auto", label: "Auto", Icon: AutoIcon },
+  { id: "external", label: "External", Icon: ExternalIcon },
+] as const;
+
+/** Loading shape of an ordinary job card. */
+function CardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 animate-pulse">
-      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/3 mb-4" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-full mb-1" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-4/5" />
+    <div aria-hidden="true" className="flex gap-4 rounded-[1.125rem] border border-line bg-surface p-5 sm:p-6">
+      <div className="flex-1 space-y-2.5">
+        <Shimmer className="h-5 w-3/5" />
+        <Shimmer className="h-3.5 w-2/5" />
+        <Shimmer className="!mt-6 h-1.5 w-full rounded-full" />
+        <Shimmer className="h-3 w-4/5" />
+      </div>
+    </div>
+  );
+}
+
+/** A slow shimmer rather than a blink — calmer for a screen people wait on. */
+function Shimmer({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-control bg-surface-sunken",
+        "motion-safe:animate-shimmer motion-safe:bg-[linear-gradient(90deg,rgb(var(--c-surface-sunken))_0%,rgb(var(--c-surface))_45%,rgb(var(--c-surface-sunken))_90%)] motion-safe:bg-[length:220%_100%]",
+        className,
+      )}
+    />
+  );
+}
+
+/** Loading shape of the featured card + two ordinary cards. */
+function MatchesSkeleton({ featured = true }: { featured?: boolean }) {
+  return (
+    <div role="status">
+      <span className="sr-only">Loading jobs</span>
+      {featured && (
+        <div aria-hidden="true" className="grid gap-8 rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 sm:p-8 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-12 lg:p-10">
+          <div className="space-y-3">
+            <Shimmer className="h-6 w-36 rounded-full" />
+            <Shimmer className="!mt-6 h-10 w-3/4 sm:w-3/5" />
+            <Shimmer className="h-4 w-2/5" />
+            <Shimmer className="!mt-7 h-3.5 w-full" />
+            <Shimmer className="h-3.5 w-11/12" />
+            <Shimmer className="h-3.5 w-2/3" />
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="hidden h-36 w-36 rounded-full border-8 border-surface-sunken lg:block" />
+            <Shimmer className="h-11 w-full lg:mt-3" />
+            <Shimmer className="h-11 w-full" />
+          </div>
+        </div>
+      )}
+      <div className={cn("grid gap-4 lg:grid-cols-2", featured && "mt-8")}>
+        <CardSkeleton />
+        <CardSkeleton />
+        {!featured && <><CardSkeleton /><CardSkeleton /></>}
+      </div>
     </div>
   );
 }
@@ -105,28 +187,23 @@ function SkeletonCard() {
 function BrowseLockedState() {
   return (
     <div className="relative">
-      <div className="space-y-4 blur-sm select-none pointer-events-none" aria-hidden="true">
-        <SkeletonCard />
-        <SkeletonCard />
-        <SkeletonCard />
+      <div className="pointer-events-none select-none space-y-4 opacity-70 blur-[3px]" aria-hidden="true">
+        <CardSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
       </div>
-      <div className="absolute inset-0 flex items-start justify-center pt-8">
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-lg p-8 max-w-sm text-center mx-4">
-          <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <rect x="4" y="10" width="16" height="10" rx="2" />
-              <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" />
-            </svg>
-          </div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+      <div className="absolute inset-0 flex items-start justify-center pt-6 sm:pt-10">
+        <div className="w-full max-w-md rounded-[1.375rem] bg-surface-raised px-6 pb-8 pt-9 text-center shadow-dossier ring-1 ring-line/60 motion-safe:animate-lift-in sm:px-10">
+          <div className="flex justify-center"><LockedStackIllustration /></div>
+          <h2 className="mt-6 text-balance font-serif text-[1.625rem] font-medium leading-tight text-ink sm:text-[1.75rem]">
             Upgrade to unlock Browse All Jobs
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+          <p className="mt-3 text-body text-ink-muted">
             Browse All Jobs is available on Pro and Unlimited plans.
           </p>
           <a
             href="/pricing"
-            className="inline-block w-full bg-[#1a2e5e] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+            className={cn(buttonStyles({ variant: "accent", size: "lg", block: true }), "mt-7")}
           >
             Upgrade to Pro - $24/month
           </a>
@@ -135,6 +212,8 @@ function BrowseLockedState() {
     </div>
   );
 }
+
+const linkStyles = "font-semibold text-brand-text underline underline-offset-4 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm";
 
 export default function MatchesPage() {
   const [activeTab, setActiveTab] = useState<"matches" | "browse">("matches");
@@ -238,7 +317,8 @@ export default function MatchesPage() {
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--chat-fab-bottom",
-      selectedJobs.length > 0 ? "90px" : "24px"
+      // Clear the batch-apply dock, which stacks to two rows below 640px.
+      selectedJobs.length > 0 ? (window.innerWidth < 640 ? "136px" : "96px") : "24px"
     );
   }, [selectedJobs.length]);
 
@@ -424,262 +504,297 @@ export default function MatchesPage() {
   const browseTo = browseFrom > 0 ? browseFrom + browseJobs.length - 1 : 0;
   const counts = getSelectedCounts();
 
-  return (
-    <div className="max-w-3xl mx-auto w-full overflow-hidden">
-      <div className="flex gap-1 mb-6 border-b dark:border-gray-700">
-        {(["matches", "browse"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              activeTab === tab
-                ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-          >
-            {tab === "matches" ? "My Matches" : "Browse All Jobs"}
-          </button>
-        ))}
-      </div>
+  const showBrowse = activeTab === "browse" && (plan === "pro" || plan === "unlimited") && browseError?.code !== "plan_restricted";
+  const matchesReady = !loading && !error && jobs.length > 0;
+  const [featuredJob, ...otherJobs] = filteredJobs;
 
-      {activeTab === "matches" && (
-        <>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Matched Jobs</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Top matches based on your CV</p>
-            </div>
-            <div className="flex items-center gap-3">
+  return (
+    <div className="w-full">
+      <PageHero
+        tabs={
+          <HeroTabs
+            label="Job lists"
+            active={activeTab}
+            onChange={setActiveTab}
+            tabs={[
+              { id: "matches", label: "My Matches" },
+              { id: "browse", label: "Browse All Jobs" },
+            ]}
+          />
+        }
+        title={activeTab === "matches" ? "Matched Jobs" : "Browse All Jobs"}
+        subtitle={activeTab === "matches" ? "Top matches based on your CV" : undefined}
+        meta={
+          activeTab === "matches" && (
+            <>
               {lastFetched && !loading && (
-                <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
+                <span className="hidden text-body-sm text-on-hero-muted sm:inline">
                   Last updated: {timeAgo(lastFetched)}
                 </span>
               )}
               <button
                 onClick={() => fetchJobs(true)}
                 disabled={loading}
-                className="text-sm font-medium px-3 py-1.5 border rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                className={cn(heroControlStyles({ size: "custom" }), "inline-flex h-10 items-center gap-2 px-4 text-sm font-semibold")}
               >
+                {loading ? <Spinner size="sm" decorative /> : <RefreshIcon className="h-3.5 w-3.5" />}
                 {loading ? "Loading…" : "Refresh"}
               </button>
-            </div>
-          </div>
-
-          <JobFilters
-            filters={filters}
-            onChange={setFilters}
-            matchCount={!loading && !error && jobs.length > 0 ? filteredJobs.length : undefined}
-            totalCount={!loading && !error && jobs.length > 0 ? jobs.length : undefined}
-          />
-
-          {!loading && !error && jobs.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              {(["all", "extension", "auto", "external"] as const).map((t) => {
-                const labels: Record<string, string> = { all: "All", extension: "⚡ Extension", auto: "🤖 Auto", external: "🔗 External" };
-                return (
+            </>
+          )
+        }
+      >
+        {activeTab === "matches" && (
+          <>
+            <JobFilters
+              filters={filters}
+              onChange={setFilters}
+              matchCount={matchesReady ? filteredJobs.length : undefined}
+              totalCount={matchesReady ? jobs.length : undefined}
+            />
+            {matchesReady && (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <div role="group" aria-label="Apply route" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 py-1 sm:mx-0 sm:rounded-full sm:border sm:border-white/10 sm:bg-white/[0.05] sm:p-1">
+                  {APPLY_TYPE_TABS.map(({ id, label, Icon }) => {
+                    const on = applyTypeFilter === id;
+                    return (
+                      <button
+                        key={id}
+                        aria-pressed={on}
+                        onClick={() => { setApplyTypeFilter(id); setSelectedJobs([]); }}
+                        className={cn(
+                          "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-body-sm font-semibold transition-colors duration-200",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                          on ? "bg-surface text-ink" : "border border-white/10 text-on-hero-muted hover:text-on-hero sm:border-0",
+                        )}
+                      >
+                        {Icon && <Icon className="h-3.5 w-3.5" />}
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {applyTypeFilter !== "external" && applyTypeFilter !== "all" && filteredJobs.length > 0 && (
                   <button
-                    key={t}
-                    onClick={() => { setApplyTypeFilter(t); setSelectedJobs([]); }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      applyTypeFilter === t
-                        ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
-                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-[#1a2e5e]"
-                    }`}
+                    onClick={selectAllVisible}
+                    className="inline-flex h-9 items-center rounded-full border border-dashed border-white/30 px-3.5 text-body-sm font-semibold text-on-hero transition-colors hover:border-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                   >
-                    {labels[t]}
+                    Select all {filteredJobs.length}
                   </button>
-                );
-              })}
-              {applyTypeFilter !== "external" && applyTypeFilter !== "all" && filteredJobs.length > 0 && (
-                <button
-                  onClick={selectAllVisible}
-                  className="px-3 py-1 rounded-full text-xs font-medium border border-dashed border-gray-400 text-gray-500 dark:text-gray-400 hover:border-[#1a2e5e] hover:text-[#1a2e5e] transition-colors"
-                >
-                  Select all {filteredJobs.length}
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="mt-4">
-            {loading && (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 animate-pulse">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2" />
-                    <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/3 mb-4" />
-                    <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-full mb-1" />
-                    <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-4/5" />
-                  </div>
-                ))}
+                )}
               </div>
             )}
+          </>
+        )}
+
+        {showBrowse && (
+          <div>
+            <div className="relative">
+              <label htmlFor="browse-search" className="sr-only">Search jobs</label>
+              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-on-hero-muted" />
+              <input
+                id="browse-search"
+                type="text"
+                value={browseSearch}
+                onChange={(e) => { setBrowseSearch(e.target.value); debounceBrowse(400); }}
+                placeholder="Search by title, company, or keyword..."
+                className={cn(heroControlStyles({ size: "custom" }), "h-12 w-full pl-11 pr-11 text-body")}
+              />
+              {browseLoading && (
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-on-hero-muted">
+                  <Spinner size="sm" label="Searching" />
+                </span>
+              )}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+              <label htmlFor="browse-location" className="sr-only">Location</label>
+              <input id="browse-location" type="text" value={browseLocation} onChange={(e) => { setBrowseLocation(e.target.value); debounceBrowse(400); }} placeholder="Location" className={cn(heroControlStyles(), "w-full sm:w-44")} />
+              <label htmlFor="browse-company" className="sr-only">Company</label>
+              <input id="browse-company" type="text" value={browseCompany} onChange={(e) => { setBrowseCompany(e.target.value); debounceBrowse(400); }} placeholder="Company" className={cn(heroControlStyles(), "w-full sm:w-44")} />
+              <label htmlFor="browse-source" className="sr-only">Source</label>
+              <div className="relative col-span-2 sm:col-span-1">
+                <select id="browse-source" value={browseSource} onChange={(e) => { setBrowseSource(e.target.value); setTimeout(() => fetchBrowse(1), 0); }} className={cn(heroControlStyles({ size: "custom" }), "h-10 w-full cursor-pointer appearance-none pl-3.5 pr-9 text-sm font-medium sm:w-44")}>
+                  <option value="">All sources</option>
+                  <option value="indeed">Indeed</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="company_careers">Company Careers</option>
+                </select>
+                <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-on-hero-muted" />
+              </div>
+              {hasBrowseFilter && (
+                <button onClick={clearBrowseFilters} className="h-10 rounded-control px-2 text-body-sm font-semibold text-on-hero underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Clear filters</button>
+              )}
+            </div>
+            {!browseLoading && browseTotal > 0 && (
+              <p className="mt-3 text-right text-body-sm text-on-hero-muted">
+                Showing {browseFrom}–{browseTo} of {browseTotal.toLocaleString()} jobs
+              </p>
+            )}
+          </div>
+        )}
+      </PageHero>
+
+      <div className="relative mx-auto -mt-14 max-w-6xl sm:-mt-16">
+        {activeTab === "matches" && (
+          <>
+            {loading && <MatchesSkeleton />}
 
             {error && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-5">
-                <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">Matches are loading…</p>
-                <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">{error}</p>
-                <button onClick={() => fetchJobs()} className="text-xs font-medium px-3 py-1.5 bg-amber-700 dark:bg-amber-600 text-white rounded-lg hover:opacity-90 transition-opacity">
-                  Try again
-                </button>
-              </div>
+              <StatePanel
+                role="alert"
+                illustration={<BrokenRouteIllustration />}
+                title="Matches are loading…"
+                action={
+                  <Button size="lg" onClick={() => fetchJobs()}>
+                    <RefreshIcon />
+                    Try again
+                  </Button>
+                }
+              >
+                {error}
+              </StatePanel>
             )}
 
             {!loading && !error && jobs.length === 0 && (
-              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
-                <p className="text-gray-700 dark:text-gray-300 font-medium">No new matches today.</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Check back tomorrow or{" "}
-                  <a href="/dashboard/onboarding" className="text-blue-600 dark:text-blue-400 hover:underline">update your preferences</a>.
-                </p>
-              </div>
+              <StatePanel illustration={<HorizonIllustration />} title="No new matches today.">
+                Check back tomorrow or{" "}
+                <a href="/dashboard/onboarding" className={linkStyles}>update your preferences</a>.
+              </StatePanel>
             )}
 
-            {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && (
-              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
-                <p className="text-gray-700 dark:text-gray-300 font-medium">No jobs match your filters.</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Try adjusting the filters above.</p>
-              </div>
+            {matchesReady && filteredJobs.length === 0 && (
+              <StatePanel illustration={<FunnelIllustration />} title="No jobs match your filters.">
+                Try adjusting the filters above.
+              </StatePanel>
             )}
 
-            {!loading && !error && filteredJobs.length > 0 && (
-              <div className="space-y-4">
-                {filteredJobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    initialSaved={savedIds.has(job.id)}
-                    selected={selectedJobs.includes(job.id)}
-                    onSelect={toggleJobSelection}
-                    onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
-                    onApply={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
-                  />
-                ))}
-              </div>
-            )}
-
-            {!loading && !error && jobs.length > 0 && (
+            {!loading && !error && featuredJob && (
               <>
-                <div ref={sentinelRef} style={{ height: "1px" }} />
-                {loadingMore && (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400 dark:border-gray-500" />
-                  </div>
-                )}
-                {!hasMore && (
-                  <p className="text-center py-4 text-sm text-gray-400 dark:text-gray-500">All matches loaded</p>
+                <JobCard
+                  key={featuredJob.id}
+                  variant="featured"
+                  featuredLabel={FEATURED_LABEL[filters.sortBy]}
+                  job={featuredJob}
+                  initialSaved={savedIds.has(featuredJob.id)}
+                  selected={selectedJobs.includes(featuredJob.id)}
+                  onSelect={toggleJobSelection}
+                  onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                  onApply={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                />
+                {otherJobs.length > 0 && (
+                  <section aria-labelledby="more-matches" className="mt-10 sm:mt-12">
+                    <h2 id="more-matches" className="mb-4 font-serif text-title-serif text-ink">More matches</h2>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {otherJobs.map((job) => (
+                        <JobCard
+                          key={job.id}
+                          job={job}
+                          initialSaved={savedIds.has(job.id)}
+                          selected={selectedJobs.includes(job.id)}
+                          onSelect={toggleJobSelection}
+                          onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                          onApply={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 )}
               </>
             )}
-          </div>
-        </>
-      )}
 
-      {activeTab === "browse" && plan === null && (
-        <div className="space-y-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
-      )}
-
-      {activeTab === "browse" && (plan === "free" || browseError?.code === "plan_restricted") && (
-        <BrowseLockedState />
-      )}
-
-      {activeTab === "browse" && (plan === "pro" || plan === "unlimited") && browseError?.code !== "plan_restricted" && (
-        <div>
-          <div className="relative mb-3">
-            <input
-              type="text"
-              value={browseSearch}
-              onChange={(e) => { setBrowseSearch(e.target.value); debounceBrowse(400); }}
-              placeholder="Search by title, company, or keyword..."
-              className="w-full px-4 py-2.5 pr-10 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {browseLoading && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              </div>
+            {matchesReady && (
+              <>
+                <div ref={sentinelRef} style={{ height: "1px" }} />
+                {loadingMore && (
+                  <div className="flex justify-center py-6 text-ink-subtle">
+                    <Spinner label="Loading more matches" />
+                  </div>
+                )}
+                {!hasMore && (
+                  <p className="py-8 text-center text-body-sm text-ink-subtle">All matches loaded</p>
+                )}
+              </>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <input type="text" value={browseLocation} onChange={(e) => { setBrowseLocation(e.target.value); debounceBrowse(400); }} placeholder="Location" className="w-36 px-3 py-1.5 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <input type="text" value={browseCompany} onChange={(e) => { setBrowseCompany(e.target.value); debounceBrowse(400); }} placeholder="Company" className="w-36 px-3 py-1.5 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <select value={browseSource} onChange={(e) => { setBrowseSource(e.target.value); setTimeout(() => fetchBrowse(1), 0); }} className="px-3 py-1.5 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">All sources</option>
-              <option value="indeed">Indeed</option>
-              <option value="linkedin">LinkedIn</option>
-              <option value="company_careers">Company Careers</option>
-            </select>
-            {hasBrowseFilter && (
-              <button onClick={clearBrowseFilters} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Clear filters</button>
-            )}
-          </div>
-          {!browseLoading && browseTotal > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-              Showing {browseFrom}–{browseTo} of {browseTotal.toLocaleString()} jobs
-            </p>
-          )}
-          <div ref={browseListRef}>
+          </>
+        )}
+
+        {activeTab === "browse" && plan === null && <MatchesSkeleton featured={false} />}
+
+        {activeTab === "browse" && (plan === "free" || browseError?.code === "plan_restricted") && (
+          <BrowseLockedState />
+        )}
+
+        {showBrowse && (
+          <div ref={browseListRef} className="scroll-mt-24">
             {browseLoading ? (
-              <div className="space-y-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+              <MatchesSkeleton featured={false} />
             ) : browseError?.code === "limit_reached" ? (
-              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
-                <p className="text-gray-700 dark:text-gray-300 font-medium">
-                  You&apos;ve reached your daily Browse All Jobs limit.
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  <a href="/pricing" className="text-blue-600 dark:text-blue-400 hover:underline">Upgrade for more</a>.
-                </p>
-              </div>
+              <StatePanel illustration={<HorizonIllustration />} title="You've reached your daily Browse All Jobs limit.">
+                <a href="/pricing" className={linkStyles}>Upgrade for more</a>.
+              </StatePanel>
             ) : browseJobs.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
-                <p className="text-gray-700 dark:text-gray-300 font-medium">No jobs found matching your filters.</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Try different keywords{hasBrowseFilter && <>{" or "}<button onClick={clearBrowseFilters} className="text-blue-600 dark:text-blue-400 hover:underline">clear the filters</button></>}.
-                </p>
-              </div>
+              <StatePanel illustration={<EmptySearchIllustration />} title="No jobs found matching your filters.">
+                Try different keywords{hasBrowseFilter && <>{" or "}<button onClick={clearBrowseFilters} className={linkStyles}>clear the filters</button></>}.
+              </StatePanel>
             ) : (
-              <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {browseJobs.map((job) => (
                   <JobCard key={job.id} job={job} showScore={false} showSource={true} onDismiss={(id) => setBrowseJobs((prev) => prev.filter((j) => j.id !== id))} />
                 ))}
               </div>
             )}
+
+            {!browseLoading && browseTotalPages > 1 && (
+              <nav aria-label="Pagination" className="mt-10 flex flex-col items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <Button variant="secondary" onClick={() => goToPage(browsePage - 1)} disabled={browsePage <= 1}>← Previous</Button>
+                  <span className="text-body-sm text-ink-muted">Page {browsePage} of {browseTotalPages}</span>
+                  <Button variant="secondary" onClick={() => goToPage(browsePage + 1)} disabled={browsePage >= browseTotalPages}>Next →</Button>
+                </div>
+                <div className="flex items-center gap-2 text-body-sm text-ink-muted">
+                  <label htmlFor="browse-goto">Go to page</label>
+                  <input
+                    id="browse-goto"
+                    type="number" min={1} max={browseTotalPages} value={browseGoTo}
+                    onChange={(e) => setBrowseGoTo(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { const p = parseInt(browseGoTo, 10); if (!isNaN(p)) { goToPage(p); setBrowseGoTo(""); } } }}
+                    placeholder={String(browsePage)}
+                    className={cn(inputStyles(), "h-9 w-16 text-center")}
+                  />
+                  <span>of {browseTotalPages}</span>
+                </div>
+              </nav>
+            )}
           </div>
-          {!browseLoading && browseTotalPages > 1 && (
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <div className="flex items-center gap-3">
-                <button onClick={() => goToPage(browsePage - 1)} disabled={browsePage <= 1} className="text-sm px-3 py-1.5 border rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">← Previous</button>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Page {browsePage} of {browseTotalPages}</span>
-                <button onClick={() => goToPage(browsePage + 1)} disabled={browsePage >= browseTotalPages} className="text-sm px-3 py-1.5 border rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">Next →</button>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <span>Go to page</span>
-                <input
-                  type="number" min={1} max={browseTotalPages} value={browseGoTo}
-                  onChange={(e) => setBrowseGoTo(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { const p = parseInt(browseGoTo, 10); if (!isNaN(p)) { goToPage(p); setBrowseGoTo(""); } } }}
-                  placeholder={String(browsePage)}
-                  className="w-16 px-2 py-1 border rounded-lg text-center text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <span>of {browseTotalPages}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {selectedJobs.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg px-4 py-3 flex items-center justify-between gap-3">
-          <div className="text-sm text-gray-600 dark:text-gray-300">
-            <span className="font-semibold text-[#1a2e5e] dark:text-blue-400">{selectedJobs.length} selected</span>
-            {counts.extension > 0 && <span className="ml-2 text-xs text-gray-400">⚡ {counts.extension} extension</span>}
-            {counts.auto > 0 && <span className="ml-1 text-xs text-gray-400">🤖 {counts.auto} auto</span>}
+        <div
+          role="region"
+          aria-label="Batch apply"
+          className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-overlay border border-white/10 bg-hero-via p-3 text-on-hero shadow-overlay motion-safe:animate-lift-in sm:bottom-6 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:rounded-full sm:py-2 sm:pl-7 sm:pr-2"
+        >
+          <div className="flex min-w-0 items-baseline gap-3 px-1 sm:px-0">
+            <span className="whitespace-nowrap font-serif text-lg font-medium sm:text-xl">{selectedJobs.length} selected</span>
+            <span className="flex items-center gap-2.5 whitespace-nowrap text-body-sm text-on-hero-muted">
+              {counts.extension > 0 && <span className="inline-flex items-center gap-1"><ExtensionIcon className="h-3.5 w-3.5" />{counts.extension} extension</span>}
+              {counts.auto > 0 && <span className="inline-flex items-center gap-1"><AutoIcon className="h-3.5 w-3.5" />{counts.auto} auto</span>}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setSelectedJobs([])} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2">Clear</button>
-            <button onClick={handleBatchApply} disabled={batchApplying} className="bg-[#1a2e5e] text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
+          <div className="mt-2 flex items-center gap-1 sm:mt-0 sm:shrink-0">
+            <button
+              onClick={() => setSelectedJobs([])}
+              className="h-11 whitespace-nowrap rounded-full px-4 text-body-sm font-semibold text-on-hero-muted transition-colors hover:text-on-hero focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBatchApply}
+              disabled={batchApplying}
+              aria-busy={batchApplying || undefined}
+              className="inline-flex h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-accent px-5 text-sm font-semibold text-accent-on transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 sm:flex-none"
+            >
               {batchApplying ? "Applying…" : `Apply to ${selectedJobs.length} Jobs →`}
             </button>
           </div>

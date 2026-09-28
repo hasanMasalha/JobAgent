@@ -71,7 +71,7 @@ function parseDescription(text: string): Segment[] {
   })
 }
 
-export function JobDescription({ description }: { description: string }) {
+export function JobDescription({ description, lines = 3 }: { description: string; lines?: 2 | 3 }) {
   const [expanded, setExpanded] = useState(false)
 
   const cleaned = cleanDescription(description || "")
@@ -80,17 +80,17 @@ export function JobDescription({ description }: { description: string }) {
   const isTruncated = cleaned.length > 300
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       {!expanded ? (
-        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 leading-relaxed">
+        <p className={`text-body-sm leading-relaxed text-ink-muted sm:text-[0.875rem] sm:leading-6 ${lines === 2 ? "line-clamp-2" : "line-clamp-3"}`}>
           {cleaned}
         </p>
       ) : (
-        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-2">
+        <div className="mt-2 space-y-1.5 rounded-control bg-surface-sunken p-3.5 text-body-sm leading-relaxed text-ink-muted">
           {parseDescription(cleaned).map((item, i) => {
             if (item.type === "header") {
               return (
-                <p key={i} className="font-bold text-gray-900 dark:text-gray-100 mt-3 first:mt-0 text-xs uppercase tracking-wide">
+                <p key={i} className="mt-3 text-caption font-semibold uppercase tracking-wide text-ink first:mt-0">
                   {item.content}
                 </p>
               )
@@ -98,13 +98,13 @@ export function JobDescription({ description }: { description: string }) {
             if (item.type === "bullet") {
               return (
                 <div key={i} className="flex gap-2 items-start ml-2">
-                  <span className="text-violet-500 flex-shrink-0 mt-0.5 text-xs">•</span>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">{item.content}</span>
+                  <span aria-hidden="true" className="mt-0.5 flex-shrink-0 text-ink-subtle">•</span>
+                  <span>{item.content}</span>
                 </div>
               )
             }
             return (
-              <p key={i} className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <p key={i}>
                 {item.content}
               </p>
             )
@@ -118,9 +118,10 @@ export function JobDescription({ description }: { description: string }) {
             e.stopPropagation()
             setExpanded((prev) => !prev)
           }}
-          className="text-violet-600 dark:text-violet-400 text-xs mt-1.5 hover:underline font-medium"
+          aria-expanded={expanded}
+          className="mt-1.5 rounded-sm text-body-sm font-semibold text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {expanded ? "↑ Show less" : "↓ Show more"}
+          {expanded ? "Show less" : "Show more"}
         </button>
       )}
     </div>
