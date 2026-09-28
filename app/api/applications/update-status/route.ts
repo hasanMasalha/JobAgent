@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase.server";
+import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { db } from "@/lib/db";
 import { refundAutoApplyForApplication } from "@/lib/usage";
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const { applicationId, status, userId: bodyUserId } = await req.json();
-
-    // Accept userId from request body when called from background.js service worker
-    // (SameSite=Lax prevents session cookies from being sent in that context)
-    const userId = user?.id ?? bodyUserId;
+    // Session, or the extension's signed token (its service worker can't send
+    // the session cookie). A userId in the body is ignored — it used to be
+    // trusted, which let anyone change another user's statuses and refunds.
+    const userId = await getSessionOrExtensionUserId(req);
+    const { applicationId, status } = await req.json();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -63,6 +63,8 @@ DODO_PRO_MONTHLY_PRODUCT_ID          Dodo product ID, Pro plan / monthly
 DODO_PRO_ANNUAL_PRODUCT_ID           Dodo product ID, Pro plan / annual
 DODO_UNLIMITED_MONTHLY_PRODUCT_ID    Dodo product ID, Unlimited plan / monthly
 DODO_UNLIMITED_ANNUAL_PRODUCT_ID     Dodo product ID, Unlimited plan / annual
+EXTENSION_TOKEN_SECRET     ≥32 random chars; signs the Chrome extension's API token
+                           (lib/extension-token.ts). Unset = extension API calls fail closed
 
 ## Database tables
 users          id, email, name, linkedin_session_path,
@@ -160,6 +162,18 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 - Paddle was the original processor; it rejected our account before going
   live, so `lib/paddle.ts`, `lib/paddle-client.ts`, and `app/api/paddle/*`
   were removed rather than kept as a second option.
+
+## Chrome extension auth
+- The extension's service worker can't send the site's session cookie, so
+  the routes it calls (`/api/apply/check-pending`, `/api/applications/update-status`,
+  `POST /api/apply/answers`) authenticate with `getSessionOrExtensionUserId()`:
+  the session user, or a signed `extensionToken` sent as
+  `Authorization: Bearer`. `/api/auth/me` issues the token (14-day expiry);
+  `auth-sync.js` stores it whenever the user is on the site.
+- **Never accept a user id from the query or body as identity.** These routes
+  used to (`user?.id ?? body.userId`), which let anyone who knew a user id read
+  their profile, change their application statuses and refunds, and rewrite
+  the answers the extension types into real applications. Fixed 2026-09-29.
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved
