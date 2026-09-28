@@ -24,8 +24,16 @@ const sourceSerif = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "JobAgent — AI Job Assistant",
-  description: "AI-powered job assistant for the Israeli market",
+  title: "JobAgent — AI job search software for job seekers",
+  description:
+    "JobAgent is subscription software for job seekers. It matches open roles to your CV, tailors your CV and cover letter for each one, and applies for you. Free and paid plans.",
+  openGraph: {
+    title: "JobAgent — AI job search software for job seekers",
+    description:
+      "Subscription software for job seekers: CV-matched jobs, tailored applications, and one-click apply. Free and paid plans.",
+    siteName: "JobAgent",
+    type: "website",
+  },
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png" }],
     shortcut: "/favicon.png",

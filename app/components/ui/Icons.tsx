@@ -39,7 +39,13 @@ export const FilterIcon = (p: IconProps) => <Svg {...p}><path d="M2 4h12M4 8h8M6
 export const ChevronDownIcon = (p: IconProps) => <Svg {...p}><path d="M4 6l4 4 4-4" /></Svg>;
 export const CloseIcon = (p: IconProps) => <Svg {...p}><path d="M4 4l8 8M12 4l-8 8" /></Svg>;
 export const SearchIcon = (p: IconProps) => <Svg {...p}><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></Svg>;
-export const BookmarkIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+export const CheckIcon = (p: IconProps) => <Svg {...p}><path d="M3.5 8.5l3 3 6-7" /></Svg>;
+/** An app window — "software", as opposed to a service. */
+export const AppWindowIcon = (p: IconProps) => <Svg {...p}><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M2 6h12M4.5 4.5h.01M6.5 4.5h.01" /></Svg>;
+export const CalendarIcon = (p: IconProps) => <Svg {...p}><rect x="2.5" y="3.5" width="11" height="10" rx="1.5" /><path d="M2.5 7h11M5.5 2v3M10.5 2v3" /></Svg>;
+export const SwapIcon = (p: IconProps) => <Svg {...p}><path d="M3 5.5h9.5M10 3l2.5 2.5L10 8M13 10.5H3.5M6 8l-2.5 2.5L6 13" /></Svg>;
+export const DoorOpenIcon = (p: IconProps) => <Svg {...p}><path d="M3 14h10M4.5 14V2.5h7V14M9 8.5v.01" /></Svg>;
+export const BookmarkIcon =({ filled, ...p }: IconProps & { filled?: boolean }) => (
   <Svg {...p} fill={filled ? "currentColor" : "none"}><path d="M4 2.5h8v11l-4-3-4 3z" /></Svg>
 );
 

@@ -3,7 +3,8 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
-export function ThemeToggle() {
+/** onHero: styled for the navy hero band (public pages' header). */
+export function ThemeToggle({ onHero = false }: { onHero?: boolean } = {}) {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -12,7 +13,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="w-9 h-9 flex items-center justify-center rounded-control text-ink-muted hover:text-ink hover:bg-surface-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`w-9 h-9 flex items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 ${onHero ? "text-on-hero-muted hover:text-on-hero hover:bg-white/10 focus-visible:ring-white/80" : "text-ink-muted hover:text-ink hover:bg-surface-sunken focus-visible:ring-ring"}`}
       aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {resolvedTheme === "dark" ? (

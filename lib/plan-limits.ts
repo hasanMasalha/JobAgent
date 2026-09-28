@@ -38,21 +38,49 @@ export const PLAN_DISPLAY_NAMES: Record<PaidPlan, string> = {
   unlimited: "Unlimited",
 };
 
-function formatLimit(value: number): string {
-  return value >= 999999 ? "Unlimited" : value.toLocaleString();
+// USD per month. `annual` is the per-month price when billed yearly. Must
+// match the Dodo product catalog (see productIdFor); shown on /pricing and
+// the onboarding plan picker.
+export const PLAN_PRICES_USD: Record<PlanKey, { monthly: number; annual: number }> = {
+  free: { monthly: 0, annual: 0 },
+  pro: { monthly: 24, annual: 19 },
+  unlimited: { monthly: 69, annual: 49 },
+};
+
+// What every plan gets that isn't metered, so isn't in PLAN_LIMITS. Only
+// list things no plan check restricts.
+export const INCLUDED_IN_EVERY_PLAN =
+  "Every plan includes auto-apply to Greenhouse, Lever, Workable, Ashby, Comeet and BambooHR, and the JobAgent Chrome extension.";
+
+const isUnlimited = (value: number) => value >= 999999;
+
+/**
+ * Plan bullets for /pricing, the onboarding plan picker and confirmation
+ * emails — generated from PLAN_LIMITS so the copy can't drift from what's
+ * enforced. Only limits that lib/usage.ts actually checks are listed:
+ * savedJobsMax and cvVersionsMax aren't enforced anywhere, so advertising
+ * them would promise something the product doesn't do.
+ */
+export function planFeatureList(plan: PlanKey): string[] {
+  const l = PLAN_LIMITS[plan];
+  const bullets = [
+    isUnlimited(l.jobMatchesPerDay) ? "Unlimited AI job matches" : `${l.jobMatchesPerDay} AI job matches per day`,
+    isUnlimited(l.autoAppliesPerMonth) ? "Unlimited auto-applies" : `${l.autoAppliesPerMonth} auto-applies per month`,
+    isUnlimited(l.cvTailoringPerMonth) ? "Unlimited CV tailoring" : `${l.cvTailoringPerMonth} CV tailoring requests per month`,
+  ];
+  if (l.browseJobsPerDay > 0) {
+    bullets.push(
+      isUnlimited(l.browseJobsPerDay)
+        ? "Browse All Jobs, unlimited"
+        : `Browse All Jobs, ${l.browseJobsPerDay.toLocaleString()} listings per day`,
+    );
+  }
+  return bullets;
 }
 
-// Human-readable bullets for plan confirmation emails, derived from
-// PLAN_LIMITS so the copy can't drift from the actual entitlements.
+/** Bullets for plan confirmation emails — the same list as the pricing page. */
 export function planFeatureHighlights(plan: PaidPlan): string[] {
-  const limits = PLAN_LIMITS[plan];
-  return [
-    `${formatLimit(limits.jobMatchesPerDay)} AI job matches per day`,
-    `${formatLimit(limits.autoAppliesPerMonth)} auto-applies per month`,
-    `${formatLimit(limits.cvTailoringPerMonth)} CV tailoring requests per month`,
-    `${formatLimit(limits.savedJobsMax)} saved jobs`,
-    `${limits.cvVersionsMax} CV version${limits.cvVersionsMax > 1 ? "s" : ""}`,
-  ];
+  return planFeatureList(plan);
 }
 
 export function productIdFor(plan: PaidPlan, interval: BillingInterval): string | undefined {

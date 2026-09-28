@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JOB_CATEGORIES, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
+import { PLAN_PRICES_USD, planFeatureList } from "@/lib/plan-limits";
 
 interface ExistingCV {
   clean_summary: string;
@@ -31,25 +32,22 @@ interface PlanTier {
   highlighted?: boolean;
 }
 
+// Prices and bullets come from lib/plan-limits.ts, shared with /pricing and
+// confirmation emails, so the picker can't promise something pricing doesn't.
 const PLAN_TIERS: PlanTier[] = [
   {
     key: "free",
     name: "Free",
-    price: "$0",
-    features: ["10 AI job matches per day", "5 auto-applies per month"],
+    price: `$${PLAN_PRICES_USD.free.monthly}`,
+    features: planFeatureList("free"),
     ctaLabel: "Start Free",
     destination: "/dashboard",
   },
   {
     key: "pro",
     name: "Pro",
-    price: "$24",
-    features: [
-      "100 auto-applies per month",
-      "AI CV tailoring per job",
-      "All ATS platforms (Greenhouse, Lever, Comeet, Ashby)",
-      "Chrome extension access",
-    ],
+    price: `$${PLAN_PRICES_USD.pro.monthly}`,
+    features: planFeatureList("pro"),
     ctaLabel: "Upgrade to Pro",
     destination: "/pricing",
     highlighted: true,
@@ -57,13 +55,8 @@ const PLAN_TIERS: PlanTier[] = [
   {
     key: "unlimited",
     name: "Unlimited",
-    price: "$69",
-    features: [
-      "Unlimited auto-applies",
-      "Priority matching",
-      "Multiple CV versions",
-      "Analytics dashboard",
-    ],
+    price: `$${PLAN_PRICES_USD.unlimited.monthly}`,
+    features: planFeatureList("unlimited"),
     ctaLabel: "Go Unlimited",
     destination: "/pricing",
   },

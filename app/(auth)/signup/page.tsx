@@ -239,7 +239,7 @@ export default function SignupPage() {
               Find your next role, faster.
             </h2>
             <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, margin: "0 0 40px" }}>
-              Your AI-powered career assistant for the Israeli job market.
+              Your AI-powered job search assistant.
             </p>
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 16 }}>

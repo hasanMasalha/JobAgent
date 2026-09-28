@@ -2,11 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const NAVY = "#1a2e5e";
+import { cn } from "@/lib/cn";
+import { SiteHeader } from "@/app/components/SiteHeader";
+import { INCLUDED_IN_EVERY_PLAN, PLAN_PRICES_USD, planFeatureList, type PlanKey } from "@/lib/plan-limits";
+import {
+  Badge,
+  Button,
+  buttonStyles,
+  Notice,
+  PageHero,
+  CheckIcon,
+  AppWindowIcon,
+  CalendarIcon,
+  SwapIcon,
+  DoorOpenIcon,
+} from "@/app/components/ui";
 
 type Billing = "monthly" | "annual";
-type PlanKey = "free" | "pro" | "unlimited";
 
 const PLAN_RANK: Record<PlanKey, number> = { free: 0, pro: 1, unlimited: 2 };
 
@@ -16,6 +28,7 @@ interface CurrentPlan {
 }
 
 interface Tier {
+  key: PlanKey;
   name: string;
   tagline: string;
   monthly: number;
@@ -27,74 +40,78 @@ interface Tier {
   highlighted?: boolean;
 }
 
+// Prices and bullets come from lib/plan-limits.ts, shared with the
+// onboarding plan picker and confirmation emails.
 const TIERS: Tier[] = [
   {
+    key: "free",
     name: "Free",
     tagline: "Try it out, no strings attached",
-    monthly: 0,
-    annual: 0,
+    ...PLAN_PRICES_USD.free,
     ctaLabel: "Get Started Free",
     ctaHref: "/signup",
-    features: [
-      "10 AI job matches per day",
-      "5 auto-applies per month",
-      "Basic CV (no tailoring)",
-    ],
+    features: planFeatureList("free"),
   },
   {
+    key: "pro",
     name: "Pro",
     tagline: "For active job seekers",
-    monthly: 24,
-    annual: 19,
+    ...PLAN_PRICES_USD.pro,
     ctaLabel: "Start Pro",
     ctaHref: "/signup?plan=pro",
     planKey: "pro",
-    features: [
-      "100 auto-applies per month",
-      "AI CV tailoring per job",
-      "All ATS platforms (Greenhouse, Lever, Comeet, Ashby)",
-      "Chrome extension access",
-    ],
+    features: planFeatureList("pro"),
     highlighted: true,
   },
   {
+    key: "unlimited",
     name: "Unlimited",
     tagline: "For serious career moves",
-    monthly: 69,
-    annual: 49,
+    ...PLAN_PRICES_USD.unlimited,
     ctaLabel: "Go Unlimited",
     ctaHref: "/signup?plan=unlimited",
     planKey: "unlimited",
-    features: [
-      "Unlimited auto-applies",
-      "Priority matching",
-      "Multiple CV versions",
-      "Analytics dashboard",
-      "Priority support",
-    ],
+    features: planFeatureList("unlimited"),
   },
 ];
-
-function CheckIcon() {
-  return (
-    <svg
-      className="w-5 h-5 shrink-0 text-[#1a2e5e] dark:text-blue-400"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 111.415-1.415L8.5 12.086l6.79-6.796a1 1 0 011.414 0z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
 
 function savingsPercent(monthly: number, annual: number) {
   if (monthly <= 0) return 0;
   return Math.round((1 - annual / monthly) * 100);
 }
+
+// What a subscriber — and a payment reviewer — needs to know about how
+// they're charged. Plan-change timing mirrors /api/dodo/checkout
+// (subscriptions.changePlan with prorated_immediately).
+const refundLink =
+  "font-semibold text-brand-text underline underline-offset-4 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm";
+const BILLING_FACTS = [
+  {
+    Icon: AppWindowIcon,
+    title: "A software subscription",
+    body: "JobAgent is subscription software for job seekers. Your plan pays for access to the app and its monthly limits — not per application, and not for a recruiting or placement service.",
+  },
+  {
+    Icon: CalendarIcon,
+    title: "Monthly or annual",
+    body: "Pay monthly, or annually at a lower monthly price. Prices are in US dollars.",
+  },
+  {
+    Icon: SwapIcon,
+    title: "Change plans any time",
+    body: "Upgrades, and moving to annual billing, take effect straight away with a prorated charge. Downgrades, and moving to monthly, apply from your next billing date.",
+  },
+  {
+    Icon: DoorOpenIcon,
+    title: "Cancel anytime",
+    body: (
+      <>
+        No contract, and the Free plan needs no payment details. Refunds are covered by our{" "}
+        <Link href="/legal/refund" className={refundLink}>Refund Policy</Link>.
+      </>
+    ),
+  },
+];
 
 export default function PricingPage() {
   const [billing, setBilling] = useState<Billing>("monthly");
@@ -166,120 +183,81 @@ export default function PricingPage() {
     }
   }
 
+  const maxSavings = Math.max(...TIERS.map((t) => savingsPercent(t.monthly, t.annual)));
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
-        <div className="px-4 sm:px-6 py-3 flex items-center justify-between max-w-6xl mx-auto">
-          <Link href="/" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="JobAgent" className="block dark:hidden" style={{ height: 48 }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/whiteLogo.png" alt="JobAgent" className="hidden dark:block" style={{ height: 48 }} />
-          </Link>
-          <div className="flex items-center gap-4 text-sm">
-            <Link
-              href="/login"
-              className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/signup"
-              className="bg-[#1a2e5e] hover:opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-opacity"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        {/* Hero */}
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 dark:text-white">
-            Simple, transparent pricing
-          </h1>
-          <p className="mt-3 text-base text-gray-500 dark:text-gray-400">
-            Pick the plan that matches how seriously you&apos;re job hunting. Cancel anytime.
-          </p>
-        </div>
-
-        {/* Monthly / Annual toggle */}
-        <div className="flex justify-center mb-12">
-          <div className="inline-flex items-center bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-full p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setBilling("monthly")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                billing === "monthly"
-                  ? "bg-[#1a2e5e] text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setBilling("annual")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                billing === "annual"
-                  ? "bg-[#1a2e5e] text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              Annual
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  billing === "annual"
-                    ? "bg-white/20 text-white"
-                    : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                }`}
+    <div className="min-h-screen bg-canvas font-sans text-ink">
+      <PageHero
+        bleed={false}
+        topBar={<SiteHeader current="pricing" />}
+        title="Simple, transparent pricing"
+        subtitle={<>Pick the plan that matches how seriously you&apos;re job hunting. Cancel anytime.</>}
+      >
+        <div role="group" aria-label="Billing period" className="inline-flex rounded-full border border-white/10 bg-white/[0.06] p-1">
+          {(["monthly", "annual"] as const).map((b) => {
+            const on = billing === b;
+            return (
+              <button
+                key={b}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setBilling(b)}
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm transition-colors duration-200",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                  on ? "bg-on-hero font-semibold text-hero-from" : "text-on-hero-muted hover:text-on-hero",
+                )}
               >
-                Save up to {Math.max(...TIERS.map((t) => savingsPercent(t.monthly, t.annual)))}%
-              </span>
-            </button>
-          </div>
+                {b === "monthly" ? "Monthly" : "Annual"}
+                {b === "annual" && (
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold",
+                      on ? "bg-success-soft text-success-text" : "bg-white/10 text-on-hero",
+                    )}
+                  >
+                    Save up to {maxSavings}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
+      </PageHero>
 
-        {/* Pricing cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-start">
+      <main className="relative mx-auto -mt-14 max-w-6xl px-gutter pb-20 sm:-mt-16 sm:px-gutter-lg sm:pb-28">
+        <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3 lg:gap-6">
           {TIERS.map((tier) => {
             const price = billing === "monthly" ? tier.monthly : tier.annual;
             const savings = savingsPercent(tier.monthly, tier.annual);
             const cta = ctaFor(tier);
+            const featured = tier.highlighted;
 
             return (
-              <div
+              <section
                 key={tier.name}
-                className={`relative rounded-2xl p-6 sm:p-8 flex flex-col h-full ${
-                  tier.highlighted
-                    ? "bg-blue-50/60 dark:bg-gray-800 border-2 border-[#1a2e5e] dark:border-blue-400 shadow-xl md:scale-105"
-                    : "bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-sm"
-                }`}
-              >
-                {tier.highlighted && (
-                  <span
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold text-white px-3 py-1 rounded-full whitespace-nowrap"
-                    style={{ background: NAVY }}
-                  >
-                    Most Popular
-                  </span>
+                aria-labelledby={`tier-${tier.name}`}
+                className={cn(
+                  "relative flex flex-col rounded-[1.375rem] p-6 motion-safe:animate-lift-in sm:p-8",
+                  featured
+                    ? "bg-surface-raised shadow-dossier ring-1 ring-accent/50 md:-mt-4 md:pb-12"
+                    : "border border-line bg-surface md:mt-4",
                 )}
-
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{tier.name}</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{tier.tagline}</p>
-
-                <div className="mt-5 flex items-baseline gap-2 flex-wrap">
-                  <span className="text-4xl font-bold text-gray-900 dark:text-white">${price}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">/month</span>
-                  {billing === "annual" && savings > 0 && (
-                    <span className="text-[10px] font-semibold text-green-700 bg-green-100 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-full">
-                      Save {savings}%
-                    </span>
-                  )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id={`tier-${tier.name}`} className="font-serif text-[1.625rem] font-medium leading-tight text-ink">
+                    {tier.name}
+                  </h2>
+                  {featured && <Badge tone="accent">Most Popular</Badge>}
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                <p className="mt-1.5 text-body-sm text-ink-muted">{tier.tagline}</p>
+
+                <div className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="numerals font-serif text-[3.5rem] font-medium leading-none tracking-tight text-ink">${price}</span>
+                  <span className="text-body-sm text-ink-muted">/month</span>
+                  {billing === "annual" && savings > 0 && <Badge tone="success">Save {savings}%</Badge>}
+                </div>
+                <p className="mt-2 text-caption text-ink-subtle">
                   {tier.monthly === 0
                     ? "Free forever"
                     : billing === "annual"
@@ -287,53 +265,62 @@ export default function PricingPage() {
                     : "Billed monthly"}
                 </p>
 
-                <ul className="mt-6 space-y-3 flex-1">
+                <ul className="mt-7 flex-1 space-y-3 border-t border-line pt-7">
                   {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
-                      <CheckIcon />
+                    <li key={feature} className="flex items-start gap-3 text-body-sm text-ink sm:text-[0.9375rem] sm:leading-6">
+                      <CheckIcon className="mt-0.5 h-[1.125rem] w-[1.125rem] text-brand-text" />
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
 
                 {tier.planKey ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant={cta.disabled && cta.label === "Current plan" ? "current" : featured ? "accent" : "secondary"}
+                    size="lg"
+                    block
+                    className="mt-8"
                     disabled={checkoutLoading !== null || cta.disabled}
+                    loading={checkoutLoading === tier.planKey}
                     onClick={() => handleUpgrade(tier)}
-                    className={`mt-8 w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
-                      tier.highlighted
-                        ? "text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    }`}
-                    style={tier.highlighted ? { background: NAVY } : undefined}
                   >
                     {checkoutLoading === tier.planKey ? "Working…" : cta.label}
-                  </button>
+                  </Button>
                 ) : (
-                  <Link
-                    href={tier.ctaHref}
-                    className={`mt-8 block text-center py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 ${
-                      tier.highlighted
-                        ? "text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    }`}
-                    style={tier.highlighted ? { background: NAVY } : undefined}
-                  >
+                  <Link href={tier.ctaHref} className={cn(buttonStyles({ variant: "secondary", size: "lg", block: true }), "mt-8")}>
                     {tier.ctaLabel}
                   </Link>
                 )}
-              </div>
+              </section>
             );
           })}
         </div>
 
-        {checkoutNotice && (
-          <p className="text-center text-sm text-green-700 dark:text-green-400 mt-6">{checkoutNotice}</p>
+        <p className="mx-auto mt-8 max-w-2xl text-center text-body-sm text-ink-muted">{INCLUDED_IN_EVERY_PLAN}</p>
+
+        {(checkoutNotice || checkoutError) && (
+          <div className="mx-auto mt-8 max-w-xl">
+            {checkoutNotice && <Notice tone="success">{checkoutNotice}</Notice>}
+            {checkoutError && <Notice tone="danger">{checkoutError}</Notice>}
+          </div>
         )}
-        {checkoutError && (
-          <p className="text-center text-sm text-red-600 dark:text-red-400 mt-6">{checkoutError}</p>
-        )}
+
+        <section aria-labelledby="billing-heading" className="mt-20 sm:mt-28">
+          <h2 id="billing-heading" className="font-serif text-feature-sm text-ink sm:text-feature">How billing works</h2>
+          <dl className="mt-8 grid gap-x-12 gap-y-8 sm:grid-cols-2">
+            {BILLING_FACTS.map(({ Icon, title, body }) => (
+              <div key={title} className="flex gap-4">
+                <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand-text">
+                  <Icon />
+                </span>
+                <div>
+                  <dt className="text-title-card text-ink">{title}</dt>
+                  <dd className="mt-1.5 text-body text-ink-muted">{body}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+        </section>
       </main>
     </div>
   );

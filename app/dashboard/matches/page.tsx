@@ -565,7 +565,7 @@ export default function MatchesPage() {
                         className={cn(
                           "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-body-sm font-semibold transition-colors duration-200",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-                          on ? "bg-surface text-ink" : "border border-white/10 text-on-hero-muted hover:text-on-hero sm:border-0",
+                          on ? "bg-on-hero text-hero-from" : "border border-white/10 text-on-hero-muted hover:text-on-hero sm:border-0",
                         )}
                       >
                         {Icon && <Icon className="h-3.5 w-3.5" />}

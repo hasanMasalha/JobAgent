@@ -9,29 +9,37 @@ import { cn } from "@/lib/cn";
  * heroControlStyles.
  */
 export function PageHero({
+  topBar,
   tabs,
   title,
   subtitle,
   meta,
   children,
+  bleed = true,
   className,
 }: {
+  /** Public pages: their site header, rendered full-width at the top of the band. */
+  topBar?: React.ReactNode;
   tabs?: React.ReactNode;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   meta?: React.ReactNode;
   children?: React.ReactNode;
+  /** Dashboard pages sit inside <main>'s padding and bleed out of it; public pages don't. */
+  bleed?: boolean;
   className?: string;
 }) {
   return (
     <section
       className={cn(
-        "relative isolate -mx-gutter -mt-6 overflow-hidden bg-gradient-to-br from-hero-from via-hero-via to-hero-to",
-        "px-gutter pb-20 pt-6 text-on-hero sm:-mx-gutter-lg sm:-mt-8 sm:px-gutter-lg sm:pb-24 sm:pt-10",
+        "relative isolate overflow-hidden bg-gradient-to-br from-hero-from via-hero-via to-hero-to",
+        "px-gutter pb-20 text-on-hero sm:px-gutter-lg sm:pb-24",
+        bleed ? "-mx-gutter -mt-6 pt-6 sm:-mx-gutter-lg sm:-mt-8 sm:pt-10" : "pt-0",
         className,
       )}
     >
       <Contours />
+      {topBar && <div className="relative -mx-gutter mb-8 sm:-mx-gutter-lg sm:mb-12">{topBar}</div>}
       <div className="relative mx-auto max-w-6xl">
         {tabs}
         <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", tabs ? "mt-6 sm:mt-7" : undefined)}>
@@ -77,7 +85,7 @@ export function HeroTabs<T extends string>({
             className={cn(
               "h-9 whitespace-nowrap rounded-full px-4 text-sm transition-colors duration-200",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-              on ? "bg-surface font-semibold text-ink" : "text-on-hero-muted hover:text-on-hero",
+              on ? "bg-on-hero font-semibold text-hero-from" : "text-on-hero-muted hover:text-on-hero",
             )}
           >
             {t.label}
