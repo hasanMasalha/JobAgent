@@ -168,6 +168,12 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
   used to (`user?.id ?? body.userId`), which let anyone who knew a user id read
   their profile, change their application statuses and refunds, and rewrite
   the answers the extension types into real applications. Fixed 2026-09-29.
+- Extension 1.1.0 still sends `userId` alongside the token (marked
+  `TRANSITION` in `background.js`) so it works against servers from before the
+  token existed; the server ignores it. Remove it in 1.2.0.
+- `EXTENSION_TOKEN_SECRET` is a GitHub secret written into the server's `.env`
+  by `deploy.yml`. If the GitHub secret is empty the deploy writes an empty
+  value and every extension call 401s.
 
 ## Service-to-service auth (INTERNAL_API_KEY)
 - The AI service requires `X-Internal-Key` on every route except `/health`
