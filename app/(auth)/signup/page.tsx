@@ -87,6 +87,12 @@ export default function SignupPage() {
         </Button>
       </form>
 
+      <p className="mt-4 text-center text-caption text-ink-subtle">
+        By creating an account you agree to our{" "}
+        <Link href="/legal/terms" className={authLink}>Terms of Service</Link> and{" "}
+        <Link href="/legal/privacy" className={authLink}>Privacy Policy</Link>.
+      </p>
+
       <p className="mt-6 text-center text-body-sm text-ink-muted">
         Already have an account? <Link href="/login" className={authLink}>Sign in</Link>
       </p>

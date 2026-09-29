@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase";
-import { Button, Checkbox, Field, Input, Notice } from "@/app/components/ui";
+import { Button, Field, Input, Notice } from "@/app/components/ui";
 import { AuthShell, GoogleButton, OrDivider, authLink } from "../AuthShell";
 
 export default function LoginPage() {
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,13 +63,13 @@ export default function LoginPage() {
         <Field id="login-email" label="Email">
           <Input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         </Field>
-        <Field id="login-password" label="Password">
-          <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </Field>
-
-        <div className="flex items-center justify-between">
-          <Checkbox label="Remember me" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-          <a href="#" className={authLink + " text-body-sm"}>Forgot password?</a>
+        <div>
+          <Field id="login-password" label="Password">
+            <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+          <div className="mt-2 flex justify-end">
+            <Link href="/forgot-password" className={authLink + " text-body-sm"}>Forgot password?</Link>
+          </div>
         </div>
 
         {error && <Notice tone="danger">{error}</Notice>}
