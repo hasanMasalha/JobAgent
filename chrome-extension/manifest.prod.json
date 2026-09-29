@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobAgent — AI Job Assistant",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Auto-apply to LinkedIn Easy Apply jobs with your AI-tailored CV. Fills forms, tracks applications, and syncs your LinkedIn session.",
   "author": "JobAgent",
   "homepage_url": "https://jobagent.uk",
@@ -9,7 +9,8 @@
     "cookies",
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "notifications"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
