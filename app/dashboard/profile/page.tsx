@@ -19,6 +19,7 @@ import {
   chipStyles,
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
 // The LinkedIn connection section is hidden until it's ready for launch.
 // While it is, don't run its check either: /api/linkedin/session-status
@@ -172,14 +173,16 @@ function ProfileContent() {
     }
 
     // Check Google Calendar connection status on mount
-    fetch("/api/auth/google/status")
-      .then((r) => r.json())
-      .then((d) => {
-        setGoogleConnected(d.connected);
-        setGoogleConfigured(d.configured ?? false);
-        setGoogleEmail(d.email ?? null);
-      })
-      .catch(() => {});
+    if (GOOGLE_CALENDAR_ENABLED) {
+      fetch("/api/auth/google/status")
+        .then((r) => r.json())
+        .then((d) => {
+          setGoogleConnected(d.connected);
+          setGoogleConfigured(d.configured ?? false);
+          setGoogleEmail(d.email ?? null);
+        })
+        .catch(() => {});
+    }
 
     // Show toast if redirected back with google_not_configured
     const sp = new URLSearchParams(window.location.search);
@@ -680,8 +683,8 @@ function ProfileContent() {
         </div>
         )}
 
-        {/* Google Calendar Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
-        {false && (
+        {/* Google Calendar Connection — off until Calendar launches (GOOGLE_CALENDAR_ENABLED). */}
+        {GOOGLE_CALENDAR_ENABLED && (
         <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
           <div className="flex items-start justify-between">
             <div>

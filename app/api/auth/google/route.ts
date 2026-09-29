@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
 export async function GET() {
+  if (!GOOGLE_CALENDAR_ENABLED) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 

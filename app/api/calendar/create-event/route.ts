@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { createInterviewEvent } from "@/lib/google-calendar";
+import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
 export async function POST(req: NextRequest) {
+  if (!GOOGLE_CALENDAR_ENABLED) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
     const supabase = createServerClient();
     const {

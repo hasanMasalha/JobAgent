@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
 export async function GET(req: NextRequest) {
+  if (!GOOGLE_CALENDAR_ENABLED) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
