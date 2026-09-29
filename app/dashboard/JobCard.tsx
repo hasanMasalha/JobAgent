@@ -174,6 +174,10 @@ export default function JobCard({
         body: JSON.stringify({ jobId: job.id }),
       });
       const data = await res.json();
+      if (res.status === 403 && data.error === "limit_reached") {
+        showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
+        return;
+      }
       if (data.needs_extension) {
         router.push(`/dashboard/apply/${job.id}`);
         return;

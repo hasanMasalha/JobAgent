@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { normalizePlan } from "@/lib/plan-limits";
+import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usage";
 
 // Marks an application as pending_extension so the Chrome Extension picks it up.
 // Accepts either:
 //   application_id — update an existing Application (apply page flow)
 //   jobId          — find or create an Application for this job (direct auto-apply flow)
+//
+// Only the jobId flow spends an auto-apply credit: the application_id flow
+// is Tailor & Apply, already capped by the CV tailoring limit.
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -36,24 +41,30 @@ export async function POST(req: NextRequest) {
       resultApplicationId = application_id;
     } else {
       // Direct auto-apply flow from dashboard: find or create the Application
-      const existing = await db.$queryRaw<{ id: string }[]>`
-        SELECT id FROM "Application"
+      const existing = await db.$queryRaw<{ id: string; auto_apply_charged: boolean }[]>`
+        SELECT id, auto_apply_charged FROM "Application"
         WHERE user_id = ${user.id} AND job_id = ${jobId}
         ORDER BY applied_at DESC
         LIMIT 1
       `;
 
+      if (!existing[0]?.auto_apply_charged) {
+        const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+        const { allowed } = await checkAndIncrementAutoApply(user.id, normalizePlan(dbUser?.plan));
+        if (!allowed) return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
+      }
+
       if (existing.length > 0) {
         await db.$executeRaw`
           UPDATE "Application"
-          SET status = 'pending_extension'
+          SET status = 'pending_extension', auto_apply_charged = true
           WHERE id = ${existing[0].id}
         `;
         resultApplicationId = existing[0].id;
       } else {
         const newApp = await db.$queryRaw<{ id: string }[]>`
-          INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
-          VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'pending_extension', NOW())
+          INSERT INTO "Application" (id, user_id, job_id, status, applied_at, auto_apply_charged)
+          VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'pending_extension', NOW(), true)
           RETURNING id
         `;
         resultApplicationId = newApp[0].id;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 
 async function getUser() {
   const supabase = createServerClient();
@@ -27,11 +28,11 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Allow extension to pass userId directly (cross-site cookie blocked)
-    const supabase = createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Session, or the extension's signed token. A userId in the body is
+    // ignored — it used to be trusted, which let anyone rewrite another
+    // user's saved answers (which the extension types into real applications).
+    const userId = await getSessionOrExtensionUserId(req);
     const body = await req.json();
-    const userId = user?.id ?? body.userId;
 
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
