@@ -192,7 +192,7 @@ jobs:
               screenshots:
             COMPOSE
 
-            # Inject Google Calendar + Dodo Payments secrets into .env
+            # Inject Google Calendar, Dodo Payments and app secrets into .env
             for entry in \
               "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
@@ -207,7 +207,8 @@ jobs:
               "DODO_UNLIMITED_MONTHLY_PRODUCT_ID=${{ secrets.DODO_UNLIMITED_MONTHLY_PRODUCT_ID }}" \
               "DODO_UNLIMITED_ANNUAL_PRODUCT_ID=${{ secrets.DODO_UNLIMITED_ANNUAL_PRODUCT_ID }}" \
               "NEXTJS_URL=http://nextjs:3000" \
-              "INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}"; do
+              "INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}" \
+              "EXTENSION_TOKEN_SECRET=${{ secrets.EXTENSION_TOKEN_SECRET }}"; do
               key="${entry%%=*}"
               if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
                 sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env
