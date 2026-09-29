@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { LegalFrame, LegalList, Section, legalLink } from "../legal/legal-ui";
 
 // The Chrome extension's privacy policy. It keeps the /privacy URL because
 // the Chrome Web Store listing links here; the site-wide policy is
-// /legal/privacy.
+// /legal/privacy. Keep it in step with what chrome-extension/ actually
+// stores and sends — the Store reviews the listing against it.
 
 export const metadata = {
   title: "Privacy Policy — JobAgent",
@@ -14,81 +16,104 @@ export default function PrivacyPage() {
     <LegalFrame>
       <div className="mb-10">
         <h1 className="font-serif text-title-page text-ink">Privacy Policy</h1>
-        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension — Last updated: May 2026</p>
+        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension (version 1.1.1) — Last updated: 29 September 2026</p>
       </div>
 
-      <Section title="What We Collect">
-        <p>The JobAgent Chrome Extension collects and stores the following data:</p>
+      <Section title="What the Extension Does">
+        <p>
+          The JobAgent Chrome Extension fills in LinkedIn Easy Apply forms for applications you
+          start in JobAgent. This policy covers what the extension itself stores and sends. How
+          JobAgent handles your account data is covered by our main{" "}
+          <Link href="/legal/privacy" className={legalLink}>Privacy Policy</Link>.
+        </p>
+      </Section>
+
+      <Section title="What Is Stored on Your Device">
+        <p>The extension keeps the following in <Code>chrome.storage.local</Code>, on your device only:</p>
+        <LegalList
+          items={[
+            "A sign-in token for JobAgent, so the extension can make requests for your account. It expires after 14 days and is renewed when you visit jobagent.uk.",
+            "Your JobAgent user ID and email, to show your account in the popup and find your pending applications.",
+            "The applications you queued from JobAgent and how far through them it is, so it can fill them one at a time.",
+          ]}
+        />
+      </Section>
+
+      <Section title="What Is Sent to JobAgent">
+        <p>The extension sends data only to jobagent.uk:</p>
         <div className="overflow-x-auto">
           <table className="mt-1 w-full border-collapse text-body-sm">
             <thead>
               <tr className="bg-surface-sunken text-left text-ink">
                 <Th>Data</Th>
-                <Th>Purpose</Th>
-                <Th>Storage</Th>
+                <Th>When</Th>
+                <Th>Why</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               <tr>
-                <Td>JobAgent session token</Td>
-                <Td>Authenticate API requests</Td>
-                <Td><Code>chrome.storage.local</Code> (local device only)</Td>
+                <Td>Your answers to application questions the extension doesn&apos;t recognise (the question and your answer)</Td>
+                <Td>When you answer such a question in an Easy Apply form</Td>
+                <Td>Saved to your JobAgent account and reused on later applications. You can see, edit or delete them in Profile → Saved answers.</Td>
               </tr>
               <tr>
-                <Td>JobAgent user ID and email</Td>
-                <Td>Display account status in popup</Td>
-                <Td><Code>chrome.storage.local</Code> (local device only)</Td>
+                <Td>The outcome of an application (submitted, or needs you to finish it yourself) and the application&apos;s ID</Td>
+                <Td>When a form is submitted or stops</Td>
+                <Td>Updates your applications tracker in JobAgent.</Td>
               </tr>
               <tr>
-                <Td>LinkedIn <Code>li_at</Code> session cookie</Td>
-                <Td>Detect LinkedIn login status</Td>
-                <Td>Read-only; sent to JobAgent server to enable Easy Apply</Td>
+                <Td>Your JobAgent user ID</Td>
+                <Td>With the requests above</Td>
+                <Td>Identifies your account, alongside the sign-in token.</Td>
+              </tr>
+              <tr>
+                <Td>Your LinkedIn <Code>li_at</Code> session cookie</Td>
+                <Td>When you open the popup while signed in to LinkedIn</Td>
+                <Td>The popup reads it to show whether you&apos;re signed in to LinkedIn. It is sent to jobagent.uk, which does not store it.</Td>
               </tr>
             </tbody>
           </table>
         </div>
       </Section>
 
-      <Section title="What We Do Not Collect">
-        <LegalList
-          items={[
-            "We do not collect browsing history",
-            "We do not collect personal data beyond your JobAgent account email",
-            "We do not sell or share any data with third parties",
-            "We do not use analytics or tracking services",
-          ]}
-        />
-      </Section>
-
-      <Section title="How Data Is Used">
-        <LegalList
-          items={[
-            <>
-              <strong className="font-semibold text-ink">Session token / user info:</strong> Used solely to verify you are signed
-              in to JobAgent and to display your account status in the extension popup. Stored
-              only on your local device.
-            </>,
-            <>
-              <strong className="font-semibold text-ink">LinkedIn cookie:</strong> Read once when you open the popup to confirm
-              you are logged in to LinkedIn. The value is sent to the JobAgent server to enable
-              automated Easy Apply — it is never stored permanently or shared with third parties.
-            </>,
-          ]}
-        />
-      </Section>
-
-      <Section title="Data Sharing">
+      <Section title="What the Extension Receives from JobAgent">
         <p>
-          Data is only transmitted to <Code>jobagent.uk</Code> (the JobAgent service you are
-          already using). No data is shared with LinkedIn or any other third party.
+          To fill a form you started from JobAgent, the extension downloads, for that application
+          only: the details you entered in Profile → Application details (name, phone, city,
+          profile links, experience, education, notice period, expected salary and eligibility
+          answers), the skills from your CV, your saved answers, and the cover letter for that job.
+          It uses them to fill the form in your browser and does not keep them after the application.
         </p>
+      </Section>
+
+      <Section title="What the Extension Does Not Do">
+        <LegalList
+          items={[
+            "It does not read your browsing history, or pages other than LinkedIn and jobagent.uk.",
+            "It does not sell or share your data with third parties. Apart from the application you submit to an employer through LinkedIn, it sends data only to jobagent.uk.",
+            "It does not use analytics or tracking services.",
+          ]}
+        />
+      </Section>
+
+      <Section title="Permissions">
+        <LegalList
+          items={[
+            <><strong className="font-semibold text-ink">Access to linkedin.com and jobagent.uk:</strong> to fill Easy Apply forms on LinkedIn job pages, and to pick up your sign-in when you use jobagent.uk.</>,
+            <><strong className="font-semibold text-ink">Cookies:</strong> to read your LinkedIn sign-in status for the popup.</>,
+            <><strong className="font-semibold text-ink">Storage:</strong> for the data listed under &ldquo;What Is Stored on Your Device&rdquo;.</>,
+            <><strong className="font-semibold text-ink">Notifications:</strong> to tell you when an application is submitted, needs you to finish it, or is paused.</>,
+            <><strong className="font-semibold text-ink">Active tab and scripting:</strong> to fill in the form on the LinkedIn page you are applying on.</>,
+          ]}
+        />
       </Section>
 
       <Section title="Data Retention">
         <p>
-          Data stored in <Code>chrome.storage.local</Code> remains on your device until you
-          uninstall the extension or clear extension storage. You can clear it at any time
-          via <Code>chrome://extensions</Code> → JobAgent → Storage.
+          Data in <Code>chrome.storage.local</Code> stays on your device until you uninstall the
+          extension or clear its storage via <Code>chrome://extensions</Code> → JobAgent → Storage;
+          the sign-in token stops working after 14 days. Saved answers stay in your JobAgent account
+          until you delete them in Profile → Saved answers.
         </p>
       </Section>
 
