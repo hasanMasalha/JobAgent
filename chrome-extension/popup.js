@@ -52,7 +52,6 @@ async function init() {
   if (liCookie) {
     linkedinStatus.textContent = 'Connected'
     linkedinStatus.className = 'status-value connected'
-    chrome.runtime.sendMessage({ type: 'SAVE_LINKEDIN_SESSION' })
   } else {
     linkedinStatus.textContent = 'Not connected'
     linkedinStatus.className = 'status-value disconnected'
