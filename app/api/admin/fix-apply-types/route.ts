@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
+import { isInternalRequest } from "@/lib/internal-auth";
 
 // Backfill endpoint: re-detect apply_type and recruiter_email for all jobs.
 // Protected by INTERNAL_API_KEY.
 // Call with: curl -X POST http://localhost:3000/api/admin/fix-apply-types \
 //   -H "x-api-key: <INTERNAL_API_KEY>"
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-api-key");
-  if (!key || key !== process.env.INTERNAL_API_KEY) {
+  if (!isInternalRequest(req, "x-api-key")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

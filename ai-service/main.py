@@ -7,6 +7,7 @@ load_dotenv("../.env")
 
 from fastapi import FastAPI  # noqa: E402
 
+from internal_auth import InternalKeyMiddleware  # noqa: E402
 from routes.apply import router as apply_router  # noqa: E402
 from routes.ats_apply import router as ats_apply_router  # noqa: E402
 from routes.cv import router as cv_router  # noqa: E402
@@ -25,6 +26,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+# Every route except /health requires X-Internal-Key — see internal_auth.py.
+app.add_middleware(InternalKeyMiddleware)
 app.include_router(cv_router)
 app.include_router(jobs_router)
 app.include_router(matching_router)

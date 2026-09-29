@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { isInternalRequest } from "@/lib/internal-auth";
+import { pythonFetch } from "@/lib/python-service";
 
 // POST — run cleanup (soft delete 14d, deactivate 90d+ orphans, deactivate broken URLs)
 // GET  — preview what would be cleaned without making changes
@@ -10,8 +12,7 @@ import { db } from "@/lib/db"
 //     -H "x-api-key: <INTERNAL_API_KEY>"
 
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-api-key")
-  if (!key || key !== process.env.INTERNAL_API_KEY) {
+  if (!isInternalRequest(req, "x-api-key")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -84,13 +85,10 @@ export async function POST(req: NextRequest) {
       db.job.count(),
     ])
 
-    const pythonUrl = process.env.PYTHON_SERVICE_URL || "http://fastapi:8000"
-
     // Step 5 — Check LinkedIn jobs older than 3 days for closure.
     let linkedinCheck: Record<string, unknown> = {}
     try {
-      const checkRes = await fetch(
-        `${pythonUrl}/check-closed-jobs?batch_size=50&days_old=3`,
+      const checkRes = await pythonFetch(`/check-closed-jobs?batch_size=50&days_old=3`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -108,8 +106,7 @@ export async function POST(req: NextRequest) {
     // Step 6 — Check very recent jobs (0-3 days) for fast closure.
     let recentClosedCheck: Record<string, unknown> = {}
     try {
-      const recentRes = await fetch(
-        `${pythonUrl}/check-recent-closed?batch_size=50`,
+      const recentRes = await pythonFetch(`/check-recent-closed?batch_size=50`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -151,8 +148,7 @@ export async function POST(req: NextRequest) {
 
 // GET — preview what would be affected without making changes.
 export async function GET(req: NextRequest) {
-  const key = req.headers.get("x-api-key")
-  if (!key || key !== process.env.INTERNAL_API_KEY) {
+  if (!isInternalRequest(req, "x-api-key")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

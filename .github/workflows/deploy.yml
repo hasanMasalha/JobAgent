@@ -170,7 +170,7 @@ jobs:
               fastapi:
                 image: ${{ env.ECR_FASTAPI }}:latest
                 ports:
-                  - "8000:8000"
+                  - "127.0.0.1:8000:8000"
                 env_file: .env
                 # Required for headed Chromium under Playwright (see
                 # https://playwright.dev/docs/docker) — without it the

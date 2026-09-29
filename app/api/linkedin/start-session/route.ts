@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { pythonFetch } from "@/lib/python-service";
 
 export async function POST(req: NextRequest) {
   const supabase = createServerClient();
@@ -18,8 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/linkedin/save-cookie`,
+    const res = await pythonFetch(`/linkedin/save-cookie`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -21,7 +21,7 @@ jobs:
           command_timeout: 90m
           script: |
             echo "Starting full company scrape (HTML + API)..."
-            curl -s -X POST http://localhost:8000/companies/scrape-and-store \
+            curl -s -X POST -H "X-Internal-Key: $(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)" http://localhost:8000/companies/scrape-and-store \
               --max-time 5000 \
               && echo "Full company scrape completed" \
               || echo "Full company scrape failed or timed out"

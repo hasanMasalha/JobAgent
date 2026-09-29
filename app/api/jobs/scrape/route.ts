@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { pythonFetch } from "@/lib/python-service";
 
 export async function POST(_req: NextRequest) {
   const supabase = createServerClient();
@@ -12,8 +13,7 @@ export async function POST(_req: NextRequest) {
   }
 
   try {
-    const pythonRes = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/scrape-and-store`,
+    const pythonRes = await pythonFetch(`/scrape-and-store`,
       {
         method: "POST",
         signal: AbortSignal.timeout(300_000), // 5 min — scraping takes time

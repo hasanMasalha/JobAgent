@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { pythonFetch } from "@/lib/python-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     };
 
     try {
-      const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/apply`, {
+      const pythonRes = await pythonFetch(`/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_url, application_id, user_id: user.id }),

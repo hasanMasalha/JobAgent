@@ -53,6 +53,8 @@ SUPABASE_ANON_KEY          Supabase anon key
 ANTHROPIC_API_KEY          Claude API key
 REDIS_URL                  Upstash Redis URL
 PYTHON_SERVICE_URL         http://localhost:8000
+INTERNAL_API_KEY           Shared secret between Next.js and the AI service
+                           (X-Internal-Key). Unset = both sides fail closed
 GOOGLE_CLIENT_ID           Google OAuth 2.0 client ID
 GOOGLE_CLIENT_SECRET       Google OAuth 2.0 client secret
 GOOGLE_REDIRECT_URI        https://yourdomain.com/api/auth/google/callback
@@ -139,6 +141,28 @@ There are two supported apply paths — know which one a change affects:
 - Paddle was the original processor; it rejected our account before going
   live, so `lib/paddle.ts`, `lib/paddle-client.ts`, and `app/api/paddle/*`
   were removed rather than kept as a second option.
+
+## Service-to-service auth (INTERNAL_API_KEY)
+- The AI service requires `X-Internal-Key` on every route except `/health`
+  (`ai-service/internal_auth.py`, a middleware in `main.py`). It fails
+  closed: with the key unset, everything but `/health` returns 401. Port 8000
+  was once reachable from the internet with no auth, and `/ats-apply` and
+  `/linkedin/save-cookie` take `user_id` from the body.
+- Next.js calls it only via `pythonFetch()` (`lib/python-service.ts`), which
+  adds the base URL and the header. Never `fetch(PYTHON_SERVICE_URL…)` directly.
+- Internal-only Next routes (`/api/email/*`, `/api/admin/*`) check the key
+  with `isInternalRequest()` (`lib/internal-auth.ts`). **No "is it localhost?"
+  shortcut** — Host and X-Forwarded-For are set by the caller.
+- User-facing routes that proxy to the AI service must require a session and
+  must not forward caller-supplied URLs or user ids (`/api/jobs/check-status`
+  checks the job's stored URL, not one from the body).
+- Cron workflows read the key from the server's `.env` over SSH rather than
+  from GitHub secrets. FastAPI is bound to `127.0.0.1:8000` (production and
+  local compose); Next reaches it as `http://fastapi:8000`.
+- **Outstanding:** workflows still reach the server over SSH with a long-lived
+  key (`EC2_SSH_KEY`); moving to SSM Session Manager hasn't started. Also
+  unconfirmed: how Cloudflare reaches port 3000, and whether 3000 is
+  reachable directly (bypassing Cloudflare).
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { pythonFetch } from "@/lib/python-service";
 
 export async function GET() {
   const supabase = createServerClient();
@@ -12,8 +13,7 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/linkedin/login-poll/${user.id}`
+    const res = await pythonFetch(`/linkedin/login-poll/${user.id}`
     );
 
     if (!res.ok) {

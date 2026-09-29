@@ -5,24 +5,12 @@ import {
   sendNeedsManualEmail,
 } from "@/lib/email";
 import { generateCVDocx } from "@/lib/generate-cv";
+import { isInternalRequest } from "@/lib/internal-auth";
 
-function isAuthorized(req: NextRequest): boolean {
-  // Allow calls from localhost
-  const forwarded = req.headers.get("x-forwarded-for");
-  const host = req.headers.get("host") ?? "";
-  const isLocal =
-    host.startsWith("localhost") ||
-    host.startsWith("127.0.0.1") ||
-    forwarded === "127.0.0.1";
-
-  // Allow calls with matching internal key
-  const internalKey = req.headers.get("x-internal-key");
-  const hasValidKey =
-    !!process.env.INTERNAL_API_KEY &&
-    internalKey === process.env.INTERNAL_API_KEY;
-
-  return isLocal || hasValidKey;
-}
+// Only the AI service calls this (X-Internal-Key). There used to be a
+// "localhost" shortcut based on Host / X-Forwarded-For, which any caller
+// can set — removed; see lib/internal-auth.ts.
+const isAuthorized = (req: NextRequest) => isInternalRequest(req);
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {

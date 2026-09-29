@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { pythonFetch } from "@/lib/python-service";
 
 export const maxDuration = 120; // 2 minutes — Playwright runs in background but PDF gen can be slow
 
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     console.log("[ats] lastName:", lastName);
     console.log("[ats] email:", email);
 
-    const pythonRes = await fetch(`${process.env.PYTHON_SERVICE_URL}/ats-apply`, {
+    const pythonRes = await pythonFetch(`/ats-apply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
