@@ -164,6 +164,14 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
   live, so `lib/paddle.ts`, `lib/paddle-client.ts`, and `app/api/paddle/*`
   were removed rather than kept as a second option.
 
+## Chrome extension privacy policy
+`/privacy` is the extension's policy and the Chrome Web Store listing links
+to it. It lists what the extension stores (`chrome.storage.local`), sends
+(saved answers, application outcomes, the LinkedIn `li_at` cookie) and
+receives (Application details, CV skills, saved answers, cover letter).
+Any change to what `chrome-extension/` stores or sends must update it in
+the same PR — the Store reviews the listing against it.
+
 ## Chrome extension auth
 - The extension's service worker can't send the site's session cookie, so
   the routes it calls (`/api/apply/check-pending`, `/api/applications/update-status`,
@@ -212,6 +220,9 @@ is positioned as global and priced in USD, so both are real gaps.
   with a +972 phone placeholder. These answers are typed into real
   applications. Needs a decision on what to ask instead (per-country work
   authorization? currency picker?) before rewording.
+- **Salaries shown in shekels.** Saved jobs formats `salary_min`/`salary_max`
+  with a fixed ₪ sign, whatever the job's country. Needs a currency per job
+  (or none) before it's shown to a global audience.
 - **Location is free text on Profile, a country list in onboarding.** A user
   can have "Tel Aviv" in one and "Israel" in the other. Pick one model for
   `job_preferences.locations`.
