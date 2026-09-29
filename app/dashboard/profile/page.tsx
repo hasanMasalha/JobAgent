@@ -1,8 +1,29 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
+import {
+  Badge,
+  Button,
+  DocumentIcon,
+  Field,
+  Input,
+  Notice,
+  PageHero,
+  RemovableTag,
+  Select,
+  Skeleton,
+  UploadIcon,
+  chipStyles,
+} from "@/app/components/ui";
+import { cn } from "@/lib/cn";
+
+// The LinkedIn connection section is hidden until it's ready for launch.
+// While it is, don't run its check either: /api/linkedin/session-status
+// starts a Playwright session validation on the AI service (5-10 s).
+const LINKEDIN_SECTION_ENABLED = false;
 
 interface Profile {
   cv: { clean_summary: string | null; skills_json: string | null; updated_at: string } | null;
@@ -86,7 +107,7 @@ function ProfileContent() {
 
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
-  const [linkedinChecking, setLinkedinChecking] = useState(true);
+  const [linkedinChecking, setLinkedinChecking] = useState(LINKEDIN_SECTION_ENABLED);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinModal, setLinkedinModal] = useState(false);
   const [linkedinCookie, setLinkedinCookie] = useState("");
@@ -142,11 +163,13 @@ function ProfileContent() {
       .catch(() => {});
 
     // Check LinkedIn session status on mount — real Playwright validation (5-10 s)
-    fetch("/api/linkedin/session-status")
-      .then((r) => r.json())
-      .then((d) => { setLinkedinConnected(!!d.connected); })
-      .catch(() => {})
-      .finally(() => setLinkedinChecking(false));
+    if (LINKEDIN_SECTION_ENABLED) {
+      fetch("/api/linkedin/session-status")
+        .then((r) => r.json())
+        .then((d) => { setLinkedinConnected(!!d.connected); })
+        .catch(() => {})
+        .finally(() => setLinkedinChecking(false));
+    }
 
     // Check Google Calendar connection status on mount
     fetch("/api/auth/google/status")
@@ -356,18 +379,14 @@ function ProfileContent() {
     } catch { return []; }
   })();
 
-  if (loading) {
-    return (
-      <div className="max-w-lg mx-auto space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl h-24 animate-pulse" />
-        ))}
-      </div>
-    );
-  }
+  if (loading) return <ProfileSkeleton />;
+
+  const cvUpdated = profile?.cv
+    ? new Date(profile.cv.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : null;
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    <div className="w-full">
       {/* LinkedIn cookie modal */}
       {linkedinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -421,190 +440,216 @@ function ProfileContent() {
         </div>
       )}
 
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your Profile</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Update your CV and job preferences</p>
-      </div>
+      <PageHero
+        title="Your profile"
+        subtitle="Your CV, the jobs you want, and the details JobAgent fills into applications for you."
+      />
 
-      {/* Current CV status */}
-      {profile?.cv && (
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Current CV</h2>
-            <span className="text-xs text-gray-400">
-              Last updated {new Date(profile.cv.updated_at).toLocaleDateString("en-GB", {
-                day: "numeric", month: "short", year: "numeric",
-              })}
-            </span>
-          </div>
-          {profile.cv.clean_summary && (
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-3">{profile.cv.clean_summary}</p>
-          )}
-          {skills.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {skills.slice(0, 12).map((s: string) => (
-                <span key={s} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
-                  {s}
-                </span>
-              ))}
-              {skills.length > 12 && (
-                <span className="text-xs text-gray-400">+{skills.length - 12} more</span>
-              )}
+      <div className="relative mx-auto -mt-14 max-w-3xl space-y-6 pb-24 sm:-mt-16 sm:pb-10">
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* ── Your CV ── */}
+          <section aria-labelledby="cv-heading" className={cardCls}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h2 id="cv-heading" className={sectionHeading}>Your CV</h2>
+              {cvUpdated && <p className="text-body-sm text-ink-subtle">Last updated {cvUpdated}</p>}
             </div>
-          )}
-        </div>
-      )}
 
-      <form onSubmit={handleSave} className="space-y-5">
-        {/* CV upload */}
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-            {profile?.cv ? "Replace CV (optional)" : "Upload CV"}
-          </h2>
-          <label className="block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors">
-            <input
-              type="file"
-              accept=".pdf,.docx"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                if (f.name.toLowerCase().endsWith(".doc") && !f.name.toLowerCase().endsWith(".docx")) {
-                  setError("Old .doc format is not supported. Please save as .docx or .pdf.");
-                  return;
-                }
-                if (f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
-                setError("");
-                setFile(f);
-              }}
-            />
-            {file ? (
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{file.name}</span>
-            ) : (
-              <span className="text-sm text-gray-400">
-                {profile?.cv ? "Click to upload a new PDF or Word doc" : "Click to choose a PDF or Word doc (.pdf, .docx)"}
-              </span>
+            {profile?.cv && (
+              <div className="mt-5">
+                {profile.cv.clean_summary && (
+                  <p className="line-clamp-3 text-body text-ink-muted">{profile.cv.clean_summary}</p>
+                )}
+                {skills.length > 0 && (
+                  <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Skills from your CV">
+                    {skills.slice(0, 12).map((s: string) => (
+                      <li key={s}><Badge>{s}</Badge></li>
+                    ))}
+                    {skills.length > 12 && (
+                      <li className="self-center text-caption text-ink-subtle">+{skills.length - 12} more</li>
+                    )}
+                  </ul>
+                )}
+                <Link href="/dashboard/my-cv" className={cn(textLink, "mt-4 inline-block")}>
+                  View your full CV →
+                </Link>
+              </div>
             )}
-          </label>
-        </div>
 
-        {/* Job preferences */}
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Job Preferences</h2>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Job titles</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
-                placeholder="e.g. Frontend Developer"
-                className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
-              />
-              <button type="button" onClick={addTitle} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-500 rounded-md text-sm hover:bg-gray-200 dark:hover:bg-gray-600">Add</button>
+            <div className="mt-6">
+              <p className="text-body-sm font-medium text-ink">{profile?.cv ? "Replace your CV" : "Upload your CV"}</p>
+              <label
+                className={cn(
+                  "mt-2 flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed px-6 py-7 text-center transition-colors",
+                  "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                  file ? "border-brand/50 bg-brand-soft/40" : "border-line-strong/60 hover:border-brand/60 hover:bg-surface-sunken",
+                )}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.docx"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    if (f.name.toLowerCase().endsWith(".doc") && !f.name.toLowerCase().endsWith(".docx")) {
+                      setError("Old .doc format is not supported. Please save as .docx or .pdf.");
+                      return;
+                    }
+                    if (f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
+                    setError("");
+                    setFile(f);
+                  }}
+                />
+                <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand-text">
+                  {file ? <DocumentIcon className="h-5 w-5" /> : <UploadIcon className="h-5 w-5" />}
+                </span>
+                {file ? (
+                  <>
+                    <span className="text-body-sm font-semibold text-ink">{file.name}</span>
+                    <span className="text-caption text-ink-subtle">Replaces your current CV when you save</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-body-sm font-medium text-ink">Choose a PDF or Word file</span>
+                    <span className="text-caption text-ink-subtle">.pdf or .docx, up to 5 MB</span>
+                  </>
+                )}
+              </label>
             </div>
-            {titles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {titles.map((t) => (
-                  <span key={t} className="flex items-center gap-1 bg-black text-white text-xs px-2 py-1 rounded-full">
-                    {t}
-                    <button type="button" onClick={() => setTitles(titles.filter((x) => x !== t))} className="hover:opacity-70">×</button>
-                  </span>
-                ))}
+          </section>
+
+          {/* ── What you're looking for ── */}
+          <section aria-labelledby="prefs-heading" className={cardCls}>
+            <h2 id="prefs-heading" className={sectionHeading}>What you&apos;re looking for</h2>
+            <p className="mt-1.5 text-body-sm text-ink-muted">Used to find and filter your matches.</p>
+
+            <div className="mt-6 space-y-5">
+              <Field id="profile-title" label="Job titles">
+                <div className="flex gap-2">
+                  <Input
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
+                    placeholder="e.g. Frontend Developer"
+                  />
+                  <Button type="button" variant="secondary" onClick={addTitle}>Add</Button>
+                </div>
+              </Field>
+              {titles.length > 0 && (
+                <div className="-mt-2 flex flex-wrap gap-2">
+                  {titles.map((t) => (
+                    <RemovableTag key={t} label={t} onRemove={() => setTitles(titles.filter((x) => x !== t))} />
+                  ))}
+                </div>
+              )}
+
+              <Field id="profile-location" label="Location">
+                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Tel Aviv" />
+              </Field>
+
+              <fieldset>
+                <legend className="text-body-sm font-medium text-ink">Work mode</legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["Remote", "Hybrid", "On-site"].map((mode) => {
+                    const on = workModes.includes(mode);
+                    return (
+                      <button key={mode} type="button" aria-pressed={on} onClick={() => toggleWorkMode(mode)} className={chipStyles({ selected: on })}>
+                        {mode}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="profile-salary" className="text-body-sm font-medium text-ink">Minimum salary</label>
+                  <button
+                    type="button"
+                    onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }}
+                    className={cn(textLink, "text-body-sm")}
+                  >
+                    {skipSalary ? "Add salary" : "Skip salary"}
+                  </button>
+                </div>
+                {skipSalary ? (
+                  <p className="mt-1.5 text-body-sm italic text-ink-subtle">No minimum salary set</p>
+                ) : (
+                  <Input
+                    id="profile-salary"
+                    type="number"
+                    className="mt-1.5"
+                    value={minSalary}
+                    onChange={(e) => setMinSalary(e.target.value)}
+                    placeholder="e.g. 15000"
+                  />
+                )}
+              </div>
+            </div>
+
+            {error && <Notice tone="danger" className="mt-5">{error}</Notice>}
+
+            <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" size="lg" onClick={() => router.push("/dashboard")}>
+                Cancel
+              </Button>
+              <Button type="submit" size="lg" disabled={saving || titles.length === 0} loading={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </section>
+        </form>
+        {/* LinkedIn Connection — hidden from UI, not ready for launch (LINKEDIN_SECTION_ENABLED). */}
+        {LINKEDIN_SECTION_ENABLED && (
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
+            </div>
+            {/* Desktop: badge + button inline */}
+            {linkedinChecking ? (
+              <span className="hidden sm:inline text-xs text-gray-400 italic">Verifying LinkedIn connection…</span>
+            ) : linkedinConnected ? (
+              <div className="hidden sm:flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                  Connected
+                </span>
+                <button
+                  onClick={handleConnectLinkedin}
+                  disabled={linkedinConnecting}
+                  className="text-xs text-gray-500 hover:underline disabled:opacity-50"
+                >
+                  Reconnect
+                </button>
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                  Not connected
+                </span>
+                <button
+                  onClick={handleConnectLinkedin}
+                  disabled={linkedinConnecting}
+                  className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  {linkedinConnecting ? "Connecting…" : "Connect LinkedIn"}
+                </button>
               </div>
             )}
           </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Location</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Tel Aviv"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Work mode</label>
-            <div className="flex flex-wrap gap-2">
-              {["Remote", "Hybrid", "On-site"].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => toggleWorkMode(mode)}
-                  className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                    workModes.includes(mode)
-                      ? "bg-[#1a2e5e] text-white border-[#1a2e5e]"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">Minimum salary</label>
-              <button
-                type="button"
-                onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }}
-                className="text-xs text-gray-400 hover:text-gray-600 underline"
-              >
-                {skipSalary ? "Add salary" : "Skip salary"}
-              </button>
-            </div>
-            {!skipSalary && (
-              <input
-                type="number"
-                value={minSalary}
-                onChange={(e) => setMinSalary(e.target.value)}
-                placeholder="e.g. 15000"
-                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
-              />
-            )}
-            {skipSalary && <p className="text-sm text-gray-400 italic">No minimum salary set</p>}
-          </div>
-        </div>
-
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="flex-1 border dark:border-gray-600 dark:text-gray-300 py-2 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving || titles.length === 0}
-            className="flex-1 bg-black dark:bg-white dark:text-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </form>
-
-      {/* LinkedIn Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
-      {false && (
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">LinkedIn Connection</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Required for Easy Apply automation</p>
-          </div>
-          {/* Desktop: badge + button inline */}
+          {!linkedinChecking && !linkedinConnected && (
+            <p className="sm:hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+              Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
+            </p>
+          )}
+          {/* Mobile: badge + button last */}
           {linkedinChecking ? (
-            <span className="hidden sm:inline text-xs text-gray-400 italic">Verifying LinkedIn connection…</span>
+            <span className="flex sm:hidden text-xs text-gray-400 italic mt-3">Verifying LinkedIn connection…</span>
           ) : linkedinConnected ? (
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -618,7 +663,7 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
                 Not connected
@@ -633,57 +678,66 @@ function ProfileContent() {
             </div>
           )}
         </div>
-        {!linkedinChecking && !linkedinConnected && (
-          <p className="sm:hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-            Easy Apply won&apos;t work until LinkedIn is connected. Click Connect and log in when the browser opens.
-          </p>
         )}
-        {/* Mobile: badge + button last */}
-        {linkedinChecking ? (
-          <span className="flex sm:hidden text-xs text-gray-400 italic mt-3">Verifying LinkedIn connection…</span>
-        ) : linkedinConnected ? (
-          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              Connected
-            </span>
-            <button
-              onClick={handleConnectLinkedin}
-              disabled={linkedinConnecting}
-              className="text-xs text-gray-500 hover:underline disabled:opacity-50"
-            >
-              Reconnect
-            </button>
-          </div>
-        ) : (
-          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-              Not connected
-            </span>
-            <button
-              onClick={handleConnectLinkedin}
-              disabled={linkedinConnecting}
-              className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
-            >
-              {linkedinConnecting ? "Connecting…" : "Connect LinkedIn"}
-            </button>
-          </div>
-        )}
-      </div>
-      )}
 
-      {/* Google Calendar Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
-      {false && (
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Google Calendar</h2>
-            <p className="text-xs text-gray-500 mt-0.5">For scheduling interviews from the chat assistant</p>
+        {/* Google Calendar Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
+        {false && (
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Google Calendar</h2>
+              <p className="text-xs text-gray-500 mt-0.5">For scheduling interviews from the chat assistant</p>
+            </div>
+            {/* Desktop: badge + button inline */}
+            {googleConnected ? (
+              <div className="hidden sm:flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                  Connected
+                </span>
+                <button
+                  onClick={handleDisconnectGoogle}
+                  disabled={googleDisconnecting}
+                  className="text-xs text-gray-500 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {googleDisconnecting ? "Disconnecting…" : "Disconnect"}
+                </button>
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+                  Not connected
+                </span>
+                {googleConfigured ? (
+                  <a
+                    href="/api/auth/google"
+                    className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors whitespace-nowrap"
+                  >
+                    Connect Google Calendar
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    title="Google Calendar integration is not configured on this server"
+                    className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed whitespace-nowrap"
+                  >
+                    Connect Google Calendar
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          {/* Desktop: badge + button inline */}
+          {googleConnected && googleEmail && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Connected as {googleEmail}</p>
+          )}
+          {!googleConnected && (
+            <p className="sm:hidden text-xs text-gray-400 mt-3">
+              Connect to automatically schedule interviews directly from the chat assistant
+            </p>
+          )}
+          {/* Mobile: badge + button last */}
           {googleConnected ? (
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
                 Connected
@@ -697,7 +751,7 @@ function ProfileContent() {
               </button>
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
                 Not connected
               </span>
@@ -720,283 +774,260 @@ function ProfileContent() {
             </div>
           )}
         </div>
-        {googleConnected && googleEmail && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Connected as {googleEmail}</p>
         )}
-        {!googleConnected && (
-          <p className="sm:hidden text-xs text-gray-400 mt-3">
-            Connect to automatically schedule interviews directly from the chat assistant
-          </p>
-        )}
-        {/* Mobile: badge + button last */}
-        {googleConnected ? (
-          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              Connected
-            </span>
-            <button
-              onClick={handleDisconnectGoogle}
-              disabled={googleDisconnecting}
-              className="text-xs text-gray-500 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
-            >
-              {googleDisconnecting ? "Disconnecting…" : "Disconnect"}
-            </button>
-          </div>
-        ) : (
-          <div className="flex sm:hidden items-center gap-3 justify-end mt-3">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
-              Not connected
-            </span>
-            {googleConfigured ? (
-              <a
-                href="/api/auth/google"
-                className="text-xs font-semibold bg-black dark:bg-white dark:text-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors whitespace-nowrap"
-              >
-                Connect Google Calendar
-              </a>
-            ) : (
-              <button
-                disabled
-                title="Google Calendar integration is not configured on this server"
-                className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 px-3 py-1.5 rounded-lg cursor-not-allowed whitespace-nowrap"
-              >
-                Connect Google Calendar
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-      )}
 
-      {/* Auto Apply Defaults */}
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Auto Apply Defaults</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Used automatically when applying to jobs via the Chrome extension
-          </p>
-        </div>
+        {/* ── Application details (Easy Apply defaults) ── */}
+        <section aria-labelledby="details-heading" className={cardCls}>
+          <h2 id="details-heading" className={sectionHeading}>Application details</h2>
+          <p className="mt-1.5 text-body-sm text-ink-muted">JobAgent fills these into application forms when it applies for you.</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { label: "First name", key: "first_name", placeholder: "Hasan" },
-            { label: "Last name", key: "last_name", placeholder: "Masalha" },
-            { label: "Phone", key: "phone", placeholder: "+972-50-000-0000" },
-            { label: "City", key: "city", placeholder: "e.g. Tel Aviv, New York, London" },
-            { label: "Current/Most Recent Company", key: "currentCompany", placeholder: "e.g. Google, Self-employed, Student" },
-          ].map(({ label, key, placeholder }) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
-              <input
-                type="text"
-                value={defaults[key as keyof EasyApplyDefaults] as string}
-                onChange={e => setDefaults({ ...defaults, [key]: e.target.value })}
-                placeholder={placeholder}
-                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-              />
-            </div>
-          ))}
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">LinkedIn Profile URL</label>
-            <input
-              type="url"
-              value={defaults.linkedin_url}
-              onChange={e => setDefaults({ ...defaults, linkedin_url: e.target.value })}
-              placeholder="https://linkedin.com/in/yourname"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">GitHub URL</label>
-            <input
-              type="url"
-              value={defaults.github_url}
-              onChange={e => setDefaults({ ...defaults, github_url: e.target.value })}
-              placeholder="https://github.com/yourname"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Portfolio / Website</label>
-            <input
-              type="url"
-              value={defaults.portfolio_url}
-              onChange={e => setDefaults({ ...defaults, portfolio_url: e.target.value })}
-              placeholder="https://yourwebsite.com"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expected Salary (monthly, NIS)</label>
-            <input
-              type="text"
-              value={defaults.expected_salary}
-              onChange={e => setDefaults({ ...defaults, expected_salary: e.target.value })}
-              placeholder="20000"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notice period (days)</label>
-            <input
-              type="text"
-              value={defaults.notice_period}
-              onChange={e => setDefaults({ ...defaults, notice_period: e.target.value })}
-              placeholder="30"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Years of experience</label>
-            <input
-              type="text"
-              value={defaults.years_of_experience}
-              onChange={e => setDefaults({ ...defaults, years_of_experience: e.target.value })}
-              placeholder="2"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Highest education</label>
-            <select
-              value={defaults.highest_education}
-              onChange={e => setDefaults({ ...defaults, highest_education: e.target.value })}
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a2e5e]"
-            >
-              {["High School", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "PhD", "Bootcamp / Self-taught"].map(o => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Boolean defaults */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-          {([
-            { label: "Authorized to work in Israel?", key: "work_authorized", yesFirst: true },
-            { label: "Requires visa sponsorship?", key: "requires_sponsorship", yesFirst: false },
-            { label: "Willing to relocate?", key: "willing_to_relocate", yesFirst: true },
-          ] as { label: string; key: keyof EasyApplyDefaults; yesFirst: boolean }[]).map(({ label, key, yesFirst }) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{label}</label>
-              <div className="flex gap-4">
-                {(yesFirst ? [true, false] : [false, true]).map(val => (
-                  <label key={String(val)} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={defaults[key] === val}
-                      onChange={() => setDefaults({ ...defaults, [key]: val })}
-                      className="accent-[#1a2e5e]"
+          <div className="mt-6 space-y-7">
+            <div>
+              <h3 className={groupLabel}>Contact</h3>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {([
+                  { label: "First name", key: "first_name", placeholder: "", type: "text" },
+                  { label: "Last name", key: "last_name", placeholder: "", type: "text" },
+                  { label: "Phone", key: "phone", placeholder: "+972-50-000-0000", type: "tel" },
+                  { label: "City", key: "city", placeholder: "e.g. Tel Aviv, New York, London", type: "text" },
+                ] as const).map(({ label, key, placeholder, type }) => (
+                  <Field key={key} id={`default-${key}`} label={label}>
+                    <Input
+                      type={type}
+                      value={defaults[key]}
+                      onChange={(e) => setDefaults({ ...defaults, [key]: e.target.value })}
+                      placeholder={placeholder || undefined}
                     />
-                    <span className="text-gray-700 dark:text-gray-300">{val ? "Yes" : "No"}</span>
-                  </label>
+                  </Field>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
 
-        <button
-          type="button"
-          onClick={handleSaveDefaults}
-          disabled={savingDefaults}
-          className="mt-2 px-5 py-2 text-sm font-semibold text-white bg-[#1a2e5e] hover:opacity-90 rounded-lg disabled:opacity-50 transition-opacity"
-        >
-          {savingDefaults ? "Saving…" : "Save defaults"}
-        </button>
-      </div>
-
-      {/* Saved Answers */}
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
-        <div className="mb-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Saved Answers</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Answers learned during previous Easy Apply sessions — reused automatically
-          </p>
-        </div>
-
-        {savedAnswers.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500 italic">
-            No saved answers yet. They appear here after Easy Apply fills a form and you answer an unknown question.
-          </p>
-        ) : (
-          <div className="divide-y dark:divide-gray-700">
-            {savedAnswers.map((a) => (
-              <div key={a.id} className="py-3 flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-0.5 truncate">{a.question}</p>
-                  {editingAnswer?.id === a.id ? (
-                    <div className="flex gap-2 mt-1">
-                      <input
-                        type="text"
-                        value={editingAnswer.value}
-                        onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSaveEditedAnswer(a.question, editingAnswer.value);
-                          if (e.key === "Escape") setEditingAnswer(null);
-                        }}
-                        className="flex-1 border dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#1a2e5e]"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => handleSaveEditedAnswer(a.question, editingAnswer.value)}
-                        className="text-xs text-white bg-[#1a2e5e] px-2 py-1 rounded"
-                      >Save</button>
-                      <button
-                        onClick={() => setEditingAnswer(null)}
-                        className="text-xs text-gray-500 px-2 py-1"
-                      >Cancel</button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-900 dark:text-gray-100">{a.answer}</p>
-                  )}
-                </div>
-                <div className="flex gap-2 shrink-0 mt-0.5">
-                  <button
-                    onClick={() => setEditingAnswer({ id: a.id, value: a.answer })}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >Edit</button>
-                  <button
-                    onClick={() => handleDeleteAnswer(a.question)}
-                    className="text-xs text-red-500 dark:text-red-400 hover:underline"
-                  >Delete</button>
-                </div>
+            <div>
+              <h3 className={groupLabel}>Experience</h3>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field id="default-currentCompany" label="Current or most recent company" className="sm:col-span-2">
+                  <Input
+                    value={defaults.currentCompany}
+                    onChange={(e) => setDefaults({ ...defaults, currentCompany: e.target.value })}
+                    placeholder="e.g. Google, Self-employed, Student"
+                  />
+                </Field>
+                <Field id="default-years" label="Years of experience">
+                  <Input
+                    inputMode="numeric"
+                    value={defaults.years_of_experience}
+                    onChange={(e) => setDefaults({ ...defaults, years_of_experience: e.target.value })}
+                    placeholder="2"
+                  />
+                </Field>
+                <Field id="default-education" label="Highest education">
+                  <Select
+                    value={defaults.highest_education}
+                    onChange={(e) => setDefaults({ ...defaults, highest_education: e.target.value })}
+                  >
+                    {["High School", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "PhD", "Bootcamp / Self-taught"].map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field id="default-salary" label="Expected salary (monthly, NIS)">
+                  <Input
+                    inputMode="numeric"
+                    value={defaults.expected_salary}
+                    onChange={(e) => setDefaults({ ...defaults, expected_salary: e.target.value })}
+                    placeholder="20000"
+                  />
+                </Field>
+                <Field id="default-notice" label="Notice period (days)">
+                  <Input
+                    inputMode="numeric"
+                    value={defaults.notice_period}
+                    onChange={(e) => setDefaults({ ...defaults, notice_period: e.target.value })}
+                    placeholder="30"
+                  />
+                </Field>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
 
-      {/* Notifications */}
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 pb-24 sm:pb-5">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Notifications</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Daily match emails</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Get an email when new jobs are found</p>
+            <div>
+              <h3 className={groupLabel}>Links</h3>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {([
+                  { label: "LinkedIn profile", key: "linkedin_url", placeholder: "https://linkedin.com/in/yourname" },
+                  { label: "GitHub", key: "github_url", placeholder: "https://github.com/yourname" },
+                  { label: "Portfolio or website", key: "portfolio_url", placeholder: "https://yourwebsite.com" },
+                ] as const).map(({ label, key, placeholder }) => (
+                  <Field key={key} id={`default-${key}`} label={label}>
+                    <Input
+                      type="url"
+                      value={defaults[key]}
+                      onChange={(e) => setDefaults({ ...defaults, [key]: e.target.value })}
+                      placeholder={placeholder}
+                    />
+                  </Field>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className={groupLabel}>Eligibility</h3>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {([
+                  { label: "Authorized to work in Israel?", key: "work_authorized", yesFirst: true },
+                  { label: "Requires visa sponsorship?", key: "requires_sponsorship", yesFirst: false },
+                  { label: "Willing to relocate?", key: "willing_to_relocate", yesFirst: true },
+                ] as const).map(({ label, key, yesFirst }) => (
+                  <fieldset key={key}>
+                    <legend className="text-body-sm font-medium text-ink">{label}</legend>
+                    <div className="mt-2 inline-flex rounded-control border border-line-strong bg-surface-sunken p-0.5">
+                      {(yesFirst ? [true, false] : [false, true]).map((val) => {
+                        const on = defaults[key] === val;
+                        return (
+                          <label
+                            key={String(val)}
+                            className={cn(
+                              "cursor-pointer rounded-[0.4rem] px-4 py-1.5 text-body-sm transition-colors",
+                              "focus-within:ring-2 focus-within:ring-ring",
+                              on ? "bg-brand font-semibold text-brand-on shadow-sm" : "text-ink-muted hover:text-ink",
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name={`default-${key}`}
+                              className="sr-only"
+                              checked={on}
+                              onChange={() => setDefaults({ ...defaults, [key]: val })}
+                            />
+                            {val ? "Yes" : "No"}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ))}
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => handleEmailToggle(!emailNotifications)}
-            disabled={savingEmail}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-60 ${
-              emailNotifications ? "bg-black" : "bg-gray-200"
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                emailNotifications ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </div>
+
+          <div className="mt-8 flex sm:justify-end">
+            <Button type="button" size="lg" className="w-full sm:w-auto" onClick={handleSaveDefaults} disabled={savingDefaults} loading={savingDefaults}>
+              {savingDefaults ? "Saving…" : "Save application details"}
+            </Button>
+          </div>
+        </section>
+
+        {/* ── Saved answers ── */}
+        <section aria-labelledby="answers-heading" className={cardCls}>
+          <h2 id="answers-heading" className={sectionHeading}>Saved answers</h2>
+          <p className="mt-1.5 text-body-sm text-ink-muted">
+            Answers you gave to questions the extension didn&apos;t recognise. It reuses them on later applications.
+          </p>
+
+          {savedAnswers.length === 0 ? (
+            <p className="mt-5 rounded-card bg-surface-sunken px-4 py-5 text-center text-body-sm text-ink-subtle">
+              Nothing saved yet. When an application asks something new, your answer is kept here.
+            </p>
+          ) : (
+            <ul className="mt-5 divide-y divide-line">
+              {savedAnswers.map((a) => (
+                <li key={a.id} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-caption font-medium text-ink-subtle">{a.question}</p>
+                    {editingAnswer?.id === a.id ? (
+                      <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          aria-label={`Answer to: ${a.question}`}
+                          value={editingAnswer.value}
+                          onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditedAnswer(a.question, editingAnswer.value);
+                            if (e.key === "Escape") setEditingAnswer(null);
+                          }}
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleSaveEditedAnswer(a.question, editingAnswer.value)}>Save</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingAnswer(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-0.5 text-body text-ink">{a.answer}</p>
+                    )}
+                  </div>
+                  {editingAnswer?.id !== a.id && (
+                    <div className="flex shrink-0 gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setEditingAnswer({ id: a.id, value: a.answer })}>Edit</Button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAnswer(a.question)}
+                        className="inline-flex h-8 items-center rounded-control px-3 text-body-sm font-semibold text-danger-text transition-colors hover:bg-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ── Notifications ── */}
+        <section aria-labelledby="notif-heading" className={cardCls}>
+          <h2 id="notif-heading" className={sectionHeading}>Notifications</h2>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            <div>
+              <p id="daily-email-label" className="text-body font-medium text-ink">Daily match emails</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">An email when new jobs match your profile.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={emailNotifications}
+              aria-labelledby="daily-email-label"
+              onClick={() => handleEmailToggle(!emailNotifications)}
+              disabled={savingEmail}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                emailNotifications ? "bg-brand" : "bg-line-strong",
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "inline-block h-4 w-4 rounded-full bg-surface shadow transition-transform",
+                  emailNotifications ? "translate-x-6" : "translate-x-1",
+                )}
+              />
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+const cardCls = "rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 sm:p-8";
+const sectionHeading = "font-serif text-feature-sm text-ink";
+const groupLabel = "text-caption font-semibold uppercase tracking-wide text-ink-subtle";
+const textLink = "font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm";
+
+function ProfileSkeleton() {
+  return (
+    <div className="w-full" aria-busy="true">
+      <PageHero title="Your profile" subtitle="Your CV, the jobs you want, and the details JobAgent fills into applications for you." />
+      <div className="relative mx-auto -mt-14 max-w-3xl space-y-6 sm:-mt-16">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className={cardCls}>
+            <Skeleton className="h-7 w-1/3" />
+            <Skeleton className="mt-5 h-4 w-full" />
+            <Skeleton className="mt-2 h-4 w-4/5" />
+            <Skeleton className="mt-6 h-10 w-full" />
+          </div>
+        ))}
+        <span className="sr-only">Loading your profile</span>
       </div>
     </div>
   );
@@ -1004,13 +1035,7 @@ function ProfileContent() {
 
 export default function ProfilePage() {
   return (
-    <Suspense fallback={
-      <div className="max-w-lg mx-auto space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl h-24 animate-pulse" />
-        ))}
-      </div>
-    }>
+    <Suspense fallback={<ProfileSkeleton />}>
       <ProfileContent />
     </Suspense>
   );

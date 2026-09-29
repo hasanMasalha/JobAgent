@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Badge, Button, CheckIcon, CloseIcon, Notice, ScoreRing, Spinner, type BadgeTone } from "@/app/components/ui";
+import { cn } from "@/lib/cn";
 
 interface Improvement {
   issue: string;
@@ -16,59 +18,25 @@ interface CVScore {
   improvements: Improvement[];
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const color =
-    score >= 80 ? "#16a34a" : score >= 60 ? "#d97706" : "#dc2626";
-  const radius = 36;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
+const GRADE_TONE: Record<string, BadgeTone> = { A: "success", B: "brand", C: "attention", D: "danger" };
 
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width="96" height="96" className="-rotate-90">
-        <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="8" className="text-gray-200 dark:text-gray-600" />
-        <circle
-          cx="48"
-          cy="48"
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="8"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.6s ease" }}
-        />
-      </svg>
-      <span
-        className="absolute text-2xl font-bold"
-        style={{ color }}
-      >
-        {score}
-      </span>
-    </div>
-  );
-}
-
-function GradeBadge({ grade }: { grade: string }) {
-  const styles: Record<string, string> = {
-    A: "bg-green-100 text-green-800",
-    B: "bg-amber-100 text-amber-800",
-    C: "bg-orange-100 text-orange-800",
-    D: "bg-red-100 text-red-800",
-  };
-  return (
-    <span className={`inline-block text-sm font-bold px-2.5 py-0.5 rounded-full ${styles[grade] ?? "bg-gray-100 text-gray-700"}`}>
-      {grade}
-    </span>
-  );
-}
+const cardCls = "rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 sm:p-7";
+const groupLabel = "text-caption font-semibold uppercase tracking-wide text-ink-subtle";
 
 function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [cvId, setCvId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [downloading, setDownloading] = useState(false);
+
+  // Escape closes, except while Claude is rewriting (closing then would hide the result).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && state !== "loading") onClose(cvId ?? undefined);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state, cvId, onClose]);
 
   async function handleImprove() {
     setState("loading");
@@ -103,67 +71,53 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6">
-        <div className="flex items-start justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Improve with AI</h2>
-          <button onClick={() => onClose(cvId ?? undefined)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/60 p-gutter font-sans">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="improve-title"
+        className="w-full max-w-md rounded-overlay bg-surface p-6 shadow-overlay"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h2 id="improve-title" className="font-serif text-title-serif text-ink">Improve with AI</h2>
+          <Button variant="ghost" size="sm" onClick={() => onClose(cvId ?? undefined)} disabled={state === "loading"} aria-label="Close">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {state === "idle" && (
           <>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-              Claude will rewrite your CV applying all the suggested improvements — stronger verbs, quantified achievements, cleaner language. Your current CV will be replaced with the improved version.
+            <p className="mt-3 text-body text-ink-muted">
+              Claude rewrites your CV with the suggested improvements: stronger verbs, measurable results and cleaner wording.
             </p>
-            <button
-              onClick={handleImprove}
-              className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-            >
-              Rewrite my CV
-            </button>
+            <Notice tone="attention" className="mt-4">The rewrite replaces your current CV.</Notice>
+            <Button size="lg" block className="mt-6" onClick={handleImprove}>Rewrite my CV</Button>
           </>
         )}
 
         {state === "loading" && (
-          <div className="text-center py-8">
-            <div className="inline-block w-6 h-6 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">Claude is improving your CV…</p>
+          <div className="py-10 text-center">
+            <Spinner size="lg" label="Claude is improving your CV" />
+            <p className="mt-3 text-body-sm text-ink-muted">Claude is improving your CV…</p>
           </div>
         )}
 
         {state === "done" && (
           <>
-            <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-4">
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <p className="text-sm font-medium">Your CV has been improved and saved.</p>
+            <Notice tone="success" className="mt-4">Your CV has been improved and saved.</Notice>
+            <div className="mt-6 space-y-2">
+              <Button size="lg" block onClick={handleDownload} disabled={downloading} loading={downloading}>
+                {downloading ? "Preparing…" : "Download improved CV (.docx)"}
+              </Button>
+              <Button size="lg" variant="secondary" block onClick={() => onClose(cvId ?? undefined)}>Close</Button>
             </div>
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 transition-colors mb-2"
-            >
-              {downloading ? "Preparing…" : "Download improved CV (.docx)"}
-            </button>
-            <button
-              onClick={() => onClose(cvId ?? undefined)}
-              className="w-full border dark:border-gray-600 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Close
-            </button>
           </>
         )}
 
         {state === "error" && (
           <>
-            <p className="text-sm text-red-600 dark:text-red-400 mb-4">{errorMsg}</p>
-            <button
-              onClick={() => setState("idle")}
-              className="w-full border dark:border-gray-600 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Try again
-            </button>
+            <Notice tone="danger" className="mt-4">{errorMsg}</Notice>
+            <Button size="lg" variant="secondary" block className="mt-6" onClick={() => setState("idle")}>Try again</Button>
           </>
         )}
       </div>
@@ -214,17 +168,17 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-6 text-center">
-        <div className="inline-block w-5 h-5 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-2" />
-        <p className="text-sm text-gray-500 dark:text-gray-400">Scoring your CV…</p>
+      <div className={cn(cardCls, "flex flex-col items-center py-10 text-center")}>
+        <Spinner size="lg" label="Scoring your CV" />
+        <p className="mt-3 text-body-sm text-ink-muted">Scoring your CV…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl p-6 text-center">
-        <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
+      <div className={cardCls}>
+        <Notice tone="danger" title="Couldn't score your CV">{error}</Notice>
       </div>
     );
   }
@@ -239,30 +193,26 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
     <>
       {showModal && <ImproveModal onClose={handleModalClose} />}
 
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
-        {/* Header row */}
-        <div className="px-6 pt-6 pb-4 flex items-center gap-5 border-b dark:border-gray-700">
-          <ScoreRing score={score.score} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">CV Score</span>
-              <GradeBadge grade={score.grade} />
+      <section aria-labelledby="cv-score-heading" className={cardCls}>
+        <div className="flex items-center gap-5">
+          <ScoreRing score={score.score} kind="cv" size="md" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="cv-score-heading" className="font-serif text-title-serif text-ink">CV score</h2>
+              <Badge tone={GRADE_TONE[score.grade] ?? "neutral"}>Grade {score.grade}</Badge>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-snug">{score.summary}</p>
+            <p className="mt-1.5 text-body-sm text-ink-muted">{score.summary}</p>
           </div>
         </div>
 
-        <div className="px-6 py-4 space-y-5">
-          {/* Strengths */}
+        <div className="mt-6 space-y-6 border-t border-line pt-5">
           {score.strengths.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Strengths</p>
-              <ul className="space-y-1.5">
+              <h3 className={groupLabel}>Strengths</h3>
+              <ul className="mt-2.5 space-y-2">
                 {score.strengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <svg className="w-4 h-4 text-green-500 dark:text-green-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                  <li key={i} className="flex items-start gap-2.5 text-body-sm text-ink">
+                    <CheckIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
                     {s}
                   </li>
                 ))}
@@ -270,33 +220,26 @@ export default function CVScoreCard({ initialScore, onImproved }: CVScoreCardPro
             </div>
           )}
 
-          {/* Improvements */}
           {sortedImprovements.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Improvements</p>
-              <ul className="space-y-3">
+              <h3 className={groupLabel}>To improve</h3>
+              <ul className="mt-2.5 space-y-3.5">
                 {sortedImprovements.map((item, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className={`mt-0.5 shrink-0 inline-block w-2 h-2 rounded-full ${item.priority === "high" ? "bg-red-400" : "bg-amber-400"}`} />
-                    <div>
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{item.issue}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.fix}</p>
-                    </div>
+                  <li key={i}>
+                    <p className="text-body-sm font-semibold text-ink">
+                      {item.priority === "high" && <Badge tone="attention" className="mr-2 align-[1px]">High priority</Badge>}
+                      {item.issue}
+                    </p>
+                    <p className="mt-0.5 text-body-sm text-ink-muted">{item.fix}</p>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* CTA */}
-          <button
-            onClick={() => setShowModal(true)}
-            className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-          >
-            Improve with AI
-          </button>
+          <Button size="lg" block onClick={() => setShowModal(true)}>Improve with AI</Button>
         </div>
-      </div>
+      </section>
     </>
   );
 }
