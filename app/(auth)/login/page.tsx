@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createBrowserClient();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
@@ -28,18 +28,12 @@ export default function LoginPage() {
       return;
     }
 
-    // Sync token to extension via cookie + postMessage (no extension ID needed)
-    if (data.session) {
-      try {
-        const token = data.session.access_token;
-        const userId = data.session.user.id;
-        document.cookie = `jobagent_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-        document.cookie = `jobagent_user_id=${userId}; path=/; max-age=86400; SameSite=Lax`;
-        window.postMessage({ type: "JOBAGENT_AUTH", token, userId }, "*");
-      } catch {
-        // ignore
-      }
-    }
+    // This page used to copy the Supabase access token into a JS-readable
+    // cookie and postMessage it to "*" for the extension. Nothing read either
+    // (the extension authenticates with the signed token from /api/auth/me),
+    // so it's gone; expire any copies left in browsers from before.
+    document.cookie = "jobagent_token=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = "jobagent_user_id=; path=/; max-age=0; SameSite=Lax";
 
     router.push("/dashboard");
   }
