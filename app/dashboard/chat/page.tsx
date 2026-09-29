@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Spinner } from "@/app/components/ui";
+import { cn } from "@/lib/cn";
 
 interface Message {
   role: "user" | "assistant";
@@ -141,23 +143,27 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-80px)]">
+    <div className="mx-auto flex h-[calc(100vh-80px)] max-w-2xl flex-col">
       <div className="mb-4">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Chat Assistant</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Ask anything about your job search</p>
+        <h1 className="font-serif text-title-page-sm text-ink sm:text-title-page">Assistant</h1>
+        <p className="mt-1 text-body-sm text-ink-muted">Ask about your matches, applications and progress. Answers use your live data.</p>
       </div>
 
       {/* Message area */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4 pr-1">
+      <div className="flex-1 space-y-4 overflow-y-auto pb-4 pr-1" aria-live="polite">
         {history.length === 0 && !streaming && (
-          <div className="space-y-3 pt-4">
-            <p className="text-sm text-gray-400 text-center">Try asking something:</p>
-            <div className="flex flex-col gap-2">
+          <div className="pt-6">
+            <p className="text-caption font-semibold uppercase tracking-wide text-ink-subtle">Try asking</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {STARTER_PROMPTS.map((prompt) => (
                 <button
                   key={prompt}
+                  type="button"
                   onClick={() => sendMessage(prompt)}
-                  className="text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  className={cn(
+                    "rounded-card border border-line bg-surface px-4 py-3 text-left text-body-sm text-ink transition-colors",
+                    "hover:border-brand/50 hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  )}
                 >
                   {prompt}
                 </button>
@@ -167,23 +173,21 @@ export default function ChatPage() {
         )}
 
         {history.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+          <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+              className={cn(
+                "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-body-sm",
                 msg.role === "user"
-                  ? "bg-blue-600 text-white rounded-br-sm"
-                  : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-              }`}
+                  ? "rounded-br-sm bg-brand text-brand-on"
+                  : "rounded-bl-sm border border-line bg-surface text-ink",
+              )}
             >
               {msg.content}
               {msg.role === "assistant" && msg.content === "" && streaming && !toolLabel && (
-                <span className="inline-flex gap-1 items-center h-4">
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                <span className="inline-flex h-4 items-center gap-1" aria-label="Thinking">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ink-subtle motion-safe:animate-bounce [animation-delay:0ms]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-ink-subtle motion-safe:animate-bounce [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-ink-subtle motion-safe:animate-bounce [animation-delay:300ms]" />
                 </span>
               )}
             </div>
@@ -194,22 +198,18 @@ export default function ChatPage() {
       </div>
 
       {/* Input area */}
-      <div className="border-t dark:border-gray-700 pt-4">
-        {/* Tool status indicator */}
+      <div className="border-t border-line pt-4">
         {toolLabel && (
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <span className="inline-flex gap-0.5 items-center">
-              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-              <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
-            </span>
-            <span className="text-xs text-gray-400 italic">{toolLabel}</span>
+          <div className="mb-2 flex items-center gap-2 px-1 text-caption text-ink-subtle" role="status">
+            <Spinner size="sm" decorative />
+            {toolLabel}
           </div>
         )}
 
-        <div className="flex gap-2 items-end bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-2xl px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
+        <div className="flex items-end gap-2 rounded-2xl border border-line-strong bg-surface px-4 py-2 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
           <textarea
             ref={textareaRef}
+            aria-label="Message the assistant"
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -228,23 +228,24 @@ export default function ChatPage() {
               resize: "none",
               overflowY: "hidden",
             }}
-            className="flex-1 text-sm text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none bg-transparent disabled:opacity-50"
+            className="flex-1 bg-transparent py-2.5 text-body-sm text-ink placeholder:text-ink-subtle focus:outline-none disabled:opacity-50"
           />
           <button
+            type="button"
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || streaming}
-            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-blue-600 text-white disabled:opacity-40 hover:bg-blue-700 transition-colors"
+            className="mb-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand text-brand-on transition-colors hover:bg-brand-hover disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Send"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
           </button>
         </div>
-        {showHint && (
-          <p className="text-xs text-gray-400 mt-1.5 text-center">Enter to send · Shift+Enter for new line</p>
-        )}
+        <p className={cn("mt-1.5 text-center text-caption text-ink-subtle transition-opacity", showHint ? "opacity-100" : "opacity-0")} aria-hidden={!showHint}>
+          Enter to send · Shift+Enter for a new line
+        </p>
       </div>
     </div>
   );

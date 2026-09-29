@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import JobCard, { Job } from "@/app/dashboard/JobCard";
+import { Button, PageHero, RemovableTag, SkeletonCard, StatePanel } from "@/app/components/ui";
 import { LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories";
 
 interface SearchMeta {
@@ -13,16 +15,8 @@ interface SearchMeta {
   seniorities: string[];
 }
 
-function SkeletonCard() {
-  return (
-    <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5 animate-pulse">
-      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/3 mb-4" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-full mb-1" />
-      <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-4/5" />
-    </div>
-  );
-}
+const cardCls = "rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 sm:p-6";
+const groupLabel = "text-caption font-semibold uppercase tracking-wide text-ink-subtle";
 
 export default function SearchResultsPage() {
   const routeParams = useParams();
@@ -142,146 +136,110 @@ export default function SearchResultsPage() {
     fetchJobsWithFilters(activeKeywords, activeLocations, updated);
   }
 
+  const hasFilters = activeKeywords.length + activeLocations.length + activeSeniorities.length > 0;
+
   return (
-    <div className="max-w-3xl mx-auto w-full">
-      {/* Header */}
-      <div className="mb-5">
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1 mb-3"
-        >
-          ← Back
-        </button>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-          {search ? `${search.category} Jobs` : "Search Results"}
-        </h1>
-      </div>
+    <div className="w-full">
+      <PageHero
+        tabs={
+          <Link href="/dashboard" className="inline-flex items-center gap-1 rounded-sm text-body-sm text-on-hero-muted hover:text-on-hero focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">
+            <span aria-hidden="true">←</span> Saved searches
+          </Link>
+        }
+        title={search ? `${search.category} jobs` : "Search results"}
+        meta={!loading && search && (
+          <span className="text-body-sm text-on-hero-muted tabular-nums">
+            {total.toLocaleString()} {total === 1 ? "job" : "jobs"} found
+          </span>
+        )}
+      />
 
-      {/* Editable filter pills */}
-      {search && (
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-4 mb-4 space-y-3">
-          {/* Keywords */}
-          {activeKeywords.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Keywords
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {activeKeywords.map((keyword) => (
-                  <button
-                    key={keyword}
-                    onClick={() => removeKeyword(keyword)}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 rounded-full text-xs hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                  >
-                    {keyword}
-                    <span className="opacity-70">×</span>
-                  </button>
-                ))}
-              </div>
+      <div className="relative mx-auto -mt-14 max-w-3xl space-y-4 pb-24 sm:-mt-16 sm:pb-10">
+        {search && hasFilters && (
+          <section aria-label="Filters for this search" className={cardCls}>
+            <div className="space-y-4">
+              {activeKeywords.length > 0 && (
+                <div>
+                  <h2 className={groupLabel}>Keywords</h2>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {activeKeywords.map((keyword) => (
+                      <RemovableTag key={keyword} label={keyword} onRemove={() => removeKeyword(keyword)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeLocations.length > 0 && (
+                <div>
+                  <h2 className={groupLabel}>Locations</h2>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {activeLocations.map((locValue) => (
+                      <RemovableTag
+                        key={locValue}
+                        label={LOCATIONS.find((l) => l.value === locValue)?.label ?? locValue}
+                        onRemove={() => removeLocation(locValue)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeSeniorities.length > 0 && (
+                <div>
+                  <h2 className={groupLabel}>Seniority</h2>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {activeSeniorities.map((senValue) => (
+                      <RemovableTag
+                        key={senValue}
+                        label={SENIORITY_LEVELS.find((s) => s.value === senValue)?.label ?? senValue}
+                        onRemove={() => removeSeniority(senValue)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Locations */}
-          {activeLocations.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Locations
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {activeLocations.map((locValue) => {
-                  const label = LOCATIONS.find((l) => l.value === locValue)?.label ?? locValue;
-                  return (
-                    <button
-                      key={locValue}
-                      onClick={() => removeLocation(locValue)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                    >
-                      {label}
-                      <span className="opacity-70">×</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Seniority */}
-          {activeSeniorities.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Seniority
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {activeSeniorities.map((senValue) => {
-                  const label = SENIORITY_LEVELS.find((s) => s.value === senValue)?.label ?? senValue;
-                  return (
-                    <button
-                      key={senValue}
-                      onClick={() => removeSeniority(senValue)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                    >
-                      {label}
-                      <span className="opacity-70">×</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!loading && (
-            <p className="text-sm font-medium text-gray-900 dark:text-white pt-1 border-t dark:border-gray-700">
-              {total.toLocaleString()} {total === 1 ? "job" : "jobs"} found
+            <p className="mt-4 border-t border-line pt-3 text-caption text-ink-subtle">
+              Removing a filter here only changes this view. Edit the search on the dashboard to keep it.
             </p>
-          )}
-        </div>
-      )}
+          </section>
+        )}
 
-      {/* Job list */}
-      {loading ? (
-        <div className="space-y-4">
-          <SkeletonCard /><SkeletonCard /><SkeletonCard />
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-10 text-center">
-          <p className="text-gray-700 dark:text-gray-300 font-medium">No jobs found for this search.</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Try removing some filters or check back when new jobs are scraped.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-4">
-            {jobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                showScore={false}
-                showSource={true}
-                onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
-              />
-            ))}
+        {loading ? (
+          <div className="space-y-4" aria-busy="true">
+            <SkeletonCard lines={2} /><SkeletonCard lines={2} /><SkeletonCard lines={2} />
+            <span className="sr-only" role="status">Loading jobs</span>
           </div>
-
-          {hasMore && (
-            <div className="mt-6 flex justify-center">
-              <button
-                onClick={loadMoreJobs}
-                disabled={loadingMore}
-                className="px-6 py-2 border dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-              >
-                {loadingMore ? "Loading…" : "Load More"}
-              </button>
+        ) : jobs.length === 0 ? (
+          <StatePanel title="No jobs match this search yet">
+            Try removing a filter, or check back after the next daily scrape.
+          </StatePanel>
+        ) : (
+          <>
+            <div className="space-y-4">
+              {jobs.map((job) => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  showScore={false}
+                  showSource={true}
+                  onDismiss={(id) => setJobs((prev) => prev.filter((j) => j.id !== id))}
+                />
+              ))}
             </div>
-          )}
 
-          {!hasMore && jobs.length > 0 && (
-            <p className="text-center py-4 text-sm text-gray-400 dark:text-gray-500">
-              All {total.toLocaleString()} jobs loaded
-            </p>
-          )}
-        </>
-      )}
+            {hasMore ? (
+              <div className="flex justify-center pt-2">
+                <Button variant="secondary" size="lg" onClick={loadMoreJobs} disabled={loadingMore} loading={loadingMore}>
+                  {loadingMore ? "Loading…" : "Load more"}
+                </Button>
+              </div>
+            ) : (
+              <p className="py-2 text-center text-body-sm text-ink-subtle">
+                That&apos;s all {total.toLocaleString()} {total === 1 ? "job" : "jobs"}.
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
