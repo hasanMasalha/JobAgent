@@ -37,6 +37,10 @@ export default function PrivacyPage() {
             "The applications you queued from JobAgent and how far through them it is, so it can fill them one at a time.",
           ]}
         />
+        <p>
+          The popup also reads LinkedIn&apos;s <Code>li_at</Code> cookie to show whether you&apos;re
+          signed in to LinkedIn. It is read on your device only and never sent anywhere.
+        </p>
       </Section>
 
       <Section title="What Is Sent to JobAgent">
@@ -60,16 +64,6 @@ export default function PrivacyPage() {
                 <Td>The outcome of an application (submitted, or needs you to finish it yourself) and the application&apos;s ID</Td>
                 <Td>When a form is submitted or stops</Td>
                 <Td>Updates your applications tracker in JobAgent.</Td>
-              </tr>
-              <tr>
-                <Td>Your JobAgent user ID</Td>
-                <Td>With the requests above</Td>
-                <Td>Identifies your account, alongside the sign-in token.</Td>
-              </tr>
-              <tr>
-                <Td>Your LinkedIn <Code>li_at</Code> session cookie</Td>
-                <Td>When you open the popup while signed in to LinkedIn</Td>
-                <Td>The popup reads it to show whether you&apos;re signed in to LinkedIn. It is sent to jobagent.uk, which does not store it.</Td>
               </tr>
             </tbody>
           </table>
