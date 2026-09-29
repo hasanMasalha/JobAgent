@@ -84,7 +84,7 @@ export default function PrivacyPolicyPage() {
             <>
               Request a copy of the personal data we hold about you, or ask us to correct or erase it, by
               emailing{" "}
-              <a href="mailto:privacy@jobagent.uk" className="text-[#1a2e5e] dark:text-blue-400 underline">
+              <a href="mailto:privacy@jobagent.uk" className="font-medium text-brand-text underline underline-offset-4">
                 privacy@jobagent.uk
               </a>
               .
@@ -106,7 +106,7 @@ export default function PrivacyPolicyPage() {
       <Section title="7. Contact">
         <p>
           Questions about this Privacy Policy or how we handle your data? Email us at{" "}
-          <a href="mailto:privacy@jobagent.uk" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <a href="mailto:privacy@jobagent.uk" className="font-medium text-brand-text underline underline-offset-4">
             privacy@jobagent.uk
           </a>
           .

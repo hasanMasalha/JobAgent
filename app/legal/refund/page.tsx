@@ -23,7 +23,7 @@ export default function RefundPolicyPage() {
       <Section title="2. How to Request a Refund">
         <p>
           Email{" "}
-          <a href="mailto:support@jobagent.uk" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <a href="mailto:support@jobagent.uk" className="font-medium text-brand-text underline underline-offset-4">
             support@jobagent.uk
           </a>{" "}
           from the address on your account with your request. Please include:
@@ -65,7 +65,7 @@ export default function RefundPolicyPage() {
       <Section title="6. Contact">
         <p>
           Any questions about billing or refunds — reach us at{" "}
-          <a href="mailto:support@jobagent.uk" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <a href="mailto:support@jobagent.uk" className="font-medium text-brand-text underline underline-offset-4">
             support@jobagent.uk
           </a>
           .

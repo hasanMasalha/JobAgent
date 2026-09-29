@@ -65,7 +65,7 @@ export default function TermsOfServicePage() {
           the end of the current billing period. Payments are processed by our payment provider, Dodo
           Payments. See
           our{" "}
-          <Link href="/legal/refund" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <Link href="/legal/refund" className="font-medium text-brand-text underline underline-offset-4">
             Refund Policy
           </Link>{" "}
           for details on refunds.
@@ -99,7 +99,7 @@ export default function TermsOfServicePage() {
         <p>
           You may delete your account at any time from your profile settings, which will stop future
           scraping, matching, and auto-apply activity and remove your personal data as described in our{" "}
-          <Link href="/legal/privacy" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <Link href="/legal/privacy" className="font-medium text-brand-text underline underline-offset-4">
             Privacy Policy
           </Link>
           .
@@ -122,7 +122,7 @@ export default function TermsOfServicePage() {
       <Section title="8. Contact">
         <p>
           Questions about these Terms? Email us at{" "}
-          <a href="mailto:support@jobagent.uk" className="text-[#1a2e5e] dark:text-blue-400 underline">
+          <a href="mailto:support@jobagent.uk" className="font-medium text-brand-text underline underline-offset-4">
             support@jobagent.uk
           </a>
           .
