@@ -1,10 +1,5 @@
-// Signed token from /api/auth/me (stored by auth-sync.js). The API no longer
-// accepts a bare userId from the extension.
-//
-// TRANSITION (remove in 1.2.0): 1.1.0 also still sends userId, which servers
-// deployed before the token existed need and current servers ignore. That
-// lets 1.1.0 ship to the Web Store before the server change deploys, so
-// there's no window where extension applies break.
+// Signed token from /api/auth/me (stored by auth-sync.js) — the only way the
+// extension identifies the user to the API. It never sends a bare userId.
 function authHeader(stored) {
   return stored && stored.extensionToken ? { Authorization: `Bearer ${stored.extensionToken}` } : {}
 }
@@ -141,23 +136,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (message.type === 'GET_AUTH_TOKEN') {
-    // Return stored token if present; content scripts use credentials:include as primary
-    chrome.storage.local.get(['authToken', 'userId'], (data) => {
-      sendResponse({ token: data.authToken, userId: data.userId })
-    })
-    return true
-  }
-
-  if (message.type === 'SAVE_AUTH') {
-    chrome.storage.local.set({
-      authToken: message.token,
-      userId: message.userId
-    })
-    sendResponse({ success: true })
-    return true
-  }
-
   if (message.type === 'STORE_PENDING_APPLICATION') {
     chrome.storage.local.set({ pendingApplication: message.application })
     sendResponse({ success: true })
@@ -174,7 +152,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const jobId = message.jobId || extractJobId(message.jobUrl || '')
         const param = (jobId
           ? `jobId=${jobId}`
-          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}`) + `&userId=${stored.userId}` // TRANSITION
+          : `jobUrl=${encodeURIComponent(message.jobUrl || '')}`)
         const fullUrl = `${serverUrl}/api/apply/check-pending?${param}`
 
         console.log('[JobAgent bg] GET_PENDING_APPLICATION — userId:', stored.userId)
@@ -227,13 +205,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SAVE_ANSWER') {
     ;(async () => {
       try {
-        const stored = await chrome.storage.local.get(['userId', 'extensionToken'])
+        const stored = await chrome.storage.local.get(['extensionToken'])
         const serverUrl = await getServerUrl()
         await fetch(`${serverUrl}/api/apply/answers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...authHeader(stored) },
           body: JSON.stringify({
-            userId: stored.userId, // TRANSITION
             question: message.question,
             answer: message.answer,
           }),
@@ -270,7 +247,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ;(async () => {
       try {
         const stored = await chrome.storage.local.get([
-          'userId', 'extensionToken', 'activeApplyTab'
+          'extensionToken', 'activeApplyTab'
         ])
         const url = await getServerUrl()
         const status = message.status || 'applied'
@@ -281,7 +258,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
-            userId: stored.userId, // TRANSITION
           }),
         })
         const resText = await res.text()
@@ -334,35 +310,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })()
     return true
   }
-
-  if (message.type === 'SAVE_LINKEDIN_SESSION') {
-    chrome.cookies.get(
-      { url: 'https://www.linkedin.com', name: 'li_at' },
-      async (cookie) => {
-        if (!cookie) {
-          sendResponse({ success: false, error: 'Not logged in to LinkedIn' })
-          return
-        }
-        try {
-          const stored = await chrome.storage.local.get(['userId'])
-          const jobagentUrl = await getServerUrl()
-          await fetch(`${jobagentUrl}/api/linkedin/save-cookie`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent() },
-            credentials: 'include',
-            body: JSON.stringify({
-              user_id: stored.userId,
-              cookie: cookie.value
-            })
-          })
-          sendResponse({ success: true })
-        } catch (e) {
-          sendResponse({ success: false, error: e.message })
-        }
-      }
-    )
-    return true
-  }
 })
 
 // Messages sent from the jobagent web app (externally_connectable)
@@ -371,15 +318,6 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
 
   if (message.type === 'PING') {
     sendResponse({ pong: true })
-    return true
-  }
-
-  if (message.type === 'JOBAGENT_AUTH') {
-    chrome.storage.local.set({
-      authToken: message.token,
-      userId: message.userId
-    })
-    sendResponse({ success: true })
     return true
   }
 

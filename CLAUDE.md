@@ -167,7 +167,7 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 ## Chrome extension privacy policy
 `/privacy` is the extension's policy and the Chrome Web Store listing links
 to it. It lists what the extension stores (`chrome.storage.local`), sends
-(saved answers, application outcomes, the LinkedIn `li_at` cookie) and
+(saved answers, application outcomes) and
 receives (Application details, CV skills, saved answers, cover letter).
 Any change to what `chrome-extension/` stores or sends must update it in
 the same PR — the Store reviews the listing against it.
@@ -183,19 +183,13 @@ the same PR — the Store reviews the listing against it.
   used to (`user?.id ?? body.userId`), which let anyone who knew a user id read
   their profile, change their application statuses and refunds, and rewrite
   the answers the extension types into real applications. Fixed 2026-09-29.
-- Extension 1.1.0 still sends `userId` alongside the token (marked
-  `TRANSITION` in `background.js`) so it works against servers from before the
-  token existed; the server ignores it. Remove it in 1.2.0.
 - `EXTENSION_TOKEN_SECRET` is a GitHub secret written into the server's `.env`
   by `deploy.yml`. If the GitHub secret is empty the deploy writes an empty
   value and every extension call 401s.
-- **Next extension release (1.2.0) — remove dead code in `background.js`:**
-  the `TRANSITION` `userId` above; the `GET_AUTH_TOKEN` and `SAVE_AUTH`
-  handlers, the external `JOBAGENT_AUTH` handler and the `authToken` they
-  store (the site stopped sending the token on 2026-09-29, and nothing reads
-  it); and `SAVE_LINKEDIN_SESSION`, which posts the `li_at` cookie to
-  `/api/linkedin/save-cookie` — a route that doesn't exist. Dropping that
-  last one changes what the extension sends, so update `/privacy` with it.
+- Since 1.1.1 the extension sends only the signed token — no `userId`, and
+  no LinkedIn `li_at` cookie (the popup reads it locally for status). The
+  old `authToken` / `JOBAGENT_AUTH` / `SAVE_LINKEDIN_SESSION` paths were
+  removed with the site's token cookie (2026-09-29); don't reintroduce them.
 - **Never put a Supabase access token anywhere JS or other origins can read
   it** (non-HttpOnly cookies, `postMessage(…, "*")`). The site did both for
   the extension until 2026-09-29.
