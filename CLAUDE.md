@@ -91,7 +91,14 @@ draft → applied → interviewing → offer / rejected / cancelled
 - Job batch scoring: claude-haiku-3-5 (once per day per user, all jobs in ONE call)
 - CV tailoring on apply: claude-sonnet-4-20250514 (only when user clicks Apply)
 - Chat assistant: claude-haiku-3-5 (per message)
+- CV score (My CV, CV builder preview): claude-haiku-4-5, once per version
+  of the CV text. `/api/cv/score` caches the result on `CV.score_json`,
+  keyed by `CV.score_text_hash` (SHA-256 of `raw_text`), and calls Claude
+  only when the text has changed. It used to score on every page visit.
 - NEVER call the API per-job per-user for matching — use pgvector for that
+- NEVER call the API on page load without a cache in front of it. A page
+  can be reloaded any number of times; a Claude call belongs behind a user
+  action or a cache keyed to the input it depends on.
 
 ## Apply flow rules — critical
 There are two supported apply paths — know which one a change affects:
@@ -196,6 +203,22 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
   key (`EC2_SSH_KEY`); moving to SSM Session Manager hasn't started. Also
   unconfirmed: how Cloudflare reaches port 3000, and whether 3000 is
   reachable directly (bypassing Cloudflare).
+
+## Outstanding product decisions
+Not bugs; questions that need an answer before the code changes. The site
+is positioned as global and priced in USD, so both are real gaps.
+- **Israel-specific application details.** Profile → Application details
+  asks "Authorized to work in Israel?" and "Expected salary (monthly, NIS)",
+  with a +972 phone placeholder. These answers are typed into real
+  applications. Needs a decision on what to ask instead (per-country work
+  authorization? currency picker?) before rewording.
+- **Location is free text on Profile, a country list in onboarding.** A user
+  can have "Tel Aviv" in one and "Israel" in the other. Pick one model for
+  `job_preferences.locations`.
+- **Hidden LinkedIn connection section.** Profile hides it behind
+  `LINKEDIN_SECTION_ENABLED`; that flag also gates its Playwright status
+  check (`/api/linkedin/session-status`), which used to run on every Profile
+  visit for a section nobody could see. Turn both on together.
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved

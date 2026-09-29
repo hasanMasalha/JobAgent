@@ -90,6 +90,11 @@ model CV {
   original_filename   String?
   original_mime_type  String?
 
+  // Cached Claude CV score (/api/cv/score). Valid while score_text_hash
+  // equals SHA-256 of raw_text; any change to the CV text re-scores once.
+  score_json       Json?
+  score_text_hash  String?
+
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id])
