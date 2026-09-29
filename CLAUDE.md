@@ -181,6 +181,16 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 - `EXTENSION_TOKEN_SECRET` is a GitHub secret written into the server's `.env`
   by `deploy.yml`. If the GitHub secret is empty the deploy writes an empty
   value and every extension call 401s.
+- **Next extension release (1.2.0) — remove dead code in `background.js`:**
+  the `TRANSITION` `userId` above; the `GET_AUTH_TOKEN` and `SAVE_AUTH`
+  handlers, the external `JOBAGENT_AUTH` handler and the `authToken` they
+  store (the site stopped sending the token on 2026-09-29, and nothing reads
+  it); and `SAVE_LINKEDIN_SESSION`, which posts the `li_at` cookie to
+  `/api/linkedin/save-cookie` — a route that doesn't exist. Dropping that
+  last one changes what the extension sends, so update `/privacy` with it.
+- **Never put a Supabase access token anywhere JS or other origins can read
+  it** (non-HttpOnly cookies, `postMessage(…, "*")`). The site did both for
+  the extension until 2026-09-29.
 
 ## Service-to-service auth (INTERNAL_API_KEY)
 - The AI service requires `X-Internal-Key` on every route except `/health`
