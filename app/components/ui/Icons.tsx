@@ -39,6 +39,8 @@ export const FilterIcon = (p: IconProps) => <Svg {...p}><path d="M2 4h12M4 8h8M6
 export const ChevronDownIcon = (p: IconProps) => <Svg {...p}><path d="M4 6l4 4 4-4" /></Svg>;
 export const CloseIcon = (p: IconProps) => <Svg {...p}><path d="M4 4l8 8M12 4l-8 8" /></Svg>;
 export const SearchIcon = (p: IconProps) => <Svg {...p}><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></Svg>;
+export const UploadIcon = (p: IconProps) => <Svg {...p}><path d="M8 10V2.5M5 5.5l3-3 3 3M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" /></Svg>;
+export const DocumentIcon = (p: IconProps) => <Svg {...p}><path d="M4 1.5h5.5L12.5 4.5V14a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 .5-.5z" /><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5" /></Svg>;
 export const CheckIcon = (p: IconProps) => <Svg {...p}><path d="M3.5 8.5l3 3 6-7" /></Svg>;
 /** An app window — "software", as opposed to a service. */
 export const AppWindowIcon = (p: IconProps) => <Svg {...p}><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M2 6h12M4.5 4.5h.01M6.5 4.5h.01" /></Svg>;

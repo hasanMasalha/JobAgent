@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 export default function ChatFab() {
   const router = useRouter();
   const pathname = usePathname();
-  if (pathname === "/dashboard/chat") return null;
+  // Hidden on onboarding: on phones it sits over the step cards and their links.
+  if (pathname === "/dashboard/chat" || pathname.startsWith("/dashboard/onboarding")) return null;
   return (
     <button
       onClick={() => router.push("/dashboard/chat")}

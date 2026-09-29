@@ -3,7 +3,23 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JOB_CATEGORIES, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
-import { PLAN_PRICES_USD, planFeatureList } from "@/lib/plan-limits";
+import { INCLUDED_IN_EVERY_PLAN, PLAN_PRICES_USD, planFeatureList } from "@/lib/plan-limits";
+import { cn } from "@/lib/cn";
+import {
+  Badge,
+  Button,
+  chipStyles,
+  inputStyles,
+  Notice,
+  PageHero,
+  RemovableTag,
+  Spinner,
+  ArrowRightIcon,
+  CheckIcon,
+  DocumentIcon,
+  PenIcon,
+  UploadIcon,
+} from "@/app/components/ui";
 
 interface ExistingCV {
   clean_summary: string;
@@ -62,10 +78,11 @@ const PLAN_TIERS: PlanTier[] = [
   },
 ];
 
+// Matches the landing page's claims: nothing is sent without the user's click.
 const WELCOME_BULLETS = [
-  "AI matches you to the best jobs globally",
-  "Auto-applies to Greenhouse, Lever, Comeet & more",
-  "Tailors your CV for every application",
+  "Matches you to open roles worldwide, ranked against your CV",
+  "Applies to Greenhouse, Lever, Workable, Ashby, Comeet and BambooHR in one click",
+  "Tailors your CV and cover letter for each application",
 ];
 
 const COUNTRIES = [
@@ -76,18 +93,6 @@ const COUNTRIES = [
 ];
 
 const WORK_ARRANGEMENTS = ["Remote", "Hybrid", "On-site", "Open to all"];
-
-function CheckIcon() {
-  return (
-    <svg className="w-4 h-4 shrink-0 mt-0.5 text-[#1a2e5e] dark:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-      <path
-        fillRule="evenodd"
-        d="M16.704 5.29a1 1 0 010 1.415l-7.5 7.5a1 1 0 01-1.415 0l-3.5-3.5a1 1 0 111.415-1.415L8.5 12.086l6.79-6.796a1 1 0 011.414 0z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -350,513 +355,487 @@ export default function OnboardingPage() {
 
   if (profileLoading) {
     return (
-      <div className="max-w-lg mx-auto mt-20 text-center">
-        <div className="inline-block w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin" />
+      <div className="flex justify-center pt-24 text-ink-subtle">
+        <Spinner size="lg" label="Loading your profile" />
       </div>
     );
   }
 
+  const heroTitle =
+    currentKey === "welcome" ? "Let's set up your job search" : isUpdate ? "Update your profile" : "Set up your profile";
+  const cardCls =
+    "rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 motion-safe:animate-lift-in sm:p-10";
+  const stepHeading = "font-serif text-feature-sm text-ink";
+  const backLink =
+    "inline-flex items-center gap-1 rounded-sm text-body-sm font-medium text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const actions = "mt-8 flex flex-col-reverse gap-3 sm:flex-row";
+
   return (
-    <div className={`mx-auto ${currentKey === "plan" ? "max-w-4xl" : "max-w-lg"}`}>
-      {currentKey !== "welcome" && (
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold">
-            {isUpdate ? "Update your profile" : "Set up your profile"}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
-        </div>
-      )}
-
-      {/* Step indicator */}
-      <div className="flex gap-2 mb-8">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
-          <div
-            key={s}
-            className={`h-1.5 flex-1 rounded-full transition-colors ${
-              s <= step ? "bg-black dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
-            }`}
-          />
-        ))}
-      </div>
-
-      {/* ── Welcome ── */}
-      {currentKey === "welcome" && (
-        <div className="flex flex-col items-center text-center space-y-6 py-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="JobAgent" className="block dark:hidden" style={{ height: 56 }} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/whiteLogo.png" alt="JobAgent" className="hidden dark:block" style={{ height: 56 }} />
-
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white leading-snug">
-            Apply to hundreds of jobs automatically
-          </h2>
-
-          <ul className="space-y-3 text-left w-full max-w-sm">
-            {WELCOME_BULLETS.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
-                <CheckIcon />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            onClick={goNext}
-            className="w-full bg-[#1a2e5e] text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            Get Started →
-          </button>
-        </div>
-      )}
-
-      {/* ── CV ── */}
-      {currentKey === "cv" && (
-        <div className="space-y-4">
-          {!isUpdate && (
-            <button
-              type="button"
-              onClick={goBack}
-              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-            >
-              ← Back
-            </button>
-          )}
-
-          {isUpdate && existingCV && (
-            <div className="bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current CV</p>
-              {existingCV.skills_json?.skills?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {existingCV.skills_json.skills.slice(0, 12).map((s) => (
-                    <span key={s} className="text-xs bg-white dark:bg-gray-700 border dark:border-gray-600 px-2 py-0.5 rounded-full text-gray-700 dark:text-gray-300">{s}</span>
-                  ))}
-                  {existingCV.skills_json.skills.length > 12 && (
-                    <span className="text-xs text-gray-400">+{existingCV.skills_json.skills.length - 12} more</span>
-                  )}
-                </div>
-              ) : null}
-              {existingCV.skills_json?.years_experience != null && (
-                <p className="text-xs text-gray-500">
-                  {existingCV.skills_json.years_experience} year{existingCV.skills_json.years_experience === 1 ? "" : "s"} experience
-                </p>
+    <div className="w-full">
+      <PageHero
+        title={heroTitle}
+        subtitle={currentKey === "welcome" ? "A few questions, then your first matches." : undefined}
+        meta={<span className="text-body-sm text-on-hero-muted">Step {step} of {TOTAL_STEPS}</span>}
+      >
+        <div className="flex gap-1.5" aria-hidden="true">
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
+            <div
+              key={s}
+              className={cn(
+                "h-1 flex-1 rounded-full transition-colors duration-500 ease-calm",
+                s <= step ? "bg-on-hero" : "bg-white/15",
               )}
-              <p className="text-xs text-gray-400">
-                Last updated {new Date(existingCV.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-              </p>
-            </div>
-          )}
-
-          {!isUpdate && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Upload your CV to get personalized matches
-            </p>
-          )}
-
-          {cvPath === null && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => setCvPath("upload")}
-                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center bg-white dark:bg-gray-800 dark:border-gray-600 hover:border-black dark:hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-full bg-gray-100 group-hover:bg-black flex items-center justify-center transition-colors">
-                  <svg className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{isUpdate ? "Replace CV" : "Upload existing CV"}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">PDF or Word document (.pdf, .docx)</p>
-                </div>
-                <span className="text-xs font-medium border border-gray-300 dark:border-gray-500 dark:text-gray-300 px-3 py-1 rounded-lg group-hover:border-black dark:group-hover:border-gray-300 transition-colors">
-                  {isUpdate ? "Upload new CV" : "Upload CV"}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push("/dashboard/cv-builder")}
-                className="flex flex-col items-center gap-3 border-2 rounded-xl p-6 text-center bg-white dark:bg-gray-800 dark:border-gray-600 hover:border-purple-500 hover:bg-purple-50 dark:hover:border-purple-400 dark:hover:bg-purple-900/20 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-full bg-purple-100 group-hover:bg-purple-500 flex items-center justify-center transition-colors">
-                  <svg className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Build CV with AI</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Answer a few questions, Claude writes it</p>
-                </div>
-                <span className="text-xs font-medium bg-purple-600 text-white px-3 py-1 rounded-lg group-hover:bg-purple-700 transition-colors">
-                  Start building →
-                </span>
-              </button>
-            </div>
-          )}
-
-          {cvPath === "upload" && (
-            <>
-              <button type="button" onClick={() => setCvPath(null)} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                ← Back to options
-              </button>
-              <label className="block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-gray-400 transition-colors">
-                <input
-                  type="file"
-                  accept=".pdf,.docx"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f && f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
-                    setError("");
-                    setFile(f ?? null);
-                  }}
-                />
-                {file ? (
-                  <span className="text-sm font-medium">{file.name}</span>
-                ) : (
-                  <span className="text-sm text-gray-400">
-                    {isUpdate ? "Click to choose a new PDF or Word file (optional)" : "Click to choose a PDF or Word file (.docx)"}
-                  </span>
-                )}
-              </label>
-              {error && <p className="text-red-600 text-sm">{error}</p>}
-              <button
-                disabled={!isUpdate && !file}
-                onClick={goNext}
-                className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40"
-              >
-                Continue
-              </button>
-            </>
-          )}
-
-          {isUpdate && cvPath === null && (
-            <button
-              onClick={goNext}
-              className="w-full border dark:border-gray-600 py-2 rounded text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Keep current CV, update preferences only →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Preferences ── */}
-      {currentKey === "preferences" && (
-        <div className="space-y-5">
-          {/* Job titles */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Job titles you&apos;re looking for</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
-                placeholder="e.g. Frontend Developer"
-                className="flex-1 border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
-              />
-              <button type="button" onClick={addTitle} className="bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-500 rounded-md px-3 py-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-500">
-                Add
-              </button>
-            </div>
-            {titles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {titles.map((t) => (
-                  <span key={t} className="flex items-center gap-1 bg-black text-white text-xs px-2 py-1 rounded-full">
-                    {t}
-                    <button type="button" onClick={() => removeTitle(t)} className="hover:opacity-70">×</button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Location */}
-          <div className="relative">
-            <label className="block text-sm font-medium mb-1">Location</label>
-            <input
-              type="text"
-              value={locationQuery}
-              onChange={(e) => {
-                setLocationQuery(e.target.value);
-                setLocation("");
-                setLocationDropdownOpen(true);
-              }}
-              onFocus={() => setLocationDropdownOpen(true)}
-              onBlur={() => setTimeout(() => setLocationDropdownOpen(false), 150)}
-              placeholder="Search for a country…"
-              autoComplete="off"
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
             />
-            {locationDropdownOpen && filteredCountries.length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg shadow-lg py-1">
-                {filteredCountries.map((c) => (
-                  <li key={c}>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setLocation(c);
-                        setLocationQuery(c);
-                        setLocationDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 ${
-                        location === c ? "bg-gray-100 dark:bg-gray-600 font-medium text-gray-900 dark:text-white" : "text-gray-700 dark:text-gray-300"
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Min salary */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">Minimum salary</label>
-              <button type="button" onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                {skipSalary ? "Add salary" : "Skip salary"}
-              </button>
-            </div>
-            {!skipSalary && (
-              <input
-                type="number"
-                value={minSalary}
-                onChange={(e) => setMinSalary(e.target.value)}
-                placeholder="e.g. 15000"
-                className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
-              />
-            )}
-            {skipSalary && <p className="text-sm text-gray-400 italic">No minimum salary set</p>}
-          </div>
-
-          <div className="flex gap-3">
-            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-              Back
-            </button>
-            <button
-              type="button"
-              disabled={titles.length === 0}
-              onClick={goNext}
-              className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
-            >
-              Continue
-            </button>
-          </div>
+          ))}
         </div>
-      )}
+      </PageHero>
 
-      {/* ── Categories ── */}
-      {currentKey === "categories" && (
-        <div className="space-y-5">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">What job are you looking for?</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Pick up to 4 categories
-              <span className="ml-2 font-medium text-gray-700 dark:text-gray-300">
-                {selectedCategories.length}/4 selected
-              </span>
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {JOB_CATEGORIES.map((cat) => {
-              const isSelected = selectedCategories.includes(cat);
-              const isDisabled = !isSelected && selectedCategories.length >= 4;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => toggleCategory(cat)}
-                  disabled={isDisabled}
-                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    isSelected
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : isDisabled
-                      ? "opacity-40 cursor-not-allowed bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
-                  }`}
-                >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-3">
-            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-              Back
-            </button>
-            <button
-              type="button"
-              disabled={selectedCategories.length === 0}
-              onClick={goNext}
-              className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
-            >
-              Continue
-            </button>
-          </div>
-          <button type="button" onClick={goNext} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">
-            Skip for now →
-          </button>
-        </div>
-      )}
-
-      {/* ── Seniority & Work Arrangement ── */}
-      {currentKey === "seniority" && (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your preferences</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Optional — helps narrow down results</p>
-          </div>
-
-          {/* Seniority */}
-          <div>
-            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">What level are you at?</p>
-            <div className="flex flex-wrap gap-2">
-              {SENIORITY_LEVELS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => toggleSeniority(s.value)}
-                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    selectedSeniorities.includes(s.value)
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Work arrangement */}
-          <div>
-            <p className="text-sm font-medium mb-2 text-gray-800 dark:text-gray-200">What work arrangement do you prefer?</p>
-            <div className="flex flex-wrap gap-2">
-              {WORK_ARRANGEMENTS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => toggleWorkArrangement(w)}
-                  className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    selectedWorkArrangements.includes(w)
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-violet-400"
-                  }`}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-
-          <div className="flex gap-3">
-            <button type="button" onClick={goBack} className="flex-1 border py-2 rounded text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-              Back
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-black text-white py-2 rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
-            >
-              {loading ? "Saving…" : isUpdate ? "Save changes" : "Continue"}
-            </button>
-          </div>
-          {loading && file && (
-            <p className="text-xs text-center text-gray-400 dark:text-gray-500">
-              Processing your CV in the background — this may take a moment.
-            </p>
-          )}
-        </form>
-      )}
-
-      {/* ── Plan ── */}
-      {currentKey === "plan" && (
-        <div className="space-y-6">
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">You&apos;re all set!</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Choose a plan to start applying</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-start">
-            {PLAN_TIERS.map((tier) => {
-              const isCurrent = currentPlan !== null && tier.key === currentPlan;
-              const isPaidUser = currentPlan === "pro" || currentPlan === "unlimited";
-              const rank = (k: string) => (k === "unlimited" ? 2 : k === "pro" ? 1 : 0);
-              const ctaLabel = isCurrent
-                ? "Current plan"
-                : isPaidUser && tier.key !== "free"
-                ? rank(tier.key) > rank(currentPlan) ? "Upgrade" : "Downgrade"
-                : tier.ctaLabel;
-              return (
-              <div
-                key={tier.key}
-                className={`relative rounded-2xl p-6 flex flex-col h-full ${
-                  tier.highlighted
-                    ? "bg-blue-50/60 dark:bg-gray-800 border-2 border-[#1a2e5e] dark:border-blue-400 shadow-xl md:scale-105"
-                    : "bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-sm"
-                }`}
-              >
-                {tier.highlighted && (
-                  <span
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold text-white px-3 py-1 rounded-full whitespace-nowrap"
-                    style={{ background: "#1a2e5e" }}
-                  >
-                    Most Popular
+      <div className={cn("relative mx-auto -mt-14 sm:-mt-16", currentKey === "plan" ? "max-w-6xl" : "max-w-2xl")}>
+        {/* ── Welcome ── */}
+        {currentKey === "welcome" && (
+          <section aria-labelledby="welcome-heading" className={cardCls}>
+            <h2 id="welcome-heading" className={stepHeading}>What JobAgent does for you</h2>
+            <ul className="mt-6 space-y-4">
+              {WELCOME_BULLETS.map((item) => (
+                <li key={item} className="flex items-start gap-3.5 text-body text-ink sm:text-[1.0625rem] sm:leading-7">
+                  <span aria-hidden="true" className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand-text">
+                    <CheckIcon className="h-3.5 w-3.5" />
                   </span>
-                )}
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <Button size="lg" block className="mt-9" onClick={goNext}>
+              Get Started
+              <ArrowRightIcon />
+            </Button>
+          </section>
+        )}
 
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{tier.name}</h3>
-                <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
-                  {tier.price}
-                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400">/month</span>
+        {/* ── CV ── */}
+        {currentKey === "cv" && (
+          <section aria-labelledby="cv-heading" className={cardCls}>
+            {!isUpdate && (
+              <button type="button" onClick={goBack} className={cn(backLink, "mb-5")}>
+                ← Back
+              </button>
+            )}
+            <h2 id="cv-heading" className={stepHeading}>Your CV</h2>
+            {!isUpdate && (
+              <p className="mt-2 text-body text-ink-muted">Upload your CV to get personalized matches</p>
+            )}
+
+            {isUpdate && existingCV && (
+              <div className="mt-6 rounded-card border border-line bg-surface-sunken p-4">
+                <p className="text-caption font-semibold uppercase tracking-wide text-ink-subtle">Current CV</p>
+                {existingCV.skills_json?.skills?.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {existingCV.skills_json.skills.slice(0, 12).map((s) => (
+                      <Badge key={s} tone="neutral">{s}</Badge>
+                    ))}
+                    {existingCV.skills_json.skills.length > 12 && (
+                      <span className="self-center text-caption text-ink-subtle">+{existingCV.skills_json.skills.length - 12} more</span>
+                    )}
+                  </div>
+                ) : null}
+                <p className="mt-3 text-body-sm text-ink-muted">
+                  {existingCV.skills_json?.years_experience != null && (
+                    <>
+                      {existingCV.skills_json.years_experience} year{existingCV.skills_json.years_experience === 1 ? "" : "s"} experience ·{" "}
+                    </>
+                  )}
+                  Last updated {new Date(existingCV.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                 </p>
+              </div>
+            )}
 
-                <ul className="mt-5 space-y-2.5 flex-1">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                      <CheckIcon />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
+            {cvPath === null && (
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setCvPath("upload")}
+                  className="group flex flex-col items-start gap-4 rounded-card border border-line bg-surface p-5 text-left transition-all duration-300 ease-calm hover:border-brand/60 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5"
+                >
+                  <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft text-brand-text transition-colors group-hover:bg-brand group-hover:text-brand-on">
+                    <UploadIcon className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-title-card text-ink">{isUpdate ? "Replace CV" : "Upload existing CV"}</span>
+                    <span className="mt-1 block text-body-sm text-ink-muted">PDF or Word document (.pdf, .docx)</span>
+                  </span>
+                  <span className="mt-auto text-body-sm font-semibold text-brand-text">{isUpdate ? "Upload new CV" : "Upload CV"} →</span>
+                </button>
 
                 <button
                   type="button"
-                  disabled={planActionLoading !== null || isCurrent}
-                  onClick={() => handlePlanChoice(tier)}
-                  className={`mt-6 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 ${
-                    tier.highlighted ? "text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  }`}
-                  style={tier.highlighted ? { background: "#1a2e5e" } : undefined}
+                  onClick={() => router.push("/dashboard/cv-builder")}
+                  className="group flex flex-col items-start gap-4 rounded-card border border-line bg-surface p-5 text-left transition-all duration-300 ease-calm hover:border-brand/60 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5"
                 >
-                  {planActionLoading === tier.key ? "…" : ctaLabel}
+                  <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft text-brand-text transition-colors group-hover:bg-brand group-hover:text-brand-on">
+                    <PenIcon className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-title-card text-ink">Build CV with AI</span>
+                    <span className="mt-1 block text-body-sm text-ink-muted">Answer a few questions, Claude writes it</span>
+                  </span>
+                  <span className="mt-auto text-body-sm font-semibold text-brand-text">Start building →</span>
                 </button>
               </div>
-              );
-            })}
-          </div>
+            )}
 
-          {planError && <p className="text-red-600 text-sm text-center">{planError}</p>}
+            {cvPath === "upload" && (
+              <div className="mt-6">
+                <button type="button" onClick={() => setCvPath(null)} className={backLink}>
+                  ← Back to options
+                </button>
+                <label
+                  className={cn(
+                    "mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-card border-2 border-dashed px-6 py-10 text-center transition-colors",
+                    "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                    file ? "border-brand/50 bg-brand-soft/40" : "border-line-strong/60 hover:border-brand/60 hover:bg-surface-sunken",
+                  )}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf,.docx"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f && f.size > 5 * 1024 * 1024) { setError("File must be under 5MB"); return; }
+                      setError("");
+                      setFile(f ?? null);
+                    }}
+                  />
+                  <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-brand-text ring-1 ring-line">
+                    {file ? <DocumentIcon className="h-5 w-5" /> : <UploadIcon className="h-5 w-5" />}
+                  </span>
+                  {file ? (
+                    <span className="text-body font-semibold text-ink">{file.name}</span>
+                  ) : (
+                    <span className="text-body text-ink-muted">
+                      {isUpdate ? "Click to choose a new PDF or Word file (optional)" : "Click to choose a PDF or Word file (.docx)"}
+                    </span>
+                  )}
+                </label>
+                {error && <Notice tone="danger" className="mt-4">{error}</Notice>}
+                <Button size="lg" block className="mt-6" disabled={!isUpdate && !file} onClick={goNext}>
+                  Continue
+                </Button>
+              </div>
+            )}
 
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={planActionLoading !== null}
-            className="w-full max-w-lg mx-auto block border dark:border-gray-600 py-2 rounded text-sm hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            Back
-          </button>
-        </div>
-      )}
+            {isUpdate && cvPath === null && (
+              <div className="mt-6 text-center">
+                <button type="button" onClick={goNext} className={backLink}>
+                  Keep current CV, update preferences only →
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Preferences ── */}
+        {currentKey === "preferences" && (
+          <section aria-labelledby="prefs-heading" className={cardCls}>
+            <h2 id="prefs-heading" className={stepHeading}>What you&apos;re looking for</h2>
+            <div className="mt-7 space-y-6">
+              {/* Job titles */}
+              <div>
+                <label htmlFor="onb-title" className="block text-body-sm font-medium text-ink">Job titles you&apos;re looking for</label>
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    id="onb-title"
+                    type="text"
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitle(); } }}
+                    placeholder="e.g. Frontend Developer"
+                    className={cn(inputStyles(), "h-11 flex-1")}
+                  />
+                  <Button variant="secondary" size="lg" onClick={addTitle}>
+                    Add
+                  </Button>
+                </div>
+                {titles.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {titles.map((t) => (
+                      <RemovableTag key={t} label={t} onRemove={() => removeTitle(t)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Location */}
+              <div className="relative">
+                <label htmlFor="onb-location" className="block text-body-sm font-medium text-ink">Location</label>
+                <input
+                  id="onb-location"
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => {
+                    setLocationQuery(e.target.value);
+                    setLocation("");
+                    setLocationDropdownOpen(true);
+                  }}
+                  onFocus={() => setLocationDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setLocationDropdownOpen(false), 150)}
+                  placeholder="Search for a country…"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={locationDropdownOpen && filteredCountries.length > 0}
+                  aria-controls="onb-location-list"
+                  className={cn(inputStyles(), "mt-1.5 h-11 w-full")}
+                />
+                {locationDropdownOpen && filteredCountries.length > 0 && (
+                  <ul
+                    id="onb-location-list"
+                    role="listbox"
+                    className="absolute z-10 mt-1.5 max-h-56 w-full overflow-y-auto rounded-card border border-line bg-surface py-1 shadow-overlay"
+                  >
+                    {filteredCountries.map((c) => (
+                      <li key={c} role="option" aria-selected={location === c}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setLocation(c);
+                            setLocationQuery(c);
+                            setLocationDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full px-3.5 py-2 text-left text-body-sm transition-colors hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:outline-none",
+                            location === c ? "bg-brand-soft font-semibold text-brand-text" : "text-ink",
+                          )}
+                        >
+                          {c}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Min salary */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="onb-salary" className="text-body-sm font-medium text-ink">Minimum salary</label>
+                  <button
+                    type="button"
+                    onClick={() => { setSkipSalary((v) => !v); setMinSalary(""); }}
+                    className="rounded-sm text-body-sm font-medium text-brand-text underline underline-offset-4 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {skipSalary ? "Add salary" : "Skip salary"}
+                  </button>
+                </div>
+                {!skipSalary && (
+                  <input
+                    id="onb-salary"
+                    type="number"
+                    value={minSalary}
+                    onChange={(e) => setMinSalary(e.target.value)}
+                    placeholder="e.g. 15000"
+                    className={cn(inputStyles(), "mt-1.5 h-11 w-full")}
+                  />
+                )}
+                {skipSalary && <p className="mt-1.5 text-body-sm italic text-ink-subtle">No minimum salary set</p>}
+              </div>
+            </div>
+
+            <div className={actions}>
+              <Button variant="secondary" size="lg" className="sm:flex-1" onClick={goBack}>
+                Back
+              </Button>
+              <Button size="lg" className="sm:flex-1" disabled={titles.length === 0} onClick={goNext}>
+                Continue
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Categories ── */}
+        {currentKey === "categories" && (
+          <section aria-labelledby="cat-heading" className={cardCls}>
+            <h2 id="cat-heading" className={stepHeading}>What job are you looking for?</h2>
+            <p className="mt-2 text-body text-ink-muted">
+              Pick up to 4 categories
+              <span className="ml-2 font-semibold text-ink" aria-live="polite">{selectedCategories.length}/4 selected</span>
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {JOB_CATEGORIES.map((cat) => {
+                const isSelected = selectedCategories.includes(cat);
+                const isDisabled = !isSelected && selectedCategories.length >= 4;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleCategory(cat)}
+                    disabled={isDisabled}
+                    className={cn(chipStyles({ selected: isSelected }), isDisabled && "cursor-not-allowed opacity-40")}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className={actions}>
+              <Button variant="secondary" size="lg" className="sm:flex-1" onClick={goBack}>
+                Back
+              </Button>
+              <Button size="lg" className="sm:flex-1" disabled={selectedCategories.length === 0} onClick={goNext}>
+                Continue
+              </Button>
+            </div>
+            <div className="mt-4 text-center">
+              <button type="button" onClick={goNext} className={backLink}>
+                Skip for now →
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Seniority & Work Arrangement ── */}
+        {currentKey === "seniority" && (
+          <form onSubmit={handleSubmit} aria-labelledby="sen-heading" className={cardCls}>
+            <h2 id="sen-heading" className={stepHeading}>Your preferences</h2>
+            <p className="mt-2 text-body text-ink-muted">Optional — helps narrow down results</p>
+
+            <fieldset className="mt-7">
+              <legend className="text-body-sm font-medium text-ink">What level are you at?</legend>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {SENIORITY_LEVELS.map((s) => {
+                  const on = selectedSeniorities.includes(s.value);
+                  return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleSeniority(s.value)}
+                      className={chipStyles({ selected: on })}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <fieldset className="mt-7">
+              <legend className="text-body-sm font-medium text-ink">What work arrangement do you prefer?</legend>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {WORK_ARRANGEMENTS.map((w) => {
+                  const on = selectedWorkArrangements.includes(w);
+                  return (
+                    <button
+                      key={w}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleWorkArrangement(w)}
+                      className={chipStyles({ selected: on })}
+                    >
+                      {w}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {error && <Notice tone="danger" className="mt-6">{error}</Notice>}
+
+            <div className={actions}>
+              <Button variant="secondary" size="lg" className="sm:flex-1" onClick={goBack}>
+                Back
+              </Button>
+              <Button type="submit" size="lg" className="sm:flex-1" disabled={loading} loading={loading}>
+                {loading ? "Saving…" : isUpdate ? "Save changes" : "Continue"}
+              </Button>
+            </div>
+            {loading && file && (
+              <p className="mt-4 text-center text-body-sm text-ink-subtle">
+                Processing your CV in the background — this may take a moment.
+              </p>
+            )}
+          </form>
+        )}
+
+        {/* ── Plan ── */}
+        {currentKey === "plan" && (
+          <section aria-labelledby="plan-heading">
+            <div className={cn(cardCls, "text-center")}>
+              <h2 id="plan-heading" className={stepHeading}>You&apos;re all set!</h2>
+              <p className="mt-2 text-body text-ink-muted">Choose a plan to start applying</p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
+              {PLAN_TIERS.map((tier) => {
+                const isCurrent = currentPlan !== null && tier.key === currentPlan;
+                const isPaidUser = currentPlan === "pro" || currentPlan === "unlimited";
+                const rank = (k: string) => (k === "unlimited" ? 2 : k === "pro" ? 1 : 0);
+                const ctaLabel = isCurrent
+                  ? "Current plan"
+                  : isPaidUser && tier.key !== "free"
+                  ? rank(tier.key) > rank(currentPlan) ? "Upgrade" : "Downgrade"
+                  : tier.ctaLabel;
+                return (
+                  <div
+                    key={tier.key}
+                    className={cn(
+                      "flex flex-col rounded-[1.375rem] p-6 sm:p-7",
+                      tier.highlighted ? "bg-surface-raised shadow-dossier ring-1 ring-accent/50" : "border border-line bg-surface",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-serif text-[1.5rem] font-medium leading-tight text-ink">{tier.name}</h3>
+                      {tier.highlighted && <Badge tone="accent">Most Popular</Badge>}
+                    </div>
+                    <p className="mt-4">
+                      <span className="numerals font-serif text-[2.75rem] font-medium leading-none text-ink">{tier.price}</span>
+                      <span className="ml-1.5 text-body-sm text-ink-muted">/month</span>
+                    </p>
+
+                    <ul className="mt-6 flex-1 space-y-2.5 border-t border-line pt-6">
+                      {tier.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2.5 text-body-sm text-ink">
+                          <CheckIcon className="mt-0.5 h-4 w-4 text-brand-text" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button
+                      variant={isCurrent ? "current" : tier.highlighted ? "accent" : "secondary"}
+                      size="lg"
+                      block
+                      className="mt-7"
+                      disabled={planActionLoading !== null || isCurrent}
+                      loading={planActionLoading === tier.key}
+                      onClick={() => handlePlanChoice(tier)}
+                    >
+                      {planActionLoading === tier.key ? "…" : ctaLabel}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="mx-auto mt-6 max-w-2xl text-center text-body-sm text-ink-muted">{INCLUDED_IN_EVERY_PLAN}</p>
+            {planError && <Notice tone="danger" className="mx-auto mt-6 max-w-lg">{planError}</Notice>}
+
+            <div className="mt-6 flex justify-center">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={goBack}
+                disabled={planActionLoading !== null}
+              >
+                Back
+              </Button>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
