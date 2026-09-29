@@ -4,6 +4,11 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 
+// The LinkedIn connection section is hidden until it's ready for launch.
+// While it is, don't run its check either: /api/linkedin/session-status
+// starts a Playwright session validation on the AI service (5-10 s).
+const LINKEDIN_SECTION_ENABLED = false;
+
 interface Profile {
   cv: { clean_summary: string | null; skills_json: string | null; updated_at: string } | null;
   preferences: { titles: string[]; locations: string[]; remote_ok: boolean; work_modes: string[]; min_salary: number | null } | null;
@@ -86,7 +91,7 @@ function ProfileContent() {
 
   // LinkedIn session state
   const [linkedinConnected, setLinkedinConnected] = useState(false);
-  const [linkedinChecking, setLinkedinChecking] = useState(true);
+  const [linkedinChecking, setLinkedinChecking] = useState(LINKEDIN_SECTION_ENABLED);
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinModal, setLinkedinModal] = useState(false);
   const [linkedinCookie, setLinkedinCookie] = useState("");
@@ -142,11 +147,13 @@ function ProfileContent() {
       .catch(() => {});
 
     // Check LinkedIn session status on mount — real Playwright validation (5-10 s)
-    fetch("/api/linkedin/session-status")
-      .then((r) => r.json())
-      .then((d) => { setLinkedinConnected(!!d.connected); })
-      .catch(() => {})
-      .finally(() => setLinkedinChecking(false));
+    if (LINKEDIN_SECTION_ENABLED) {
+      fetch("/api/linkedin/session-status")
+        .then((r) => r.json())
+        .then((d) => { setLinkedinConnected(!!d.connected); })
+        .catch(() => {})
+        .finally(() => setLinkedinChecking(false));
+    }
 
     // Check Google Calendar connection status on mount
     fetch("/api/auth/google/status")
@@ -592,8 +599,8 @@ function ProfileContent() {
         </div>
       </form>
 
-      {/* LinkedIn Connection — hidden from UI, not ready for launch. Backend/state untouched. */}
-      {false && (
+      {/* LinkedIn Connection — hidden from UI, not ready for launch (LINKEDIN_SECTION_ENABLED). */}
+      {LINKEDIN_SECTION_ENABLED && (
       <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-5">
         <div className="flex items-start justify-between">
           <div>
