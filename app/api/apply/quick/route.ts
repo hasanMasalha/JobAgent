@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { pythonFetch, pythonServiceUrl } from "@/lib/python-service";
 
 export const maxDuration = 60;
 
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
       `;
       const applicationId = appRows[0].id;
 
-      const pythonUrl = `${process.env.PYTHON_SERVICE_URL}/ats-apply`;
+      const pythonUrl = pythonServiceUrl("/ats-apply");
       console.log("[apply/quick] calling Python:", {
         url: pythonUrl,
         ats: atsPlatform,
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
         hasName: !!(profile.first_name || profile.last_name),
       });
 
-      const pythonRes = await fetch(pythonUrl, {
+      const pythonRes = await pythonFetch("/ats-apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

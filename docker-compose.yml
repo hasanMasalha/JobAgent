@@ -15,7 +15,7 @@ services:
   fastapi:
     build: ./ai-service
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # Playwright/Chromium docs (https://playwright.dev/docs/docker) call
     # ipc: host required — without it Chromium's shared-memory IPC starves
     # under Docker's default limits and the renderer process gets OOM-killed,

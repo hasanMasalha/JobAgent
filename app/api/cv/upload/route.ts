@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { pythonFetch } from "@/lib/python-service";
 
 // Allow up to 60 seconds for the synchronous part + background call
 export const maxDuration = 60;
@@ -177,11 +178,10 @@ export async function POST(req: NextRequest) {
     // The Node.js runtime continues executing after the response is sent.
     // Skills/embedding are written to the CV row once Python finishes.
     const capturedUserId = user.id;
-    const pythonUrl = process.env.PYTHON_SERVICE_URL ?? "http://localhost:8000";
     void (async () => {
       try {
         console.log("[cv/upload] background embedding starting for", capturedUserId);
-        const pythonRes = await fetch(`${pythonUrl}/process-cv`, {
+        const pythonRes = await pythonFetch(`/process-cv`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ raw_text: rawText, user_id: capturedUserId }),

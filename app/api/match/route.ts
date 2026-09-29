@@ -4,6 +4,7 @@ import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type"
 import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementMatches } from "@/lib/usage";
+import { pythonFetch } from "@/lib/python-service";
 
 function limitReachedResponse() {
   return NextResponse.json(
@@ -47,8 +48,7 @@ export async function GET(req: NextRequest) {
 
     let pythonRes: Response;
     try {
-      pythonRes = await fetch(
-        `${process.env.PYTHON_SERVICE_URL}/match-jobs`,
+      pythonRes = await pythonFetch(`/match-jobs`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { createInterviewEvent } from "@/lib/google-calendar";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementMatches } from "@/lib/usage";
+import { pythonFetch } from "@/lib/python-service";
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -176,9 +177,7 @@ async function executeTool(
       if (!allowed) {
         return { error: "You've reached your daily match limit. Upgrade to Pro for more matches." };
       }
-
-      const pythonUrl = process.env.PYTHON_SERVICE_URL ?? "http://localhost:8000";
-      const res = await fetch(`${pythonUrl}/match-jobs`, {
+      const res = await pythonFetch(`/match-jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),

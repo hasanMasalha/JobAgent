@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { pythonFetch } from "@/lib/python-service";
 
 export async function POST() {
   const supabase = createServerClient();
@@ -12,8 +13,7 @@ export async function POST() {
   }
 
   try {
-    const res = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/linkedin/force-connected`,
+    const res = await pythonFetch(`/linkedin/force-connected`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

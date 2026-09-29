@@ -21,7 +21,7 @@ jobs:
           command_timeout: 55m
           script: |
             echo "Starting LinkedIn/Indeed scrape..."
-            curl -s -X POST http://localhost:8000/scrape-and-store \
+            curl -s -X POST -H "X-Internal-Key: $(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)" http://localhost:8000/scrape-and-store \
               --max-time 3000 \
               && echo "LinkedIn/Indeed scrape completed" \
               || echo "LinkedIn/Indeed scrape failed or timed out"
@@ -35,7 +35,7 @@ jobs:
           command_timeout: 10m
           script: |
             echo "Starting API company scrape (greenhouse/comeet/lever/ashby)..."
-            curl -s -X POST http://localhost:8000/companies/scrape-api-only \
+            curl -s -X POST -H "X-Internal-Key: $(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)" http://localhost:8000/companies/scrape-api-only \
               --max-time 300 \
               && echo "API company scrape completed" \
               || echo "API company scrape failed or timed out"

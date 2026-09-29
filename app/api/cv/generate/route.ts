@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
+import { pythonFetch } from "@/lib/python-service";
 
 function buildPrompt(data: CVFormData): string {
   const { personal, experiences, educations, skillsInfo } = data;
@@ -155,8 +156,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send to Python service for embeddings
-    const pythonRes = await fetch(
-      `${process.env.PYTHON_SERVICE_URL}/process-cv`,
+    const pythonRes = await pythonFetch(`/process-cv`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
