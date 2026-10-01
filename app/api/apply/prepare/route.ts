@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { job_id } = await req.json();
+    const { job_id, mode } = await req.json();
     if (!job_id) {
       return NextResponse.json({ error: "job_id required" }, { status: 400 });
     }
@@ -93,6 +93,34 @@ export async function POST(req: NextRequest) {
       LIMIT 1
     `;
     const draft = existing[0];
+
+    // LinkedIn Easy Apply sends the résumé saved on the user's LinkedIn
+    // profile: the extension uploads no CV and no cover letter. So there is
+    // nothing to tailor and nothing to charge — the review screen says what
+    // will happen instead. (Download mode still tailors: the user asked for a
+    // CV to apply with by hand.)
+    if (job.url.toLowerCase().includes("linkedin.com") && mode !== "download") {
+      const applicationId =
+        draft?.id ??
+        (
+          await db.$queryRaw<{ id: string }[]>`
+            INSERT INTO "Application" (id, user_id, job_id, status, applied_at)
+            VALUES (gen_random_uuid(), ${user.id}, ${job_id}, 'draft', now())
+            RETURNING id
+          `
+        )[0].id;
+      return NextResponse.json({
+        application_id: applicationId,
+        linkedin: true,
+        cover_letter: "",
+        tailored_cv: "",
+        cv_changes: [],
+        job_title: job.title,
+        company: job.company,
+        job_url: job.url,
+        match_score: matchScore,
+      });
+    }
     // A draft from before the hash existed (null) is reused as it is.
     if (draft?.tailored_cv && draft.cover_letter && (!draft.tailored_cv_hash || draft.tailored_cv_hash === cvHash)) {
       return NextResponse.json({

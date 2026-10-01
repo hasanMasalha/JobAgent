@@ -88,6 +88,13 @@ function isAutoApplicable(job: Job): boolean {
   return ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
 }
 
+// LinkedIn Easy Apply sends the résumé on the user's LinkedIn profile, so a
+// tailored CV is only useful there as a download.
+function isLinkedInOnly(job: Job): boolean {
+  const url = (job.url || "").toLowerCase();
+  return url.includes("linkedin.com") && !ATS_DOMAINS.some((d) => url.includes(d));
+}
+
 export function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
   if (type === "auto" && isATSJob(url))
     return (
@@ -218,8 +225,8 @@ export default function JobCard({
     e.stopPropagation();
     e.preventDefault();
     onApply?.(job.id);
-    const isExternal = !isAutoApplicable(job);
-    router.push(`/dashboard/apply/${job.id}${isExternal ? "?mode=download" : ""}`);
+    const download = !isAutoApplicable(job) || isLinkedInOnly(job);
+    router.push(`/dashboard/apply/${job.id}${download ? "?mode=download" : ""}`);
   };
 
   async function handleDismiss() {
@@ -327,7 +334,7 @@ export default function JobCard({
   const tailorButton = (
     <Button variant="secondary" size={featured ? "lg" : "sm"} block={featured} onClick={handleTailorApply}>
       <PenIcon className="h-3.5 w-3.5" />
-      {autoApplicable ? "Tailor CV" : "Tailor & Download"}
+      {autoApplicable && !isLinkedInOnly(job) ? "Tailor CV" : "Tailor & Download"}
     </Button>
   );
 

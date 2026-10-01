@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobAgent DEV",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Local dev build — do not submit to Chrome Web Store.",
   "permissions": [
     "cookies",
@@ -35,7 +35,7 @@
         "https://www.linkedin.com/*",
         "https://il.linkedin.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["answers.js", "content.js"],
       "run_at": "document_end"
     }
   ],

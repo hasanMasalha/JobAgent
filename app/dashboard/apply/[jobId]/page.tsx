@@ -16,10 +16,11 @@ import {
   buttonStyles,
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import { isVersionAtLeast } from "@/lib/extension-version";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
 
-type Stage = "loading" | "ready" | "submitting" | "error" | "extension_launched" | "applying_background";
+type Stage = "loading" | "ready" | "submitting" | "error" | "extension_required" | "extension_launched" | "applying_background";
 
 type ATSPlatform = "greenhouse" | "lever" | "workable" | "ashby";
 
@@ -49,7 +50,53 @@ interface PrepareResult {
   company: string;
   job_url: string;
   match_score: number | null;
+  /** LinkedIn Easy Apply job: nothing was tailored, see /api/apply/prepare. */
+  linkedin?: boolean;
 }
+
+const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
+
+// The installed extension's version: null if it doesn't answer, "0" if it
+// answers without one (versions before 1.5.0 didn't report it). Asked twice,
+// because the first message can find its service worker still waking up.
+function extensionVersion(): Promise<string | null> {
+  const ask = () =>
+    new Promise<string | null>((resolve) => {
+      if (typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) return resolve(null);
+      const timer = setTimeout(() => resolve(null), 1500);
+      try {
+        chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, (response) => {
+          clearTimeout(timer);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((chrome.runtime as any).lastError) return resolve(null);
+          resolve(typeof response?.version === "string" ? response.version : "0");
+        });
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+  return ask().then((v) => v ?? ask());
+}
+
+// What /api/profile returns for the answers the extension may type into
+// Easy Apply. The last six only count once the user has confirmed them.
+interface ApplicationAnswers {
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  city: string | null;
+  expected_salary: string | null;
+  notice_period: string | null;
+  years_of_experience: string | null;
+  highest_education: string | null;
+  work_authorized: boolean | null;
+  requires_sponsorship: boolean | null;
+  willing_to_relocate: boolean | null;
+  application_details_confirmed: boolean;
+}
+
+const yesNo = (v: boolean | null) => (v === true ? "Yes" : v === false ? "No" : "");
 
 const cardCls = "rounded-[1.375rem] bg-surface-raised shadow-dossier ring-1 ring-line/60";
 const groupLabel = "text-caption font-semibold uppercase tracking-wide text-ink-subtle";
@@ -58,7 +105,7 @@ const groupLabel = "text-caption font-semibold uppercase tracking-wide text-ink-
 function submitPlan(url: string): { title: string; detail: string } {
   const ats = detectATS(url);
   if (ats) return { title: `Sends your application straight to ${ATS_NAMES[ats]}`, detail: "With the CV and cover letter below. You'll see the result here in about a minute." };
-  if (url.includes("linkedin.com")) return { title: "Opens the job on LinkedIn", detail: "The JobAgent extension fills in and submits the Easy Apply form in that tab. You need the extension installed and to be signed in to LinkedIn." };
+  if (url.includes("linkedin.com")) return { title: "Opens the job on LinkedIn", detail: "The JobAgent extension fills in Easy Apply with your answers and submits it. This uses one auto-apply, returned if it can't submit. You need the extension installed and to be signed in to LinkedIn." };
   return { title: "Tries to apply on the job's site", detail: "If the site sends us elsewhere or can't be completed automatically, you'll get a link to finish yourself, with your cover letter ready to paste." };
 }
 
@@ -99,6 +146,10 @@ export default function ApplyPage() {
   const [bgTimedOut, setBgTimedOut] = useState(false);
   const [manualUrl, setManualUrl] = useState<string | null>(null);
   const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
+  const [limitKind, setLimitKind] = useState<"tailoring" | "autoApply">("tailoring");
+  const [extensionProblem, setExtensionProblem] = useState<"missing" | "outdated">("missing");
+  const [answers, setAnswers] = useState<ApplicationAnswers | null>(null);
+  const [approving, setApproving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [showCv, setShowCv] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -106,10 +157,11 @@ export default function ApplyPage() {
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   useEffect(() => {
+    setStage("loading");
     fetch("/api/apply/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId }),
+      body: JSON.stringify({ job_id: jobId, mode: isDownloadMode ? "download" : undefined }),
       signal: AbortSignal.timeout(120_000),
     })
       .then(async (res) => {
@@ -132,7 +184,29 @@ export default function ApplyPage() {
         setError(err.message);
         setStage("error");
       });
-  }, [jobId]);
+  }, [jobId, isDownloadMode]);
+
+  // LinkedIn review: the answers the extension is allowed to use.
+  const isLinkedInReview = !!data?.linkedin;
+  useEffect(() => {
+    if (!isLinkedInReview) return;
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((p) => setAnswers(p as ApplicationAnswers))
+      .catch(() => showToast("Couldn't load your answers from Profile.", "error"));
+  }, [isLinkedInReview]);
+
+  async function approveAnswers() {
+    setApproving(true);
+    const ok = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm_application_details: true }),
+    }).then((r) => r.ok).catch(() => false);
+    setApproving(false);
+    if (!ok) return showToast("Couldn't save that. Please try again.", "error");
+    setAnswers((a) => (a ? { ...a, application_details_confirmed: true } : a));
+  }
 
   async function handleDownloadCv() {
     if (!data) return;
@@ -169,7 +243,7 @@ export default function ApplyPage() {
 
     // Save cover letter edits first. If that fails, stop — submitting would
     // send (or hand the extension) the unedited letter.
-    const saved = await fetch("/api/apply/submit-draft", {
+    const saved = data.linkedin || await fetch("/api/apply/submit-draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ application_id: data.application_id, cover_letter: coverLetter }),
@@ -227,11 +301,37 @@ export default function ApplyPage() {
       // Mark as pending_extension — await the full DB write before opening the
       // tab. If that fails, stop: the extension would open LinkedIn and find
       // nothing pending to apply to.
-      const marked = await fetch("/api/apply/mark-pending-extension", {
+      //
+      // Before that, the extension has to be installed and new enough: older
+      // versions typed answers nobody gave, and the server refuses them. This
+      // check runs first so nothing is marked or charged for an apply that
+      // can't happen. (Without NEXT_PUBLIC_EXTENSION_ID the page can't ask;
+      // the server-side refusal in /api/apply/check-pending still applies.)
+      if (EXTENSION_ID) {
+        const version = await extensionVersion();
+        if (!isVersionAtLeast(version)) {
+          setExtensionProblem(version ? "outdated" : "missing");
+          setStage("extension_required");
+          return;
+        }
+      }
+
+      const markRes = await fetch("/api/apply/mark-pending-extension", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ application_id: data.application_id }),
-      }).then((r) => r.ok).catch(() => false);
+      }).catch(() => null);
+      if (markRes?.status === 403) {
+        const json = await markRes.json().catch(() => ({}));
+        if (json.error === "limit_reached") {
+          setUpgradeUrl(typeof json.upgrade_url === "string" && json.upgrade_url.startsWith("/") ? json.upgrade_url : "/pricing");
+          setLimitKind("autoApply");
+          setError(json.message ?? "You've reached your monthly auto-apply limit.");
+          setStage("error");
+          return;
+        }
+      }
+      const marked = !!markRes?.ok;
       if (!marked) {
         showToast("Couldn't start the LinkedIn application, so nothing was opened. Please try again.", "error");
         setConfirming(false);
@@ -379,7 +479,7 @@ export default function ApplyPage() {
     return shell(
       <StatePanel
         role="alert"
-        title={upgradeUrl ? "You've used this month's CV tailorings" : manualUrl ? "Apply to this one yourself" : "Something went wrong"}
+        title={upgradeUrl ? (limitKind === "autoApply" ? "You've used this month's auto-applies" : "You've used this month's CV tailorings") : manualUrl ? "Apply to this one yourself" : "Something went wrong"}
         action={
           <div className="flex flex-col items-center gap-3 sm:flex-row">
             {upgradeUrl && <Link href={upgradeUrl} className={buttonStyles({ size: "lg" })}>See plans</Link>}
@@ -388,8 +488,33 @@ export default function ApplyPage() {
           </div>
         }
       >
-        {upgradeUrl ? "Your limit resets at the start of next month. A higher plan gives you more tailorings each month." : error}
+        {upgradeUrl ? `Your limit resets at the start of next month. A higher plan gives you more ${limitKind === "autoApply" ? "auto-applies" : "tailorings"} each month.${limitKind === "autoApply" ? " Nothing was sent, and you can still apply on LinkedIn yourself." : ""}` : error}
         {manualUrl && <span className="mt-2 block">Your tailored cover letter is saved in Applications.</span>}
+      </StatePanel>
+    );
+  }
+
+  /* ── LinkedIn: extension missing or too old. Nothing marked or charged. ── */
+  if (stage === "extension_required") {
+    const outdated = extensionProblem === "outdated";
+    return shell(
+      <StatePanel
+        role="status"
+        title={outdated ? "Update the JobAgent extension" : "Install the JobAgent extension"}
+        action={
+          <div className="flex flex-col items-center gap-3 sm:flex-row">
+            <a href={EXTENSION_STORE_URL} target="_blank" rel="noopener noreferrer" className={buttonStyles({ size: "lg" })}>
+              {outdated ? "Get the update" : "Get the extension"} <span aria-hidden="true">↗</span>
+            </a>
+            <Button variant="secondary" size="lg" onClick={() => { setConfirming(false); setStage("ready"); }}>Try again</Button>
+            {openJob("Apply on LinkedIn yourself")}
+          </div>
+        }
+      >
+        {outdated
+          ? "Your version filled in answers you never gave, so JobAgent no longer applies with it. Update the extension, reload this page, and confirm again."
+          : "JobAgent applies on LinkedIn through its Chrome extension, and it isn't answering in this browser. Install it, reload this page, and confirm again."}
+        <span className="mt-2 block">Nothing was sent and no auto-apply was used.</span>
       </StatePanel>
     );
   }
@@ -405,7 +530,7 @@ export default function ApplyPage() {
       return shell(
         <>
           <StatePanel role="status" title="Finish this one yourself" action={<div className="flex flex-col items-center gap-3 sm:flex-row">{openJob("Open the job")}{toApplications}</div>}>
-            The extension couldn&apos;t complete the Easy Apply form. Your tailored cover letter is below, ready to paste.
+            JobAgent stopped before submitting, usually because LinkedIn asked something you haven&apos;t given it an answer for. Nothing was sent and your auto-apply was returned. Finish the application in the LinkedIn tab.
           </StatePanel>
           {coverLetterCopy}
         </>
@@ -442,7 +567,7 @@ export default function ApplyPage() {
         >
           install the extension
         </a>{" "}
-        or apply in that tab yourself — your cover letter is saved in Applications.
+        or apply in that tab yourself.
       </StatePanel>
     );
   }
@@ -489,9 +614,90 @@ export default function ApplyPage() {
   const lowMatch = d.match_score !== null && d.match_score !== undefined && d.match_score < 0.45;
   const plan = submitPlan(d.job_url);
 
+  const answerRows: { label: string; value: string; needsApproval?: boolean }[] = answers
+    ? [
+        { label: "Name", value: [answers.first_name, answers.last_name].filter(Boolean).join(" ") },
+        { label: "Phone", value: answers.phone ?? "" },
+        { label: "City", value: answers.city ?? "" },
+        { label: "Expected salary (monthly, NIS)", value: answers.expected_salary ?? "" },
+        { label: "Total years of experience", value: answers.years_of_experience ?? "", needsApproval: true },
+        { label: "Highest education", value: answers.highest_education ?? "", needsApproval: true },
+        { label: "Notice period (days)", value: answers.notice_period ?? "", needsApproval: true },
+        { label: "Authorized to work in Israel", value: yesNo(answers.work_authorized), needsApproval: true },
+        { label: "Requires visa sponsorship", value: yesNo(answers.requires_sponsorship), needsApproval: true },
+        { label: "Willing to relocate", value: yesNo(answers.willing_to_relocate), needsApproval: true },
+      ]
+    : [];
+  const approved = !!answers?.application_details_confirmed;
+  const awaitingApproval = !!answers && !approved && answerRows.some((r) => r.needsApproval && r.value);
+
+  const linkedInReview = (
+    <>
+      <section aria-labelledby="li-heading" className={cn(cardCls, "p-5 sm:p-8")}>
+        <h2 id="li-heading" className="font-serif text-feature-sm text-ink">What LinkedIn receives</h2>
+        <p className="mt-3 text-body text-ink">
+          LinkedIn Easy Apply sends the résumé saved on your LinkedIn profile. JobAgent doesn&apos;t send a CV or a cover letter for this job, so nothing was tailored and no CV tailoring was used.
+        </p>
+        <p className="mt-3 text-body-sm text-ink-muted">
+          Want a CV tailored to this role to upload yourself?{" "}
+          <Link href={`/dashboard/apply/${jobId}?mode=download`} className="font-semibold text-brand-text underline underline-offset-4">
+            Tailor and download one
+          </Link>{" "}
+          (uses one CV tailoring).
+        </p>
+      </section>
+
+      <section aria-labelledby="answers-heading" className={cn(cardCls, "p-5 sm:p-8")}>
+        <h2 id="answers-heading" className="font-serif text-feature-sm text-ink">Answers the extension will use</h2>
+        <p className="mt-2 text-body-sm text-ink-muted">
+          Each one is used only for the matching question, along with answers you&apos;ve typed for a question before. Anything else LinkedIn asks is left blank. If a blank question is required, JobAgent stops without submitting and you answer it yourself.
+        </p>
+
+        {!answers ? (
+          <div className="mt-5 space-y-3" aria-busy="true">
+            <Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-3/5" />
+          </div>
+        ) : (
+          <dl className="mt-5 divide-y divide-line border-y border-line">
+            {answerRows.map((row) => {
+              const held = !!row.needsApproval && !approved;
+              return (
+                <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2.5">
+                  <dt className="text-body-sm text-ink-muted">{row.label}</dt>
+                  <dd className={cn("text-body-sm font-medium", row.value && !held ? "text-ink" : "text-ink-subtle")}>
+                    {row.value || "No answer: left blank"}
+                    {row.value && held && <span className="font-normal"> · not used until you approve</span>}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        )}
+
+        {awaitingApproval && (
+          <Notice tone="attention" title="Check the last six before you apply" className="mt-5">
+            Until you approve them or save them in Profile, JobAgent leaves those questions blank.
+          </Notice>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          {awaitingApproval && (
+            <Button variant="secondary" onClick={approveAnswers} disabled={approving} loading={approving}>
+              These are correct
+            </Button>
+          )}
+          <Link href="/dashboard/profile" className="text-body-sm font-semibold text-brand-text underline underline-offset-4">
+            Edit in Profile
+          </Link>
+        </div>
+      </section>
+    </>
+  );
+
   return shell(
     <div className="grid items-start gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        {d.linkedin ? linkedInReview : (<>
         <section aria-labelledby="letter-heading" className={cn(cardCls, "p-5 sm:p-8")}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="letter-heading" className="font-serif text-feature-sm text-ink">Cover letter</h2>
@@ -537,6 +743,7 @@ export default function ApplyPage() {
             </div>
           )}
         </section>
+        </>)}
       </div>
 
       <aside className="space-y-6 lg:sticky lg:top-6">
@@ -551,7 +758,7 @@ export default function ApplyPage() {
             </>
           )}
 
-          {lowMatch && (
+          {lowMatch && !d.linkedin && (
             <Notice tone="attention" className="mt-4">
               This role may not match your background well, so Claude kept its changes small rather than overstate your experience.
             </Notice>

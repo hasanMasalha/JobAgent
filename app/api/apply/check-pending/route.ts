@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { db } from "@/lib/db";
+import { extensionVersionOk, MIN_EXTENSION_VERSION } from "@/lib/extension-version";
+import { refundAutoApplyForApplication } from "@/lib/usage";
 
 // Handles both URL formats:
 //   /jobs/view/4417922448/                              → standard
@@ -73,11 +75,27 @@ export async function GET(request: NextRequest) {
 
   if (!rows.length) return NextResponse.json({ pending: false });
 
-  // Fetch profile defaults, saved answers, and CV skills in parallel
+  // Extensions older than MIN_EXTENSION_VERSION fill in answers nobody
+  // entered, so they don't get the application. It is handed back as
+  // "apply manually" and its auto-apply credit returned, so nothing is left
+  // waiting on an extension that will never be allowed to submit it.
+  if (!extensionVersionOk(request)) {
+    await refundAutoApplyForApplication(rows[0].id, userId);
+    await db.$executeRaw`
+      UPDATE "Application"
+      SET status = 'manual', error_message = 'The JobAgent extension is out of date. Update it to apply on LinkedIn.'
+      WHERE id = ${rows[0].id} AND user_id = ${userId}
+    `;
+    return NextResponse.json({ pending: false, upgrade_required: true, min_version: MIN_EXTENSION_VERSION });
+  }
+
+  // Fetch the user's answers, saved answers, and CV skills in parallel
   const [profile, savedAnswers, cvRows] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
       select: {
+        email: true,
+        application_details_confirmed_at: true,
         first_name: true,
         last_name: true,
         phone: true,
@@ -110,12 +128,19 @@ export async function GET(request: NextRequest) {
     savedAnswers.map((a) => [a.question, a.answer])
   );
 
+  // No fallbacks: a missing answer is null and the extension leaves the
+  // question blank and stops. These six columns once had database defaults,
+  // so they count as the user's answers only after the user has saved or
+  // approved them.
+  const confirmed = !!profile?.application_details_confirmed_at;
+
   return NextResponse.json({
     pending: true,
     application: {
       id: rows[0].id,
       jobUrl: rows[0].job_url,
       // Personal
+      email: profile?.email ?? null,
       first_name: profile?.first_name ?? null,
       last_name: profile?.last_name ?? null,
       phone: profile?.phone ?? null,
@@ -126,13 +151,12 @@ export async function GET(request: NextRequest) {
       portfolio_url: profile?.portfolio_url ?? null,
       // Work details
       expected_salary: profile?.expected_salary ?? null,
-      notice_period: profile?.notice_period ?? "30",
-      years_of_experience: profile?.years_of_experience ?? "2",
-      highest_education: profile?.highest_education ?? "Bachelor's Degree",
-      // Boolean defaults
-      work_authorized: profile?.work_authorized ?? true,
-      requires_sponsorship: profile?.requires_sponsorship ?? false,
-      willing_to_relocate: profile?.willing_to_relocate ?? false,
+      notice_period: confirmed ? profile?.notice_period ?? null : null,
+      years_of_experience: confirmed ? profile?.years_of_experience ?? null : null,
+      highest_education: confirmed ? profile?.highest_education ?? null : null,
+      work_authorized: confirmed ? profile?.work_authorized ?? null : null,
+      requires_sponsorship: confirmed ? profile?.requires_sponsorship ?? null : null,
+      willing_to_relocate: confirmed ? profile?.willing_to_relocate ?? null : null,
       // CV skills
       skills,
       // Learned answers from previous applications

@@ -93,11 +93,39 @@ describe("POST /api/apply/mark-pending-extension", () => {
     expect(charge).not.toHaveBeenCalled();
   });
 
-  it("application_id flow (Tailor & Apply) never charges", async () => {
-    route([]);
+  // The apply page's LinkedIn confirm. It used to be free here (the page
+  // charged a CV tailoring instead); LinkedIn jobs are no longer tailored, so
+  // it spends an auto-apply like every other submit path.
+  it("application_id flow charges one credit and marks the application as holding it", async () => {
+    route([{ id: "app-t", auto_apply_charged: false }]);
+    const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
+    expect(res.status).toBe(200);
+    expect(charge).toHaveBeenCalledTimes(1);
+    expect(sqlOf(mdb.$executeRaw.mock.calls[0])).toContain("auto_apply_charged = true");
+  });
+
+  it("application_id flow returns the limit 403 and marks nothing when no credit is left", async () => {
+    route([{ id: "app-t", auto_apply_charged: false }]);
+    charge.mockResolvedValue({ allowed: false, remaining: 0 });
+    const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("limit_reached");
+    expect(mdb.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it("application_id flow doesn't charge again for an application already holding a credit", async () => {
+    route([{ id: "app-t", auto_apply_charged: true }]);
     const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
     expect(res.status).toBe(200);
     expect(charge).not.toHaveBeenCalled();
+  });
+
+  it("application_id flow charges nothing for an application that isn't the caller's", async () => {
+    route([]);
+    const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "someone-elses" }));
+    expect(res.status).toBe(404);
+    expect(charge).not.toHaveBeenCalled();
+    expect(mdb.$executeRaw).not.toHaveBeenCalled();
   });
 });
 

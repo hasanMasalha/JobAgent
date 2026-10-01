@@ -118,6 +118,47 @@ it("returns the limit response without calling Claude when there is no draft and
   expect(create).not.toHaveBeenCalled();
 });
 
+// LinkedIn Easy Apply sends the résumé on the user's LinkedIn profile, so
+// there is nothing to tailor: no Claude call, no tailoring credit.
+describe("LinkedIn jobs", () => {
+  const LI_JOB = { ...JOB, url: "https://www.linkedin.com/jobs/view/4012345678" };
+  const liReturns = (draft: unknown[]) =>
+    mdb.$queryRaw
+      .mockResolvedValueOnce([{ raw_text: CV }])
+      .mockResolvedValueOnce([LI_JOB])
+      .mockResolvedValueOnce(draft)
+      .mockResolvedValueOnce([{ id: "app-li" }]);
+  const callWith = (body: unknown) =>
+    POST(new NextRequest("http://localhost/api/apply/prepare", { method: "POST", body: JSON.stringify(body) }));
+
+  it("creates a plain draft without charging or calling Claude", async () => {
+    liReturns([]);
+    const res = await callWith({ job_id: "job-1" });
+    expect(await res.json()).toMatchObject({ application_id: "app-li", linkedin: true, tailored_cv: "", cover_letter: "", cv_changes: [] });
+    expect(charge).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("reuses the existing draft, still without charging", async () => {
+    liReturns([{ ...DRAFT, tailored_cv: null, cover_letter: null, cv_changes: null, tailored_cv_hash: null }]);
+    const res = await callWith({ job_id: "job-1" });
+    expect(await res.json()).toMatchObject({ application_id: "app-1", linkedin: true });
+    expect(mdb.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(charge).not.toHaveBeenCalled();
+  });
+
+  it("still tailors in download mode, where the user asked for a CV to apply with by hand", async () => {
+    liReturns([]);
+    claudeReturns(JSON.stringify(TAILORED));
+    const res = await callWith({ job_id: "job-1", mode: "download" });
+    const body = await res.json();
+    expect(body.linkedin).toBeUndefined();
+    expect(body.tailored_cv).toBe(TAILORED.tailored_cv);
+    expect(charge).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
 it("doesn't save a response that isn't a valid tailoring", async () => {
   dbReturns(CV, []);
   claudeReturns(JSON.stringify({ cover_letter: "Dear Torq," }));

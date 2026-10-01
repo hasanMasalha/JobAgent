@@ -113,15 +113,17 @@ There are two supported apply paths — know which one a change affects:
 **Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
 where JobAgent submits for the user spends one credit via
 `checkAndIncrementAutoApply` (atomic): quick apply's ATS branch, batch email
-auto-apply, extension jobs queued by `batch-mark-pending`, and the `jobId`
-branch of `mark-pending-extension`. A submission that doesn't go through
+auto-apply, extension jobs queued by `batch-mark-pending`, and both branches
+of `mark-pending-extension` (`jobId`, and `application_id` — the apply page's
+LinkedIn confirm). A submission that doesn't go through
 refunds via `refundAutoApplyForApplication`, keyed on
 `Application.auto_apply_charged` so it refunds at most once: quick apply
 refunds inline on ATS error / CAPTCHA / rejection; extension applies refund
-when `/api/applications/update-status` receives `manual` or `failed`.
-External jobs, LinkedIn jobs routed to the extension from quick apply, and
-Tailor & Apply are not charged — Tailor & Apply is capped by
-`cvTailoringPerMonth` at the same numbers. Any new submit path must charge.
+when `/api/applications/update-status` receives `manual` or `failed`, or when
+`check-pending` refuses an outdated extension. External jobs and Tailor &
+Apply's ATS / other-site submits are not charged an auto-apply — those are
+capped by `cvTailoringPerMonth` at the same numbers. Any new submit path must
+charge.
 
 **Tailor CV & Apply** (`/dashboard/apply/[jobId]`)
 1. User clicks "Tailor CV & Apply" → Claude tailors CV (draft saved, nothing submitted)
@@ -130,11 +132,22 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
 5. Screenshot taken before every submit and stored
 
+**LinkedIn jobs on the apply page are not tailored.** Easy Apply sends the
+résumé saved on the user's LinkedIn profile — the extension uploads no CV and
+no cover letter — so `/api/apply/prepare` returns `linkedin: true` with no
+Claude call and no tailoring credit, and the review screen says so and lists
+the answers the extension will use. Confirm spends one auto-apply credit
+instead. Only `?mode=download` tailors a CV for a LinkedIn job (the user
+uploads it by hand). Plain Apply on a LinkedIn job lands here too, so it must
+stay free of a tailoring charge.
+
 **Known gaps in Tailor & Apply** (found 2026-10-01, not fixed):
 - **A blocked LinkedIn tab is reported as open.** The fallback
   `window.open(job_url)` result isn't checked, so "LinkedIn is open in a new
   tab" shows even when the browser blocked it. The application is already
-  `pending_extension` by then.
+  `pending_extension` (and charged an auto-apply) by then. Only reached when
+  the extension answered the version check but not the open-tab message, or
+  when `NEXT_PUBLIC_EXTENSION_ID` is unset.
 - **No retry after a failed submission.** The error screens only offer "Back
   to matches". Reopening the job reuses the draft now (no new charge), but the
   application may no longer be `draft` after a failed submit, in which case
@@ -193,6 +206,36 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
   used to (`user?.id ?? body.userId`), which let anyone who knew a user id read
   their profile, change their application statuses and refunds, and rewrite
   the answers the extension types into real applications. Fixed 2026-09-29.
+
+## Extension answers — never invent one
+- The extension types into real job applications. **It answers a question
+  only with something the user gave us**: a Profile field they saved, or an
+  answer they typed for that exact question before
+  (`chrome-extension/answers.js`). No answer → the field stays blank; if
+  LinkedIn requires it, the extension stops without submitting, reports
+  `manual` (credit refunded) and leaves the tab open for the user. Never add
+  a fallback value, a default Yes, or "pick the first option". Until
+  2026-10-01 it sent "2" years, salary "1", "Tel Aviv", "Israel", a
+  Bachelor's degree, Yes to any unrecognised yes/no question and the first
+  option of any dropdown.
+- A Profile answer is used only for the question it was asked as: work
+  authorisation is for Israel, salary is monthly NIS, years are the total.
+- The same goes for the server: `/api/apply/check-pending` sends `null`, not
+  a fallback. Six `User` columns had database defaults (notice period, years,
+  education, work authorised, sponsorship, relocation); the 2026-10-01
+  migration dropped the defaults and cleared the six for every user (all
+  testers then), and they are sent only once
+  `application_details_confirmed_at` is set — by saving Profile or by
+  "These are correct" on the apply review screen. **Known gap:** the Profile
+  form still starts those six with the old values for a user who has none;
+  they become the user's answers only when the user presses Save.
+- **Version gate:** the extension sends `X-JobAgent-Extension-Version`.
+  `check-pending` gives nothing to a version below `MIN_EXTENSION_VERSION`
+  (`lib/extension-version.ts`, 1.5.0 — the first that stops instead of
+  guessing); a request with no header counts as older. The application is
+  set to `manual` and refunded. The apply page asks the extension for its
+  version (PING) before marking or charging. Raise `MIN_EXTENSION_VERSION`
+  whenever a released version turns out to answer wrongly.
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved

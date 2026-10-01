@@ -90,7 +90,7 @@ export default function SavedJobsPage() {
                   </div>
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link href={`/dashboard/apply/${job.id}`} className={buttonStyles({ size: "sm" })}>
-                      Tailor CV &amp; apply
+                      {job.url.toLowerCase().includes("linkedin.com") ? "Apply on LinkedIn" : <>Tailor CV &amp; apply</>}
                     </Link>
                     <a href={job.url} target="_blank" rel="noopener noreferrer" className={buttonStyles({ variant: "secondary", size: "sm" })}>
                       View job <span aria-hidden="true">↗</span>
