@@ -207,8 +207,9 @@ stay free of a tailoring charge.
 ## Chrome extension privacy policy
 `/privacy` is the extension's policy and the Chrome Web Store listing links
 to it. It lists what the extension stores (`chrome.storage.local`), sends
-(saved answers, application outcomes) and
-receives (Application details, CV skills, saved answers, cover letter).
+(saved answers, application outcomes, its version number) and
+receives (account email, Application details, CV skills, saved answers — no
+CV and no cover letter).
 Any change to what `chrome-extension/` stores or sends must update it in
 the same PR — the Store reviews the listing against it.
 

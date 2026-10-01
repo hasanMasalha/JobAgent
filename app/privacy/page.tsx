@@ -16,7 +16,7 @@ export default function PrivacyPage() {
     <LegalFrame>
       <div className="mb-10">
         <h1 className="font-serif text-title-page text-ink">Privacy Policy</h1>
-        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension (version 1.1.1) — Last updated: 29 September 2026</p>
+        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension (version 1.5.0) — Last updated: 1 October 2026</p>
       </div>
 
       <Section title="What the Extension Does">
@@ -65,6 +65,11 @@ export default function PrivacyPage() {
                 <Td>When a form is submitted or stops</Td>
                 <Td>Updates your applications tracker in JobAgent.</Td>
               </tr>
+              <tr>
+                <Td>The extension&apos;s version number</Td>
+                <Td>With every request to JobAgent</Td>
+                <Td>So JobAgent can refuse to work with a version that has a known problem.</Td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -73,10 +78,13 @@ export default function PrivacyPage() {
       <Section title="What the Extension Receives from JobAgent">
         <p>
           To fill a form you started from JobAgent, the extension downloads, for that application
-          only: the details you entered in Profile → Application details (name, phone, city,
-          profile links, experience, education, notice period, expected salary and eligibility
-          answers), the skills from your CV, your saved answers, and the cover letter for that job.
-          It uses them to fill the form in your browser and does not keep them after the application.
+          only: your account email, the details you entered in Profile → Application details
+          (name, phone, city, profile links, experience, education, notice period, expected salary
+          and eligibility answers), the skills from your CV, and your saved answers. It uses them
+          to fill the form in your browser and does not keep them after the application. It fills
+          in a question only with an answer you have given; if LinkedIn requires a question you
+          haven&apos;t answered, it stops without submitting. It does not upload a CV or a cover
+          letter: LinkedIn Easy Apply uses the résumé saved on your LinkedIn profile.
         </p>
       </Section>
 
