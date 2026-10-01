@@ -89,7 +89,13 @@ draft → applied → interviewing → offer / rejected / cancelled
 ## Claude API usage rules (cost control)
 - CV extraction on upload: claude-haiku-3-5 (once per CV)
 - Job batch scoring: claude-haiku-3-5 (once per day per user, all jobs in ONE call)
-- CV tailoring on apply: claude-sonnet-4-20250514 (only when user clicks Apply)
+- CV tailoring on apply: claude-sonnet-4-20250514 (only when user clicks Apply).
+  The apply page calls `/api/apply/prepare` on every load, so the route
+  returns the existing draft — no Claude call, no tailoring credit — while
+  `Application.tailored_cv_hash` (SHA-256 of the CV `raw_text` it was tailored
+  from) still matches the user's CV. `Application.cv_changes` stores the
+  change list with it. It used to charge and call Sonnet before looking for
+  the draft, so every reload cost a credit.
 - Chat assistant: claude-haiku-3-5 (per message)
 - CV score (My CV, CV builder preview): claude-haiku-4-5, once per version
   of the CV text. `/api/cv/score` caches the result on `CV.score_json`,
@@ -116,15 +122,17 @@ There are two supported apply paths — know which one a change affects:
 **Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
 where JobAgent submits for the user spends one credit via
 `checkAndIncrementAutoApply` (atomic): quick apply's ATS branch, batch email
-auto-apply, extension jobs queued by `batch-mark-pending`, and the `jobId`
-branch of `mark-pending-extension`. A submission that doesn't go through
+auto-apply, extension jobs queued by `batch-mark-pending`, and both branches
+of `mark-pending-extension` (`jobId`, and `application_id` — the apply page's
+LinkedIn confirm). A submission that doesn't go through
 refunds via `refundAutoApplyForApplication`, keyed on
 `Application.auto_apply_charged` so it refunds at most once: quick apply
 refunds inline on ATS error / CAPTCHA / rejection; extension applies refund
-when `/api/applications/update-status` receives `manual` or `failed`.
-External jobs, LinkedIn jobs routed to the extension from quick apply, and
-Tailor & Apply are not charged — Tailor & Apply is capped by
-`cvTailoringPerMonth` at the same numbers. Any new submit path must charge.
+when `/api/applications/update-status` receives `manual` or `failed`, or when
+`check-pending` refuses an outdated extension. External jobs and Tailor &
+Apply's ATS / other-site submits are not charged an auto-apply — those are
+capped by `cvTailoringPerMonth` at the same numbers. Any new submit path must
+charge.
 
 **Tailor CV & Apply** (`/dashboard/apply/[jobId]`)
 1. User clicks "Tailor CV & Apply" → Claude tailors CV (draft saved, nothing submitted)
@@ -132,6 +140,30 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 3. Only after Confirm → Playwright opens LinkedIn Easy Apply and submits
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
 5. Screenshot taken before every submit and stored
+
+**LinkedIn jobs on the apply page are not tailored.** Easy Apply sends the
+résumé saved on the user's LinkedIn profile — the extension uploads no CV and
+no cover letter — so `/api/apply/prepare` returns `linkedin: true` with no
+Claude call and no tailoring credit, and the review screen says so and lists
+the answers the extension will use. Confirm spends one auto-apply credit
+instead. Only `?mode=download` tailors a CV for a LinkedIn job (the user
+uploads it by hand). Plain Apply on a LinkedIn job lands here too, so it must
+stay free of a tailoring charge.
+
+**Known gaps in Tailor & Apply** (found 2026-10-01, not fixed):
+- **A blocked LinkedIn tab is reported as open.** The fallback
+  `window.open(job_url)` result isn't checked, so "LinkedIn is open in a new
+  tab" shows even when the browser blocked it. The application is already
+  `pending_extension` (and charged an auto-apply) by then. Only reached when
+  the extension answered the version check but not the open-tab message, or
+  when `NEXT_PUBLIC_EXTENSION_ID` is unset.
+- **No retry after a failed submission.** The error screens only offer "Back
+  to matches". Reopening the job reuses the draft now (no new charge), but the
+  application may no longer be `draft` after a failed submit, in which case
+  it tailors again and spends another credit.
+- **The cover letter and CV scroll inside their own boxes.** On a phone the
+  letter shows two paragraphs and the CV is capped at 70vh, so Confirm can be
+  reached without seeing the end of either. Same on desktop with a long CV.
 
 ## Billing (Dodo Payments)
 - Checkout: `/api/dodo/checkout` creates a hosted Dodo Checkout Session
@@ -156,6 +188,14 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
   `User.plan` is still updated only by the `subscription.plan_changed` webhook.
 - **Known gap:** no double-click / in-flight guard on checkout — a free user
   double-clicking a plan button can still create two Checkout Sessions.
+- Plan limits: `PLAN_LIMITS` in `lib/plan-limits.ts` lists only limits that
+  `lib/usage.ts` enforces (matches/day, auto-applies/month, CV tailoring/month,
+  Browse All Jobs listings/day). Plan bullets on `/pricing`, the onboarding
+  plan picker and confirmation emails are generated from it by
+  `planFeatureList()`, and prices live in `PLAN_PRICES_USD` — never hardcode
+  either. `savedJobsMax` and `cvVersionsMax` were removed (2026-09-28) because
+  nothing enforced them; they aren't part of the offer, so don't reintroduce
+  them without enforcement.
 - `refund.succeeded` is deliberately log-only (no plan change): a refund doesn't
   cancel the Dodo subscription, so a downgrade would be undone by the next
   `subscription.renewed`. Revoking access is a manual decision. Any other
@@ -193,6 +233,36 @@ the same PR — the Store reviews the listing against it.
 - **Never put a Supabase access token anywhere JS or other origins can read
   it** (non-HttpOnly cookies, `postMessage(…, "*")`). The site did both for
   the extension until 2026-09-29.
+
+## Extension answers — never invent one
+- The extension types into real job applications. **It answers a question
+  only with something the user gave us**: a Profile field they saved, or an
+  answer they typed for that exact question before
+  (`chrome-extension/answers.js`). No answer → the field stays blank; if
+  LinkedIn requires it, the extension stops without submitting, reports
+  `manual` (credit refunded) and leaves the tab open for the user. Never add
+  a fallback value, a default Yes, or "pick the first option". Until
+  2026-10-01 it sent "2" years, salary "1", "Tel Aviv", "Israel", a
+  Bachelor's degree, Yes to any unrecognised yes/no question and the first
+  option of any dropdown.
+- A Profile answer is used only for the question it was asked as: work
+  authorisation is for Israel, salary is monthly NIS, years are the total.
+- The same goes for the server: `/api/apply/check-pending` sends `null`, not
+  a fallback. Six `User` columns had database defaults (notice period, years,
+  education, work authorised, sponsorship, relocation); the 2026-10-01
+  migration dropped the defaults and cleared the six for every user (all
+  testers then), and they are sent only once
+  `application_details_confirmed_at` is set — by saving Profile or by
+  "These are correct" on the apply review screen. **Known gap:** the Profile
+  form still starts those six with the old values for a user who has none;
+  they become the user's answers only when the user presses Save.
+- **Version gate:** the extension sends `X-JobAgent-Extension-Version`.
+  `check-pending` gives nothing to a version below `MIN_EXTENSION_VERSION`
+  (`lib/extension-version.ts`, 1.5.0 — the first that stops instead of
+  guessing); a request with no header counts as older. The application is
+  set to `manual` and refunded. The apply page asks the extension for its
+  version (PING) before marking or charging. Raise `MIN_EXTENSION_VERSION`
+  whenever a released version turns out to answer wrongly.
 
 ## Service-to-service auth (INTERNAL_API_KEY)
 - The AI service requires `X-Internal-Key` on every route except `/health`
@@ -246,6 +316,22 @@ is positioned as global and priced in USD, so both are real gaps.
   needs_manual outcome (apply manually) rather than a status of its own to
   build a "finish" flow around. Verified manually — don't reintroduce a
   dedicated needs_security_code status without solving that first.
+
+## Design system
+- Tokens: `app/globals.css` (CSS variables, light + `.dark`) mapped to
+  semantic Tailwind names in `tailwind.config.ts` — use `bg-surface`,
+  `text-ink-muted`, `bg-brand` etc., not raw hex or `gray-*`/`blue-*`.
+- Shared components: `app/components/ui/` (Button, Card, Field/Input,
+  Badge/StatusPill, Notice, Meter, EmptyState, Spinner/Skeleton,
+  PageHeader, MatchScore). Application status labels/colours live only in
+  `lib/application-status.ts`.
+- Reference page: `/dev/design-system` (404s in production).
+- Fonts are bundled in `app/fonts` (Public Sans, Source Serif 4), not
+  fetched via `next/font/google` — a Google Fonts outage must not break
+  the Docker build.
+- **Known inconsistency:** the logo (`public/logo.png`) is a brighter royal
+  blue than the brand navy `#1B3A5C` used in the UI and generated CVs.
+  Left as is for now; revisit with a recoloured logo.
 
 ## Linting
 

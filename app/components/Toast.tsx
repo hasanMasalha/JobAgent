@@ -38,11 +38,12 @@ export function Toast() {
   return (
     <div
       key={toast.id}
-      className={`fixed bottom-24 right-5 z-[60] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-fade-in ${
-        toast.type === "success" ? "bg-emerald-600" : "bg-red-500"
+      role={toast.type === "error" ? "alert" : "status"}
+      className={`fixed bottom-24 right-4 sm:right-5 z-[60] flex max-w-[calc(100vw-2rem)] items-center gap-3 px-4 py-3 rounded-card shadow-overlay font-sans text-sm font-medium text-surface motion-safe:animate-fade-in ${
+        toast.type === "success" ? "bg-success-text" : "bg-danger-text"
       }`}
     >
-      <span>{toast.type === "success" ? "✓" : "✕"}</span>
+      <span aria-hidden="true">{toast.type === "success" ? "✓" : "✕"}</span>
       {toast.message}
     </div>
   );

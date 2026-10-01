@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories"
+import { Button, Card, RemovableTag } from "@/app/components/ui"
+import { cn } from "@/lib/cn"
 
 interface SavedSearch {
   id: string
@@ -61,57 +63,60 @@ export default function SavedSearchCard({ search, onEdit, onDelete, onSearch, de
     await patchSearch({ seniorities })
   }
 
-  return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+  const panelId = `saved-search-${search.id}`
+  const confirming = deleteConfirm === search.id
 
+  return (
+    <Card padding="none" className="overflow-hidden">
       {/* Header row */}
-      <div
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        onClick={() => setIsExpanded((v) => !v)}
-      >
-        {/* Left: arrow + name */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-gray-400 text-xs select-none transition-transform duration-200 ${
-              isExpanded ? "rotate-90" : ""
-            }`}
+      <div className="flex items-center justify-between gap-3 pr-3 sm:pr-4">
+        <button
+          type="button"
+          onClick={() => setIsExpanded((v) => !v)}
+          aria-expanded={isExpanded}
+          aria-controls={panelId}
+          className="flex min-w-0 flex-1 items-center gap-2.5 py-4 pl-4 text-left transition-colors hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:pl-5"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            className={cn("h-3.5 w-3.5 shrink-0 text-ink-subtle transition-transform duration-200", isExpanded && "rotate-90")}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
           >
-            ▶
-          </span>
-          <span className="font-semibold text-gray-900 dark:text-white">
-            {localSearch.category}
-          </span>
-        </div>
+            <path d="M6 3.5L10.5 8 6 12.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="truncate text-title-card text-ink">{localSearch.category}</span>
+        </button>
 
         {/* Right: Search btn when collapsed, Edit+Delete when expanded */}
-        <div onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0">
           {!isExpanded ? (
-            <button
-              onClick={() => onSearch(search.id)}
-              className="px-4 py-1.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
-            >
-              Search →
-            </button>
+            <Button size="sm" onClick={() => onSearch(search.id)}>
+              Search
+            </Button>
           ) : (
             <div className="flex items-center gap-1">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => onEdit(localSearch)}
-                className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded transition-colors text-sm"
                 title="Edit search"
+                aria-label={`Edit ${localSearch.category} search`}
               >
-                ✏️
-              </button>
-              <button
+                <PencilIcon />
+              </Button>
+              <Button
+                variant={confirming ? "danger" : "ghost"}
+                size="sm"
                 onClick={() => onDelete(search.id)}
-                className={`p-1.5 rounded transition-colors text-sm ${
-                  deleteConfirm === search.id
-                    ? "text-red-600 bg-red-50 dark:bg-red-900/20"
-                    : "text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                }`}
-                title={deleteConfirm === search.id ? "Click again to confirm" : "Delete search"}
+                title={confirming ? "Click again to confirm" : "Delete search"}
+                aria-label={confirming ? `Confirm deleting ${localSearch.category} search` : `Delete ${localSearch.category} search`}
               >
-                {deleteConfirm === search.id ? "⚠️ Delete?" : "🗑️"}
-              </button>
+                <TrashIcon />
+                {confirming && <span>Delete?</span>}
+              </Button>
             </div>
           )}
         </div>
@@ -119,75 +124,61 @@ export default function SavedSearchCard({ search, onEdit, onDelete, onSearch, de
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
-
+        <div id={panelId} className="space-y-4 border-t border-line px-4 pb-4 pt-4 sm:px-5">
           {localSearch.keywords.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Keywords
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {localSearch.keywords.map((kw) => (
-                  <span
-                    key={kw}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 rounded-full text-xs"
-                  >
-                    {kw}
-                    <button onClick={() => removeKeyword(kw)} className="hover:text-red-500 font-bold ml-0.5">×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
+            <TagGroup label="Keywords">
+              {localSearch.keywords.map((kw) => (
+                <RemovableTag key={kw} label={kw} onRemove={() => removeKeyword(kw)} />
+              ))}
+            </TagGroup>
           )}
 
           {localSearch.locations.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Locations
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {localSearch.locations.map((loc) => (
-                  <span
-                    key={loc}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs"
-                  >
-                    {getLocationLabel(loc)}
-                    <button onClick={() => removeLocation(loc)} className="hover:text-red-500 font-bold ml-0.5">×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
+            <TagGroup label="Locations">
+              {localSearch.locations.map((loc) => (
+                <RemovableTag key={loc} label={getLocationLabel(loc)} onRemove={() => removeLocation(loc)} />
+              ))}
+            </TagGroup>
           )}
 
           {localSearch.seniorities.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                Seniority
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {localSearch.seniorities.map((sen) => (
-                  <span
-                    key={sen}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs"
-                  >
-                    {getSeniorityLabel(sen)}
-                    <button onClick={() => removeSeniority(sen)} className="hover:text-red-500 font-bold ml-0.5">×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
+            <TagGroup label="Seniority">
+              {localSearch.seniorities.map((sen) => (
+                <RemovableTag key={sen} label={getSeniorityLabel(sen)} onRemove={() => removeSeniority(sen)} />
+              ))}
+            </TagGroup>
           )}
 
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={() => onSearch(search.id)}
-              className="px-5 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
-            >
-              Search Jobs →
-            </button>
+          <div className="flex justify-end">
+            <Button onClick={() => onSearch(search.id)}>Search jobs</Button>
           </div>
         </div>
       )}
+    </Card>
+  )
+}
+
+function TagGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 text-caption font-semibold text-ink-muted">{label}</p>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path d="M10.5 3l2.5 2.5L6 12.5H3.5V10L10.5 3z" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }

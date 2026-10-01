@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/cn";
+import { heroControlStyles, ChevronDownIcon, FilterIcon } from "@/app/components/ui";
 
 export type SortBy = "score" | "newest" | "salary";
 export type WorkType = "remote" | "hybrid" | "onsite";
@@ -40,31 +42,15 @@ interface Props {
   totalCount?: number;
 }
 
-const LABEL = "block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5";
+// Sits on the Matches hero band (navy in both themes), so it uses the
+// on-hero colours rather than surface tokens.
+const LABEL = "mb-1.5 block text-caption font-medium text-on-hero-muted";
 
-const SELECT =
-  "appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 pr-7 text-xs font-medium " +
-  "text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 " +
-  "focus:outline-none cursor-pointer transition-colors";
+const SELECT = cn(heroControlStyles({ size: "custom" }), "h-10 w-full cursor-pointer appearance-none pl-3.5 pr-9 text-sm font-medium");
 
 function Chevron() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
-    >
-      <path
-        fillRule="evenodd"
-        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+  return <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-on-hero-muted" />;
 }
-
-const Divider = () => <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700 shrink-0 self-end mb-0.5" />;
 
 export default function JobFilters({ filters, onChange, matchCount, totalCount }: Props) {
   const [open, setOpen] = useState(false);
@@ -73,15 +59,16 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
   const bar = (
     <div>
       {/* Filters row */}
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap">
         {/* Sort */}
-        <div className="w-full sm:w-auto">
-          <span className={LABEL}>Sort</span>
+        <div className="col-span-2 sm:col-span-1 sm:w-auto">
+          <label htmlFor="filter-sort" className={LABEL}>Sort</label>
           <div className="relative">
             <select
+              id="filter-sort"
               value={filters.sortBy}
               onChange={(e) => onChange({ ...filters, sortBy: e.target.value as SortBy })}
-              className={`${SELECT} w-full sm:min-w-[110px]`}
+              className={cn(SELECT, "sm:min-w-[9rem]")}
             >
               <option value="score">Best match</option>
               <option value="newest">Newest first</option>
@@ -91,19 +78,18 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
           </div>
         </div>
 
-        <Divider />
-
         {/* Work type */}
         <div className="w-full sm:w-auto">
-          <span className={LABEL}>Work type</span>
+          <label htmlFor="filter-work" className={LABEL}>Work type</label>
           <div className="relative">
             <select
+              id="filter-work"
               value={filters.workTypes[0] ?? ""}
               onChange={(e) => {
                 const v = e.target.value as WorkType | "";
                 onChange({ ...filters, workTypes: v ? [v] : [] });
               }}
-              className={`${SELECT} w-full sm:min-w-[100px]`}
+              className={cn(SELECT, "sm:min-w-[9rem]")}
             >
               <option value="">All types</option>
               <option value="remote">Remote</option>
@@ -114,19 +100,18 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
           </div>
         </div>
 
-        <Divider />
-
         {/* Job type */}
         <div className="w-full sm:w-auto">
-          <span className={LABEL}>Job type</span>
+          <label htmlFor="filter-job" className={LABEL}>Job type</label>
           <div className="relative">
             <select
+              id="filter-job"
               value={filters.jobTypes[0] ?? ""}
               onChange={(e) => {
                 const v = e.target.value as JobType | "";
                 onChange({ ...filters, jobTypes: v ? [v] : [] });
               }}
-              className={`${SELECT} w-full sm:min-w-[100px]`}
+              className={cn(SELECT, "sm:min-w-[9rem]")}
             >
               <option value="">All types</option>
               <option value="full-time">Full-time</option>
@@ -137,16 +122,15 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
           </div>
         </div>
 
-        <Divider />
-
         {/* Date posted */}
         <div className="w-full sm:w-auto">
-          <span className={LABEL}>Date posted</span>
+          <label htmlFor="filter-posted" className={LABEL}>Date posted</label>
           <div className="relative">
             <select
+              id="filter-posted"
               value={filters.daysPosted}
               onChange={(e) => onChange({ ...filters, daysPosted: e.target.value as DaysPosted })}
-              className={`${SELECT} w-full sm:min-w-[100px]`}
+              className={cn(SELECT, "sm:min-w-[9rem]")}
             >
               <option value="any">Any time</option>
               <option value="1">Last 24 hours</option>
@@ -157,17 +141,16 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
           </div>
         </div>
 
-        <Divider />
-
         {/* Min salary */}
         <div className="w-full sm:w-auto">
-          <span className={LABEL}>Min salary</span>
+          <label htmlFor="filter-min-salary" className={LABEL}>Min salary</label>
           <input
+            id="filter-min-salary"
             type="number"
             placeholder="₪ Amount"
             value={filters.minSalary}
             onChange={(e) => onChange({ ...filters, minSalary: e.target.value })}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 w-full sm:w-[100px] hover:border-gray-400 dark:hover:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none transition-colors"
+            className={cn(heroControlStyles(), "w-full sm:w-[8.5rem]")}
           />
         </div>
 
@@ -177,9 +160,9 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
           <button
             type="button"
             onClick={() => onChange(DEFAULT_FILTERS)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap transition-colors self-end pb-1.5"
+            className="flex h-10 items-center gap-2 self-end whitespace-nowrap rounded-control px-2 text-body-sm font-semibold text-on-hero underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           >
-            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-on-hero" />
             Clear filters
           </button>
         )}
@@ -187,8 +170,8 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
 
       {/* Count row — right-aligned below filters */}
       {totalCount !== undefined && matchCount !== undefined && (
-        <div className="flex justify-end mt-2">
-          <span className="text-xs text-gray-400">
+        <div className="mt-3 flex justify-end">
+          <span className="text-body-sm text-on-hero-muted" aria-live="polite">
             Showing {matchCount} of {totalCount} matches
           </span>
         </div>
@@ -197,25 +180,24 @@ export default function JobFilters({ filters, onChange, matchCount, totalCount }
   );
 
   return (
-    <div className="w-full overflow-hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 sm:px-5 py-4 mb-6">
+    <div className="w-full">
       {/* Mobile toggle */}
-      <div className="sm:hidden flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between sm:hidden">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5"
+          aria-expanded={open}
+          className={cn(heroControlStyles(), "inline-flex items-center gap-2 font-semibold")}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM9 15a1 1 0 011-1h6a1 1 0 110 2h-6a1 1 0 01-1-1z" clipRule="evenodd" />
-          </svg>
+          <FilterIcon />
           Filters
-          {dirty && <span className="ml-1 w-2 h-2 rounded-full bg-blue-500 inline-block" />}
+          {dirty && <span aria-label="(active)" className="h-1.5 w-1.5 rounded-full bg-on-hero" />}
         </button>
         {dirty && (
           <button
             type="button"
             onClick={() => onChange(DEFAULT_FILTERS)}
-            className="text-xs text-blue-600 hover:underline"
+            className="h-10 rounded-control px-2 text-body-sm font-semibold text-on-hero underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           >
             Clear
           </button>

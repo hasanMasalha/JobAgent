@@ -204,15 +204,13 @@ async function fillApplicationForm(application, panel) {
       return
     }
 
-    // Log current step inputs
-    const inputs = currentPanel.querySelectorAll('input, textarea, select')
-    console.log(`JobAgent: step ${step}, inputs:`, inputs.length)
-    inputs.forEach((input, i) => {
-      const label = getInputLabel(input)
-      console.log(`  Input ${i}: type=${input.type} label="${label}"`)
-    })
-
-    await fillCurrentStep(currentPanel, application)
+    // A required question the user hasn't given us an answer for: stop here
+    // and hand over. Nothing is guessed and nothing is submitted.
+    const missing = await fillCurrentStep(currentPanel, application)
+    if (missing.length) {
+      await stopForUser(application, missing)
+      return
+    }
 
     // Named next/submit buttons (English + Hebrew)
     const nextBtn = currentPanel.querySelector(
@@ -232,7 +230,6 @@ async function fillApplicationForm(application, panel) {
     } else {
       // Fallback: primary-styled button in the panel
       const allBtns = Array.from(currentPanel.querySelectorAll('button'))
-      console.log('JobAgent: all buttons:', allBtns.map(b => b.getAttribute('aria-label')))
       const primary = allBtns.find(b => b.classList.contains('artdeco-button--primary'))
       if (primary) {
         console.log('JobAgent: clicking primary btn:', primary.textContent.trim())
@@ -243,274 +240,185 @@ async function fillApplicationForm(application, panel) {
         break
       }
     }
+
+    // LinkedIn refused the step (a question it requires is still empty and
+    // wasn't marked as required in a way we recognise): stop here too.
+    await randomDelay(800, 1500)
+    const afterPanel = getEasyApplyPanel() || scope
+    if (hasValidationError(afterPanel)) {
+      await stopForUser(application, findUnanswered(afterPanel, false))
+      return
+    }
   }
 
   // Loop ended without detecting a success message — report manual so the
   // dashboard polling can stop waiting.
   console.log('[JobAgent] form loop ended without success, reporting manual')
-  await reportResult(application.id, 'manual')
+  await reportResult(application.id, 'manual', { keepTab: true })
 }
 
+function optionText(radio, fieldset) {
+  const lbl = radio.closest('label') || fieldset.querySelector(`label[for="${radio.id}"]`)
+  return (lbl?.textContent || radio.value || '').trim()
+}
+
+function selectUnanswered(select) {
+  const chosen = select.options[select.selectedIndex]
+  return !select.value || !chosen || /^(select|choose|בחר)/i.test(chosen.text.trim())
+}
+
+function isRequired(el) {
+  if (el.required || el.getAttribute('aria-required') === 'true') return true
+  const group = el.closest(
+    'fieldset, [data-test-form-element], .fb-dash-form-element, .jobs-easy-apply-form-element, .fb-form-element'
+  )
+  if (!group) return false
+  return group.getAttribute('aria-required') === 'true' ||
+    !!group.querySelector('[aria-required="true"], [required], [class*="required"]')
+}
+
+// Labels of questions on this step that have no answer. With requiredOnly,
+// only the ones LinkedIn marks as required.
+function findUnanswered(scope, requiredOnly = true) {
+  const missing = []
+  const add = (el, label) => {
+    if (requiredOnly && !isRequired(el)) return
+    missing.push((label || 'A question on this step').replace(/\s+/g, ' ').trim().slice(0, 140))
+  }
+
+  const fields = scope.querySelectorAll(
+    'input[type="text"], input[type="url"], input[type="email"], input[type="tel"], input[type="number"], textarea'
+  )
+  for (const input of fields) {
+    if (!input.value?.trim()) add(input, getInputLabel(input))
+  }
+
+  for (const fieldset of scope.querySelectorAll('fieldset')) {
+    const radios = Array.from(fieldset.querySelectorAll('input[type="radio"]'))
+    if (radios.length && !radios.some(r => r.checked)) {
+      const legend = fieldset.querySelector('legend, [data-test-form-element-label]')
+      add(radios[0], legend?.textContent)
+    }
+  }
+
+  for (const select of scope.querySelectorAll('select')) {
+    if (selectUnanswered(select)) add(select, getInputLabel(select))
+  }
+
+  return Array.from(new Set(missing))
+}
+
+function hasValidationError(scope) {
+  return !!scope.querySelector('.artdeco-inline-feedback--error, [aria-invalid="true"]')
+}
+
+// Hand the application back to the user: say which questions need them,
+// leave the form open in this tab, and report "manual" (which also returns
+// the auto-apply credit).
+async function stopForUser(application, missing) {
+  console.log('[JobAgent] stopping, no answer from the user for:', missing)
+
+  document.getElementById('jobagent-stop-notice')?.remove()
+  const box = document.createElement('div')
+  box.id = 'jobagent-stop-notice'
+  box.setAttribute('role', 'status')
+  box.style.cssText = `
+    position:fixed;top:20px;right:20px;z-index:999999;max-width:360px;
+    background:white;color:#14202e;border:2px solid #1a2e5e;border-radius:12px;
+    padding:16px 18px;box-shadow:0 12px 40px rgba(0,0,0,0.25);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;
+  `
+  const title = document.createElement('div')
+  title.style.cssText = 'font-weight:600;margin-bottom:6px'
+  title.textContent = 'JobAgent stopped here'
+  const body = document.createElement('div')
+  body.textContent = missing.length
+    ? 'You haven\'t given JobAgent an answer for:'
+    : 'LinkedIn needs an answer JobAgent doesn\'t have from you.'
+  const list = document.createElement('ul')
+  list.style.cssText = 'margin:6px 0 8px 18px;padding:0'
+  for (const q of missing.slice(0, 6)) {
+    const li = document.createElement('li')
+    li.textContent = q
+    list.appendChild(li)
+  }
+  const foot = document.createElement('div')
+  foot.textContent = 'Nothing was submitted. Answer and submit the application yourself in this tab.'
+  const close = document.createElement('button')
+  close.type = 'button'
+  close.textContent = 'Close'
+  close.style.cssText = 'margin-top:10px;padding:6px 12px;border:1px solid #c9d1db;border-radius:8px;background:#f5f6f8;cursor:pointer'
+  close.onclick = () => box.remove()
+  box.append(title, body, list, foot, close)
+  document.body.appendChild(box)
+
+  await reportResult(application.id, 'manual', { keepTab: true })
+}
+
+// Fills in what the user has given us an answer for (see answers.js) and
+// returns the required questions that are still unanswered. Nothing is
+// guessed: no default numbers, no "Yes" for a question we don't recognise,
+// no first option of a dropdown.
 async function fillCurrentStep(scope, application) {
   console.log('JobAgent: === fillCurrentStep ===')
-  console.log('JobAgent: all inputs:',
-    Array.from(scope.querySelectorAll('input, select, textarea'))
-      .map(el => ({
-        type: el.type,
-        id: el.id,
-        name: el.name,
-        value: el.value,
-        ariaLabel: el.getAttribute('aria-label'),
-        label: getInputLabel(el)
-      }))
-  )
-  console.log('JobAgent: all fieldsets:',
-    Array.from(scope.querySelectorAll('fieldset'))
-      .map(f => f.querySelector('legend')?.textContent?.trim())
-  )
 
-  // Text / URL / email / textarea inputs
+  // Text / number / URL / email / textarea inputs
   const textInputs = scope.querySelectorAll(
-    'input[type="text"], input[type="url"], input[type="email"], textarea'
+    'input[type="text"], input[type="url"], input[type="email"], input[type="tel"], input[type="number"], textarea'
   )
   for (const input of textInputs) {
     if (input.value?.trim()) continue
     const label = getInputLabel(input)
 
-    let answer = getAnswerForLabel(label, application)
+    let answer = jaAnswerForLabel(label, application)
 
-    // Only ask user for fields we don't recognise (null).
-    // Empty string means we recognised the field but have no data — skip silently.
+    // null: no answer from the user for this one. Use what they answered for
+    // this exact question before, or ask them (only when the tab is visible).
+    // Empty string: a field we leave empty on purpose.
     if (answer === null && label) {
       answer = await getAnswerForUnknown(label, application)
     }
 
     if (answer) {
-      console.log('JobAgent: filling input:', label, '→', answer.substring(0, 30))
-      await humanType(input, answer)
+      console.log('JobAgent: filling input:', label)
+      await humanType(input, String(answer))
     }
   }
 
-  // Number inputs (years of experience)
-  const numberInputs = scope.querySelectorAll('input[type="number"]')
-  for (const input of numberInputs) {
-    if (input.value?.trim()) continue
-    const label = getInputLabel(input)
-    const answer = getAnswerForLabel(label, application)
-      || getYearsAnswer(label, application.skills || [])
-      || application.years_of_experience
-      || '2'
-    await humanType(input, String(answer))
-  }
-
-  // Fieldsets with real radio inputs (work auth, sponsorship, yes/no questions)
-  const fieldsets = scope.querySelectorAll('fieldset')
-  for (const fieldset of fieldsets) {
+  // Yes/no and other radio questions
+  for (const fieldset of scope.querySelectorAll('fieldset')) {
     const legend = fieldset.querySelector('legend, [data-test-form-element-label]')
     const legendText = legend?.textContent?.trim() || ''
-    console.log('JobAgent: fieldset legend:', legendText.substring(0, 50))
 
-    const radios = fieldset.querySelectorAll('input[type="radio"]')
-    const alreadySelected = Array.from(radios).some(r => r.checked)
-    if (alreadySelected || radios.length === 0) continue
+    const radios = Array.from(fieldset.querySelectorAll('input[type="radio"]'))
+    if (radios.length === 0 || radios.some(r => r.checked)) continue
 
-    const wantYes = getBooleanAnswer(legendText, application)
-    const target = Array.from(radios).find(r => {
-      const lbl = r.closest('label') || fieldset.querySelector(`label[for="${r.id}"]`)
-      const text = (lbl?.textContent || r.value || '').toLowerCase()
-      return wantYes
-        ? text.includes('yes') || text.includes('כן')
-        : text.includes('no') || text.includes('לא')
-    }) || (wantYes ? radios[0] : radios[radios.length - 1])
+    const options = radios.map(r => optionText(r, fieldset))
+    const wantYes = jaBooleanAnswer(legendText, application)
+    let index = wantYes === null ? -1 : jaYesNoOption(options, wantYes)
+    if (index === -1) index = jaMatchOption(options, jaSavedAnswer(legendText, application))
 
-    if (target) {
-      console.log('JobAgent: clicking radio:', target.value,
-        'for question:', legendText.substring(0, 50))
-      target.click()
-      target.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-  }
-
-  // ARIA radiogroups (older LinkedIn UI)
-  const radioGroups = scope.querySelectorAll('[role="radiogroup"]')
-  for (const group of radioGroups) {
-    const selected = group.querySelector('[aria-checked="true"]')
-    if (!selected) {
-      const yesOption = group.querySelector('[data-test-text-selectable-option__input]')
-      if (yesOption) yesOption.click()
+    if (index !== -1) {
+      console.log('JobAgent: answering radio question:', legendText.substring(0, 50))
+      radios[index].click()
+      radios[index].dispatchEvent(new Event('change', { bubbles: true }))
     }
   }
 
   // Select dropdowns
-  const selects = scope.querySelectorAll('select')
-  for (const select of selects) {
-    if (select.value) continue
+  for (const select of scope.querySelectorAll('select')) {
+    if (!selectUnanswered(select)) continue
     const label = getInputLabel(select)
-    console.log('JobAgent: select field:', label)
-
-    const answer = getAnswerForLabel(label, application)
-    if (answer) {
-      const match = Array.from(select.options).find(o =>
-        o.text.toLowerCase().includes(answer.toLowerCase()) ||
-        o.value.toLowerCase().includes(answer.toLowerCase())
-      )
-      if (match) {
-        select.value = match.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-      }
-    } else {
-      const first = Array.from(select.options).find(o => o.value && o.value !== '')
-      if (first) {
-        select.value = first.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-      }
+    const answer = jaAnswerForLabel(label, application) || jaSavedAnswer(label, application)
+    const options = Array.from(select.options)
+    const index = jaMatchOption(options.map(o => o.text), answer)
+    if (index !== -1) {
+      select.value = options[index].value
+      select.dispatchEvent(new Event('change', { bubbles: true }))
     }
   }
-}
 
-function getYearsAnswer(label, skills) {
-  if (!label) return '0'
-
-  const labelLower = label.toLowerCase()
-
-  const genericPatterns = [
-    'years of work experience',
-    'years of professional experience',
-    'total years',
-    'overall experience'
-  ]
-
-  const skipWords = new Set([
-    'years', 'experience', 'how', 'many', 'have', 'you',
-    'with', 'work', 'working', 'using', 'knowledge'
-  ])
-
-  const techWords = labelLower
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !skipWords.has(w))
-
-  const skillsLower = skills.map(s => s.toLowerCase())
-  const hasSkill = techWords.some(tech =>
-    skillsLower.some(skill => skill.includes(tech) || tech.includes(skill))
-  )
-
-  if (genericPatterns.some(p => labelLower.includes(p))) {
-    return '2'
-  }
-
-  return hasSkill ? '2' : '0'
-}
-
-// Returns the right string answer for a text/number/url/email field given its label
-function getAnswerForLabel(label, application) {
-  if (!label) return null
-  const l = label.toLowerCase().trim()
-
-  // ── Personal ──────────────────────────────────
-  if (l.includes('first name') || l === 'name') return application.first_name || ''
-  if (l.includes('last name') || l.includes('family name') || l.includes('surname'))
-    return application.last_name || ''
-  if (l.includes('full name'))
-    return `${application.first_name || ''} ${application.last_name || ''}`.trim()
-  if (l.includes('phone') || l.includes('mobile') || l.includes('telephone'))
-    return application.phone || ''
-  if (l.includes('email')) return application.email || ''
-  if (l.includes('city') || l.includes('location') || l.includes('address'))
-    return application.city || 'Tel Aviv'
-  if (l.includes('country')) return 'Israel'
-  if (l.includes('zip') || l.includes('postal')) return ''
-
-  // ── URLs ──────────────────────────────────────
-  if (l.includes('linkedin')) return application.linkedin_url || ''
-  if (l.includes('github')) return application.github_url || ''
-  if (l.includes('portfolio') || l.includes('website') || l.includes('personal site'))
-    return application.portfolio_url || ''
-
-  // ── Salary ────────────────────────────────────
-  if (
-    l.includes('salary') || l.includes('compensation') || l.includes('wage') ||
-    l.includes('pay') || l.includes('ctc') || l.includes('package') ||
-    l.includes('expected') || l.includes('desired') ||
-    l.includes('שכר') || l.includes('פיצוי') || l.includes('שכר מצופה')
-  )
-    return application.expected_salary || '1'
-
-  // ── Work Timeline ─────────────────────────────
-  if (
-    l.includes('notice') || l.includes('start date') || l.includes('availability') ||
-    l.includes('when can you start') || l.includes('joining') ||
-    l.includes('available from') || l.includes('זמינות') || l.includes('התחלה')
-  )
-    return application.notice_period || '30'
-
-  // ── Experience ────────────────────────────────
-  if (
-    (l.includes('year') && l.includes('experience')) ||
-    (l.includes('how many year') && l.includes('work')) ||
-    l.includes('total experience') || l.includes('years of work') ||
-    l.includes('שנות ניסיון')
-  )
-    return application.years_of_experience || '2'
-
-  // ── Education ─────────────────────────────────
-  if (
-    l.includes('education') || l.includes('degree') || l.includes('qualification') ||
-    l.includes('highest level') || l.includes('academic') || l.includes('השכלה')
-  )
-    return application.highest_education || "Bachelor's Degree"
-
-  // ── Cover Letter / Summary ────────────────────
-  if (
-    l.includes('cover letter') || l.includes('why do you want') ||
-    l.includes('tell us about yourself') || l.includes('introduce yourself') ||
-    l.includes('מכתב מוטיבציה')
-  )
-    return application.cover_letter || ''
-
-  // ── Languages ─────────────────────────────────
-  if (l.includes('english') && (l.includes('level') || l.includes('proficiency')))
-    return 'Full Professional Proficiency'
-  if (l.includes('hebrew') && (l.includes('level') || l.includes('proficiency')))
-    return 'Native or Bilingual'
-
-  return null
-}
-
-// Returns the right boolean for a yes/no radio group given its label
-function getBooleanAnswer(label, application) {
-  if (!label) return true
-  const l = label.toLowerCase()
-
-  if (
-    l.includes('authorized') || l.includes('authorization') ||
-    l.includes('eligible to work') || l.includes('right to work') ||
-    l.includes('legally') || l.includes('work permit') ||
-    l.includes('מורשה') || l.includes('רשאי')
-  )
-    return application.work_authorized ?? true
-
-  // "Do you require sponsorship?" — Yes means they need it
-  if (
-    l.includes('sponsor') || l.includes('visa') || l.includes('work visa') ||
-    l.includes('ויזה') || l.includes('חסות')
-  )
-    return application.requires_sponsorship ?? false
-
-  if (
-    l.includes('relocat') || l.includes('willing to move') ||
-    l.includes('open to relocation') || l.includes('מעבר דירה')
-  )
-    return application.willing_to_relocate ?? false
-
-  if (l.includes('remote') && l.includes('work')) return true
-  if (l.includes('hybrid')) return true
-
-  return true
-}
-
-// Keep old name as alias
-function getAnswerForField(label, application) {
-  return getAnswerForLabel(label, application)
+  return findUnanswered(scope)
 }
 
 // ── Learn-as-you-go popup ─────────────────────────────────────────────────────
@@ -591,10 +499,11 @@ async function getAnswerForUnknown(question, application) {
   if (!question) return null
   const normalized = question.toLowerCase().trim()
 
-  // Check saved answers from previous applications
-  if (application.savedAnswers?.[normalized]) {
+  // The user's own answer to this exact question from a previous application
+  const saved = jaSavedAnswer(question, application)
+  if (saved) {
     console.log('JobAgent: using saved answer for:', normalized)
-    return application.savedAnswers[normalized]
+    return saved
   }
 
   // Ask user via popup
@@ -697,13 +606,15 @@ async function humanType(element, text) {
 
 // All network calls go through background.js — content scripts cannot make
 // cross-origin fetches on pages with strict CSP (LinkedIn blocks them).
-async function reportResult(applicationId, status) {
+// keepTab: leave the LinkedIn tab open so the user can finish the form.
+async function reportResult(applicationId, status, { keepTab = false } = {}) {
   console.log('[JobAgent] reportResult called:', applicationId, status)
   try {
     const response = await chrome.runtime.sendMessage({
       type: 'REPORT_APPLICATION_COMPLETE',
       applicationId,
       status,
+      keepTab,
       jobUrl: window.location.href
     })
     console.log('[JobAgent] reportResult response:', response)

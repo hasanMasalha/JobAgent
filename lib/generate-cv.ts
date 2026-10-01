@@ -214,8 +214,12 @@ function reflowLines(rawLines: string[], nameIdx: number | null, contactIdx: num
       continue
     }
 
+    // "Languages: ..." / "Data: ..." category lines rarely end in punctuation,
+    // so without the LABEL_RE check each one would be glued onto the previous
+    // category and only the first label would render bold.
     const startsNewBlock =
-      isBullet(line) || isSectionHeader(line) || isRoleHeader(line) || isBareHeadingCandidate(line)
+      isBullet(line) || isSectionHeader(line) || isRoleHeader(line) || isBareHeadingCandidate(line) ||
+      LABEL_RE.test(line)
     if (!startsNewBlock && result.length > protectedCount) {
       const prev = result[result.length - 1]
       const prevIsOpen = !/[.!?:]\s*$/.test(prev) && !isSectionHeader(prev)
@@ -227,6 +231,35 @@ function reflowLines(rawLines: string[], nameIdx: number | null, contactIdx: num
     result.push(line)
   }
   return result
+}
+
+// Canonical section order, applied by the renderer rather than trusted to the
+// AI's output. Other canonical sections (Certifications, Languages, ...) follow
+// Skills; unrecognized headings ("Hackathons") go last. Ties keep input order.
+// Mirrors _order_sections in ai-service/utils/cv_pdf.py.
+const SECTION_ORDER: Record<string, number> = { Summary: 0, Experience: 1, Projects: 2, Education: 3, Skills: 4 }
+const OTHER_CANONICAL_RANK = 5
+const NONSTANDARD_RANK = 6
+
+function sectionRank(heading: string): number {
+  if (!isSectionHeader(heading)) return NONSTANDARD_RANK
+  return SECTION_ORDER[canonicalSectionText(heading)] ?? OTHER_CANONICAL_RANK
+}
+
+// Regroup body lines into sections (heading + everything up to the next
+// heading) and stable-sort the sections by sectionRank. Lines before the
+// first heading stay on top.
+function orderSections(lines: string[], headingIdx: Set<number>): { line: string; isHeading: boolean }[] {
+  type Item = { line: string; isHeading: boolean }
+  const preamble: Item[] = []
+  const sections: { rank: number; items: Item[] }[] = []
+  lines.forEach((line, i) => {
+    if (headingIdx.has(i)) sections.push({ rank: sectionRank(line), items: [{ line, isHeading: true }] })
+    else if (sections.length) sections[sections.length - 1].items.push({ line, isHeading: false })
+    else preamble.push({ line, isHeading: false })
+  })
+  sections.sort((a, b) => a.rank - b.rank) // Array.prototype.sort is stable (ES2019+)
+  return [...preamble, ...sections.flatMap((s) => s.items)]
 }
 
 // "Languages: Python, Go, TypeScript" -> bold "Languages:" label, plain rest.
@@ -288,8 +321,19 @@ export async function generateCVDocx(
     }
   }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+  // Name/contact stay on top (indices 0/1); body sections go into canonical order.
+  const headerCount = (nameIdx !== null ? 1 : 0) + (contactIdx !== null ? 1 : 0)
+  const bodyHeadingIdx = new Set<number>()
+  for (let i = headerCount; i < lines.length; i++) {
+    if (isSectionHeader(lines[i]) || bareHeadingIndices.has(i)) bodyHeadingIdx.add(i - headerCount)
+  }
+  const ordered = orderSections(lines.slice(headerCount), bodyHeadingIdx)
+  const renderLines = [...lines.slice(0, headerCount), ...ordered.map((o) => o.line)]
+  const headingIndices = new Set<number>()
+  ordered.forEach((o, j) => { if (o.isHeading) headingIndices.add(j + headerCount) })
+
+  for (let i = 0; i < renderLines.length; i++) {
+    const line = renderLines[i]
 
     // First line = candidate name — large, bold, accent colour, centered (never a link)
     if (i === nameIdx) {
@@ -324,7 +368,7 @@ export async function generateCVDocx(
     }
 
     // Section headers — canonical ATS-safe names, accent colour, hairline rule under — never links
-    if (isSectionHeader(line) || bareHeadingIndices.has(i)) {
+    if (headingIndices.has(i)) {
       const headingText = isSectionHeader(line) ? canonicalSectionText(line) : line.replace(/:$/, '')
       children.push(new Paragraph({
         spacing: { before: 220, after: 0 },

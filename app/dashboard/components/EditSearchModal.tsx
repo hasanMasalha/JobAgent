@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Button, Input, RemovableTag, chipStyles } from "@/app/components/ui"
 import { JOB_CATEGORIES, CATEGORY_KEYWORDS, LOCATIONS, SENIORITY_LEVELS } from "@/lib/job-categories"
 
 interface SavedSearch {
@@ -97,29 +98,29 @@ export default function EditSearchModal({ search, isOpen, onClose, onSave, exist
   const takenCategories = existingCategories.filter((c) => c !== search?.category)
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/60 p-gutter font-sans">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-search-title"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-overlay bg-surface shadow-overlay"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-            {search ? "Edit Search" : "New Search"}
+        <div className="flex items-center justify-between border-b border-line px-5 py-4 sm:px-6">
+          <h2 id="edit-search-title" className="text-title-section text-ink">
+            {search ? "Edit search" : "New search"}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none"
-          >
-            ×
-          </button>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+            </svg>
+          </Button>
         </div>
 
-        <div className="p-6 space-y-6">
-
+        <div className="space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
           {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Category
-            </label>
+          <fieldset>
+            <legend className="mb-2 text-body-sm font-semibold text-ink">Category</legend>
             <div className="flex flex-wrap gap-2">
               {JOB_CATEGORIES.map((cat) => {
                 const isTaken = takenCategories.includes(cat)
@@ -129,122 +130,94 @@ export default function EditSearchModal({ search, isOpen, onClose, onSave, exist
                     type="button"
                     onClick={() => !isTaken && handleCategoryChange(cat)}
                     disabled={isTaken}
-                    className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                      category === cat
-                        ? "bg-violet-600 text-white"
-                        : isTaken
-                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    }`}
+                    aria-pressed={category === cat}
+                    title={isTaken ? "You already have a search for this category" : undefined}
+                    className={chipStyles({ selected: category === cat, disabled: isTaken })}
                   >
                     {cat}
                   </button>
                 )
               })}
             </div>
-          </div>
+          </fieldset>
 
           {/* Keywords */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="edit-search-keyword" className="mb-2 block text-body-sm font-semibold text-ink">
               Keywords
             </label>
-            <div className="flex flex-wrap gap-1.5 mb-3 min-h-[32px]">
-              {keywords.map((kw) => (
-                <span
-                  key={kw}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 rounded-full text-xs"
-                >
-                  {kw}
-                  <button
-                    onClick={() => setKeywords((prev) => prev.filter((k) => k !== kw))}
-                    className="hover:text-red-500 font-bold ml-0.5 leading-none"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
+            {keywords.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {keywords.map((kw) => (
+                  <RemovableTag
+                    key={kw}
+                    label={kw}
+                    onRemove={() => setKeywords((prev) => prev.filter((k) => k !== kw))}
+                  />
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
-              <input
+              <Input
+                id="edit-search-keyword"
                 type="text"
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addKeyword()}
-                placeholder="Add keyword and press Enter…"
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                placeholder="Add a keyword and press Enter"
+                className="flex-1"
               />
-              <button
-                onClick={addKeyword}
-                className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 transition-colors"
-              >
+              <Button variant="secondary" onClick={addKeyword}>
                 Add
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* Locations */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Locations
-            </label>
+          <fieldset>
+            <legend className="mb-2 text-body-sm font-semibold text-ink">Locations</legend>
             <div className="flex flex-wrap gap-2">
               {LOCATIONS.map((loc) => (
                 <button
                   key={loc.value}
                   type="button"
                   onClick={() => toggleLocation(loc.value)}
-                  className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    locations.includes(loc.value)
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  }`}
+                  aria-pressed={locations.includes(loc.value)}
+                  className={chipStyles({ selected: locations.includes(loc.value) })}
                 >
                   {loc.label}
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Seniority */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Seniority Level
-            </label>
+          <fieldset>
+            <legend className="mb-2 text-body-sm font-semibold text-ink">Seniority level</legend>
             <div className="flex flex-wrap gap-2">
               {SENIORITY_LEVELS.map((sen) => (
                 <button
                   key={sen.value}
                   type="button"
                   onClick={() => toggleSeniority(sen.value)}
-                  className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    seniorities.includes(sen.value)
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  }`}
+                  aria-pressed={seniorities.includes(sen.value)}
+                  className={chipStyles({ selected: seniorities.includes(sen.value) })}
                 >
                   {sen.label}
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm"
-          >
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-4 sm:px-6">
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!category || saving}
-            className="px-6 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? "Saving…" : "Save Search"}
-          </button>
+          </Button>
+          <Button onClick={handleSave} disabled={!category || saving} loading={saving}>
+            {saving ? "Saving…" : "Save search"}
+          </Button>
         </div>
       </div>
     </div>

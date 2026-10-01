@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JobAgent — AI Job Assistant",
-  "version": "1.1.1",
-  "description": "Auto-apply to LinkedIn Easy Apply jobs with your AI-tailored CV. Fills forms, tracks applications, and syncs your LinkedIn session.",
+  "version": "1.5.0",
+  "description": "Applies to LinkedIn Easy Apply jobs using the answers you saved in JobAgent, and tracks your applications. Stops and asks you when it has no answer.",
   "author": "JobAgent",
   "homepage_url": "https://jobagent.uk",
   "permissions": [
@@ -26,7 +26,7 @@
         "https://www.linkedin.com/jobs/view/*",
         "https://www.linkedin.com/jobs/view/*/apply/*"
       ],
-      "js": ["content.js"],
+      "js": ["answers.js", "content.js"],
       "run_at": "document_idle"
     },
     {

@@ -9,8 +9,13 @@ import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usa
 //   application_id — update an existing Application (apply page flow)
 //   jobId          — find or create an Application for this job (direct auto-apply flow)
 //
-// Only the jobId flow spends an auto-apply credit: the application_id flow
-// is Tailor & Apply, already capped by the CV tailoring limit.
+// Both flows spend one auto-apply credit, once per application: JobAgent's
+// extension is about to submit for the user. The credit comes back when the
+// extension reports manual/failed (/api/applications/update-status). The
+// application_id flow used to be free here because the apply page charged a
+// CV tailoring instead; LinkedIn jobs are no longer tailored (Easy Apply
+// sends the résumé on the user's LinkedIn profile), so it charges like the
+// other submit paths.
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -33,9 +38,22 @@ export async function POST(req: NextRequest) {
 
     if (application_id) {
       // Apply page flow: application already created by /api/apply/prepare
+      const own = await db.$queryRaw<{ id: string; auto_apply_charged: boolean }[]>`
+        SELECT id, auto_apply_charged FROM "Application"
+        WHERE id = ${application_id} AND user_id = ${user.id}
+        LIMIT 1
+      `;
+      if (!own.length) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+
+      if (!own[0].auto_apply_charged) {
+        const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+        const { allowed } = await checkAndIncrementAutoApply(user.id, normalizePlan(dbUser?.plan));
+        if (!allowed) return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
+      }
+
       await db.$executeRaw`
         UPDATE "Application"
-        SET status = 'pending_extension'
+        SET status = 'pending_extension', auto_apply_charged = true
         WHERE id = ${application_id} AND user_id = ${user.id}
       `;
       resultApplicationId = application_id;

@@ -38,6 +38,7 @@ export async function GET(_req: NextRequest) {
           work_authorized: true,
           requires_sponsorship: true,
           willing_to_relocate: true,
+          application_details_confirmed_at: true,
         },
       }),
     ]);
@@ -76,12 +77,17 @@ export async function GET(_req: NextRequest) {
       github_url: dbUser?.github_url ?? null,
       portfolio_url: dbUser?.portfolio_url ?? null,
       expected_salary: dbUser?.expected_salary ?? null,
-      notice_period: dbUser?.notice_period ?? "30",
-      years_of_experience: dbUser?.years_of_experience ?? "2",
-      highest_education: dbUser?.highest_education ?? "Bachelor's Degree",
-      work_authorized: dbUser?.work_authorized ?? true,
-      requires_sponsorship: dbUser?.requires_sponsorship ?? false,
-      willing_to_relocate: dbUser?.willing_to_relocate ?? false,
+      // Null when the user has no answer — never a made-up one. The Profile
+      // form supplies its own starting values.
+      notice_period: dbUser?.notice_period ?? null,
+      years_of_experience: dbUser?.years_of_experience ?? null,
+      highest_education: dbUser?.highest_education ?? null,
+      work_authorized: dbUser?.work_authorized ?? null,
+      requires_sponsorship: dbUser?.requires_sponsorship ?? null,
+      willing_to_relocate: dbUser?.willing_to_relocate ?? null,
+      // False until the user has saved or approved the answers above. Until
+      // then the extension isn't given them (see /api/apply/check-pending).
+      application_details_confirmed: !!dbUser?.application_details_confirmed_at,
     });
   } catch (err) {
     console.error("[profile GET]", err);
@@ -107,8 +113,17 @@ export async function PATCH(req: NextRequest) {
       linkedin_url, github_url, portfolio_url,
       expected_salary, notice_period, years_of_experience,
       highest_education, work_authorized, requires_sponsorship,
-      willing_to_relocate,
+      willing_to_relocate, confirm_application_details,
     } = body;
+
+    // Saving the application details, or approving them on the apply review
+    // screen, is what makes them the user's own answers.
+    const APPLICATION_DETAIL_KEYS = [
+      "notice_period", "years_of_experience", "highest_education",
+      "work_authorized", "requires_sponsorship", "willing_to_relocate",
+    ];
+    const confirmsDetails =
+      confirm_application_details === true || APPLICATION_DETAIL_KEYS.some((k) => body[k] !== undefined);
 
     await db.user.update({
       where: { id: user.id },
@@ -128,6 +143,7 @@ export async function PATCH(req: NextRequest) {
         work_authorized,
         requires_sponsorship,
         willing_to_relocate,
+        ...(confirmsDetails ? { application_details_confirmed_at: new Date() } : {}),
       },
     });
 

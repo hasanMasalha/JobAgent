@@ -41,10 +41,12 @@ const refund = usage.refundAutoApplyForApplication as jest.Mock;
 const VICTIM = "victim-user-id";
 const ME = "extension-user-id";
 
+// Sent as the current extension would: with its version (older versions get
+// no application — see linkedin-apply-safety.test.ts).
 const req = (url: string, init: { method?: string; body?: unknown; token?: string } = {}) =>
   new NextRequest(`http://localhost${url}`, {
     method: init.method ?? "GET",
-    headers: init.token ? { Authorization: `Bearer ${init.token}` } : {},
+    headers: { "X-JobAgent-Extension-Version": "1.5.0", ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
 

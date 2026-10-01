@@ -7,24 +7,18 @@ export const PLAN_LIMITS = {
     jobMatchesPerDay: 10, // AI matches shown per day
     autoAppliesPerMonth: 5, // auto-apply submissions
     cvTailoringPerMonth: 5, // CV tailoring requests
-    savedJobsMax: 20, // saved/bookmarked jobs
-    cvVersionsMax: 1, // number of CV versions
     browseJobsPerDay: 0, // Browse All Jobs — not available on Free
   },
   pro: {
     jobMatchesPerDay: 100, // matches per day
     autoAppliesPerMonth: 100, // auto-apply per month
     cvTailoringPerMonth: 100, // CV tailoring per month
-    savedJobsMax: 500, // saved jobs
-    cvVersionsMax: 3, // CV versions
     browseJobsPerDay: 100, // Browse All Jobs — same cap as matches
   },
   unlimited: {
     jobMatchesPerDay: 999999, // unlimited
     autoAppliesPerMonth: 999999, // unlimited
     cvTailoringPerMonth: 999999, // unlimited
-    savedJobsMax: 999999, // unlimited
-    cvVersionsMax: 10, // multiple CVs
     browseJobsPerDay: 999999, // unlimited
   },
 } as const satisfies Record<PlanKey, Record<string, number>>;
@@ -38,21 +32,48 @@ export const PLAN_DISPLAY_NAMES: Record<PaidPlan, string> = {
   unlimited: "Unlimited",
 };
 
-function formatLimit(value: number): string {
-  return value >= 999999 ? "Unlimited" : value.toLocaleString();
+// USD per month. `annual` is the per-month price when billed yearly. Must
+// match the Dodo product catalog (see productIdFor); shown on /pricing and
+// the onboarding plan picker.
+export const PLAN_PRICES_USD: Record<PlanKey, { monthly: number; annual: number }> = {
+  free: { monthly: 0, annual: 0 },
+  pro: { monthly: 24, annual: 19 },
+  unlimited: { monthly: 69, annual: 49 },
+};
+
+// What every plan gets that isn't metered, so isn't in PLAN_LIMITS. Only
+// list things no plan check restricts.
+export const INCLUDED_IN_EVERY_PLAN =
+  "Every plan includes auto-apply to Greenhouse, Lever, Workable, Ashby, Comeet and BambooHR, and the JobAgent Chrome extension.";
+
+const isUnlimited = (value: number) => value >= 999999;
+
+/**
+ * Plan bullets for /pricing, the onboarding plan picker and confirmation
+ * emails — generated from PLAN_LIMITS so the copy can't drift from what's
+ * enforced. PLAN_LIMITS holds only limits lib/usage.ts checks — keep it
+ * that way, so nothing here can promise a limit the product doesn't apply.
+ */
+export function planFeatureList(plan: PlanKey): string[] {
+  const l = PLAN_LIMITS[plan];
+  const bullets = [
+    isUnlimited(l.jobMatchesPerDay) ? "Unlimited AI job matches" : `${l.jobMatchesPerDay} AI job matches per day`,
+    isUnlimited(l.autoAppliesPerMonth) ? "Unlimited auto-applies" : `${l.autoAppliesPerMonth} auto-applies per month`,
+    isUnlimited(l.cvTailoringPerMonth) ? "Unlimited CV tailoring" : `${l.cvTailoringPerMonth} CV tailoring requests per month`,
+  ];
+  if (l.browseJobsPerDay > 0) {
+    bullets.push(
+      isUnlimited(l.browseJobsPerDay)
+        ? "Browse All Jobs, unlimited"
+        : `Browse All Jobs, ${l.browseJobsPerDay.toLocaleString()} listings per day`,
+    );
+  }
+  return bullets;
 }
 
-// Human-readable bullets for plan confirmation emails, derived from
-// PLAN_LIMITS so the copy can't drift from the actual entitlements.
+/** Bullets for plan confirmation emails — the same list as the pricing page. */
 export function planFeatureHighlights(plan: PaidPlan): string[] {
-  const limits = PLAN_LIMITS[plan];
-  return [
-    `${formatLimit(limits.jobMatchesPerDay)} AI job matches per day`,
-    `${formatLimit(limits.autoAppliesPerMonth)} auto-applies per month`,
-    `${formatLimit(limits.cvTailoringPerMonth)} CV tailoring requests per month`,
-    `${formatLimit(limits.savedJobsMax)} saved jobs`,
-    `${limits.cvVersionsMax} CV version${limits.cvVersionsMax > 1 ? "s" : ""}`,
-  ];
+  return planFeatureList(plan);
 }
 
 export function productIdFor(plan: PaidPlan, interval: BillingInterval): string | undefined {

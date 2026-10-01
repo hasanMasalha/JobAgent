@@ -3,11 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { createInterviewEvent } from "@/lib/google-calendar";
+import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementMatches } from "@/lib/usage";
 import { pythonFetch } from "@/lib/python-service";
 
-const TOOLS: Anthropic.Tool[] = [
+const ALL_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_my_matches",
     description: "Get the user's current job matches with scores and details",
@@ -54,6 +55,10 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+// schedule_interview isn't offered to the model until Google Calendar launches:
+// it could only end in "connect it in your profile", which users can't do.
+const TOOLS = ALL_TOOLS.filter((t) => GOOGLE_CALENDAR_ENABLED || t.name !== "schedule_interview");
+
 const TOOL_LABELS: Record<string, string> = {
   get_my_matches: "Looking up your matches...",
   get_my_applications: "Checking your applications...",
@@ -66,7 +71,9 @@ const SYSTEM_PROMPT =
   "Always call get_my_matches when asked about job matches or recommendations. " +
   "Always call get_my_applications when asked about applications or companies applied to. " +
   "Always call get_application_stats when asked for a summary or overview. " +
-  "Use schedule_interview only when the user explicitly asks to schedule/add a calendar event. " +
+  (GOOGLE_CALENDAR_ENABLED
+    ? "Use schedule_interview only when the user explicitly asks to schedule/add a calendar event. "
+    : "You can't add events to the user's calendar; if asked, say calendar scheduling isn't available yet. ") +
   "Be concise — 2-4 sentences unless listing items. Never make up data; use your tools.";
 
 export async function POST(req: NextRequest) {
@@ -240,6 +247,7 @@ async function executeTool(
     }
 
     case "schedule_interview": {
+      if (!GOOGLE_CALENDAR_ENABLED) return { error: "Calendar scheduling isn't available yet." };
       const dbUser = await db.user.findUnique({
         where: { id: userId },
         select: {

@@ -4,6 +4,12 @@ function authHeader(stored) {
   return stored && stored.extensionToken ? { Authorization: `Bearer ${stored.extensionToken}` } : {}
 }
 
+// Sent on every API call. The server refuses to hand an application to a
+// version older than the first one that stopped guessing answers (1.5.0),
+// and a request without this header counts as older.
+const EXTENSION_VERSION = chrome.runtime.getManifest().version
+const versionHeader = { 'X-JobAgent-Extension-Version': EXTENSION_VERSION }
+
 // Background service worker
 // Handles messages from content script and popup
 // Communicates with JobAgent server
@@ -132,7 +138,7 @@ async function processNextInQueue() {
 // Messages from within the extension (content script, popup)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
-    sendResponse({ pong: true })
+    sendResponse({ pong: true, version: EXTENSION_VERSION })
     return true
   }
 
@@ -160,7 +166,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[JobAgent bg] calling:', fullUrl)
 
         const res = await fetch(fullUrl, {
-          headers: { 'User-Agent': getRandomUserAgent(), ...authHeader(stored) }
+          headers: { 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) }
         })
         const data = await res.json()
         console.log('[JobAgent bg] check-pending response:', data)
@@ -209,7 +215,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const serverUrl = await getServerUrl()
         await fetch(`${serverUrl}/api/apply/answers`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...authHeader(stored) },
+          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
           body: JSON.stringify({
             question: message.question,
             answer: message.answer,
@@ -254,7 +260,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[JobAgent bg] updating status:', message.applicationId, '→', status)
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...authHeader(stored) },
+          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
@@ -270,8 +276,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           })
         }
 
+        const queueNow = await chrome.storage.local.get(['isProcessingQueue'])
+        // The form is waiting for the user: leave the tab open for a single
+        // application. A queue reuses the tab for its next job either way.
+        const keepTab = message.keepTab === true && !queueNow.isProcessingQueue
+
         // Close the apply tab
-        if (stored.activeApplyTab) {
+        if (stored.activeApplyTab && keepTab) {
+          await chrome.tabs.update(stored.activeApplyTab, { active: true }).catch(() => {})
+          await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
+        } else if (stored.activeApplyTab) {
           try {
             await chrome.tabs.remove(stored.activeApplyTab)
             console.log('[JobAgent bg] closed apply tab')
@@ -290,10 +304,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.notifications.create({
             type: 'basic',
             iconUrl: 'icon48.png',
-            title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Manual Apply Needed',
+            title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Finish this one yourself',
             message: applied
               ? 'Your application was submitted successfully!'
-              : 'This job requires manual application. Your cover letter is saved.',
+              : keepTab
+                ? 'JobAgent stopped at a question it has no answer from you for. Nothing was submitted. Finish in the LinkedIn tab.'
+                : 'JobAgent could not submit this application. Apply on LinkedIn yourself.',
           })
         } else {
           // Advance the queue
@@ -317,7 +333,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   console.log('[JobAgent bg] external message:', message.type, 'from:', sender.url)
 
   if (message.type === 'PING') {
-    sendResponse({ pong: true })
+    sendResponse({ pong: true, version: EXTENSION_VERSION })
     return true
   }
 

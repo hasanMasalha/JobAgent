@@ -32,17 +32,22 @@ model User {
   dodoSubscriptionId String?
   planExpiresAt      DateTime?
 
-  // Easy Apply default answers
-  notice_period        String?  @default("30")
-  work_authorized      Boolean? @default(true)
-  requires_sponsorship Boolean? @default(false)
+  // Easy Apply answers. No defaults: an answer nobody entered must never be
+  // typed into an application. (They had defaults until 2026-10-01; that
+  // migration also cleared the six for every user.) They are sent to the
+  // extension only once application_details_confirmed_at is set (Profile
+  // save, or approval on the apply review screen).
+  notice_period        String?
+  work_authorized      Boolean?
+  requires_sponsorship Boolean?
   expected_salary      String?
-  years_of_experience  String?  @default("2")
-  highest_education    String?  @default("Bachelor's Degree")
+  years_of_experience  String?
+  highest_education    String?
   linkedin_url         String?
   portfolio_url        String?
   github_url           String?
-  willing_to_relocate  Boolean? @default(false)
+  willing_to_relocate  Boolean?
+  application_details_confirmed_at DateTime?
   cover_letter_default String?
   currentCompany       String?  @default("")
 
@@ -153,6 +158,12 @@ model Application {
   /// credits (quick apply / extension batch). Cleared when the credit is
   /// refunded, so a failure can refund at most once. See lib/usage.ts.
   auto_apply_charged Boolean @default(false)
+
+  // Tailoring cache (/api/apply/prepare). A draft is reused, with no Claude
+  // call and no tailoring credit, while tailored_cv_hash equals SHA-256 of
+  // the user's CV raw_text. cv_changes is Claude's change list for that CV.
+  cv_changes       Json?
+  tailored_cv_hash String?
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
