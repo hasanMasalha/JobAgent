@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 export default function ChatFab() {
   const router = useRouter();
   const pathname = usePathname();
-  // Hidden on onboarding: on phones it sits over the step cards and their links.
-  if (pathname === "/dashboard/chat" || pathname.startsWith("/dashboard/onboarding")) return null;
+  // Hidden in the step-by-step flows (onboarding, Tailor & Apply, CV builder):
+  // on phones it sits over their cards, links and buttons.
+  const inFlow = ["/dashboard/onboarding", "/dashboard/apply", "/dashboard/cv-builder"].some((p) => pathname.startsWith(p));
+  if (pathname === "/dashboard/chat" || inFlow) return null;
   return (
     <button
       onClick={() => router.push("/dashboard/chat")}

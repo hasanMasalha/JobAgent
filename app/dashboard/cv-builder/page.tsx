@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  Notice,
+  PageHero,
+  RemovableTag,
+  Spinner,
+  StatePanel,
+  chipStyles,
+  inputStyles,
+} from "@/app/components/ui";
+import { cn } from "@/lib/cn";
 import { useRouter } from "next/navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,14 +93,13 @@ function TagInput({ tags, onChange, placeholder, suggestions }: {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {tags.map((t) => (
-          <span key={t} className="flex items-center gap-1 bg-black text-white text-xs px-2 py-1 rounded-full">
-            {t}
-            <button type="button" onClick={() => onChange(tags.filter((x) => x !== t))} className="hover:opacity-70 leading-none">×</button>
-          </span>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <RemovableTag key={t} label={t} onRemove={() => onChange(tags.filter((x) => x !== t))} />
+          ))}
+        </div>
+      )}
       <div className="flex gap-2">
         <input
           type="text"
@@ -96,9 +107,10 @@ function TagInput({ tags, onChange, placeholder, suggestions }: {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(input); } }}
           placeholder={placeholder}
-          className="flex-1 border dark:border-gray-600 rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400"
+          aria-label={placeholder ? `Add: ${placeholder}` : "Add"}
+          className={cn(inputStyles(), "h-10 flex-1")}
         />
-        <button type="button" onClick={() => add(input)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-600 dark:text-white rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-500">Add</button>
+        <Button type="button" variant="secondary" onClick={() => add(input)}>Add</Button>
       </div>
       {suggestions && suggestions.filter((s) => !tags.includes(s)).length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
@@ -107,7 +119,7 @@ function TagInput({ tags, onChange, placeholder, suggestions }: {
               key={s}
               type="button"
               onClick={() => onChange([...tags, s])}
-              className="text-xs border border-dashed border-gray-300 dark:border-gray-500 px-2 py-0.5 rounded-full text-gray-500 dark:text-gray-400 hover:border-black dark:hover:border-gray-300 hover:text-black dark:hover:text-white transition-colors"
+              className="rounded-full border border-dashed border-line-strong px-2.5 py-0.5 text-caption text-ink-muted transition-colors hover:border-brand/60 hover:bg-brand-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               + {s}
             </button>
@@ -134,6 +146,9 @@ export default function CVBuilderPage() {
   const [_projectTechInput, setProjectTechInput] = useState<string[]>(["", "", ""]);
 
   const [skipExperience, setSkipExperience] = useState(false);
+  // Set when the user already has a CV — generating replaces it (and, for an
+  // upload, deletes the original file), so step 4 says so before Generate.
+  const [existingCvDate, setExistingCvDate] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
@@ -168,6 +183,9 @@ export default function CVBuilderPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.email) setPersonal((p) => ({ ...p, email: d.email }));
+        if (d.cv?.updated_at) {
+          setExistingCvDate(new Date(d.cv.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }));
+        }
       })
       .catch(() => {});
   }, []);
@@ -231,75 +249,87 @@ export default function CVBuilderPage() {
   }
 
   // ── Input class ─────────────────────────────────────────────────────────────
-  const inp = "w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-gray-400";
-  const label = "block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300";
+  const inp = cn(inputStyles(), "mt-1.5 py-2");
+  const label = "block text-body-sm font-medium text-ink";
+  const entryCard = "relative space-y-4 rounded-card border border-line bg-surface p-4 sm:p-5";
+  const removeBtn = "absolute right-3 top-3 rounded-control px-2 py-1 text-caption font-semibold text-ink-subtle transition-colors hover:bg-danger-soft hover:text-danger-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const addLink = "rounded-sm text-body-sm font-semibold text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const stepHeading = "font-serif text-feature-sm text-ink";
+  const cardCls = "rounded-[1.375rem] bg-surface-raised p-5 shadow-dossier ring-1 ring-line/60 sm:p-8";
+  const STEP_NAMES = ["About you", "Work experience", "Education", "Skills and projects"];
+
+  const hero = (
+    <PageHero
+      title="Build your CV with AI"
+      subtitle={generating ? undefined : "Answer in your own words — Claude writes the CV."}
+      meta={!generating && <span className="text-body-sm text-on-hero-muted">Step {step} of {TOTAL_STEPS} · {STEP_NAMES[step - 1]}</span>}
+    >
+      {!generating && (
+        <div className="flex gap-1.5" aria-hidden="true">
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+            <div key={i} className={cn("h-1 flex-1 rounded-full transition-colors duration-500", i < step ? "bg-on-hero" : "bg-white/15")} />
+          ))}
+        </div>
+      )}
+    </PageHero>
+  );
 
   if (generating) {
     return (
-      <div className="max-w-xl mx-auto mt-24 text-center">
-        <div className="inline-block w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-5" />
-        <p className="text-lg font-semibold text-gray-900 dark:text-white">Claude is writing your CV…</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">This takes about 15–20 seconds</p>
+      <div className="w-full">
+        {hero}
+        <div className="relative mx-auto -mt-14 max-w-2xl sm:-mt-16">
+          <StatePanel role="status" title="Claude is writing your CV">
+            <span className="inline-flex flex-col items-center gap-3">
+              <Spinner size="lg" decorative />
+              This takes about 15–20 seconds. Keep this page open.
+            </span>
+          </StatePanel>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Build CV with AI</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Step {step} of {TOTAL_STEPS}</p>
-      </div>
-
-      {/* Progress bar */}
-      <div className="flex gap-1.5 mb-8">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < step ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`} />
-        ))}
-      </div>
+    <div className="w-full">
+      {hero}
+      <div className="relative mx-auto -mt-14 max-w-2xl pb-24 sm:-mt-16 sm:pb-10">
+      <section className={cardCls} aria-label={STEP_NAMES[step - 1]}>
 
       {/* ── Step 1: Personal info ───────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white">Personal information</h2>
+          <h2 className={stepHeading}>About you</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={label}>Full name <span className="text-red-400">*</span></label>
+            <label className={label}>Full name <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
               <input className={inp} value={personal.fullName} onChange={(e) => setPersonal((p) => ({ ...p, fullName: e.target.value }))} placeholder="e.g. Yossi Cohen" />
-            </div>
-            <div>
-              <label className={label}>Professional title <span className="text-red-400">*</span></label>
+            </label>
+            <label className={label}>Professional title <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
               <input className={inp} value={personal.title} onChange={(e) => setPersonal((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior Backend Engineer" />
-            </div>
+            </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={label}>Email <span className="text-red-400">*</span></label>
+            <label className={label}>Email <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
               <input className={inp} type="email" value={personal.email} onChange={(e) => setPersonal((p) => ({ ...p, email: e.target.value }))} placeholder="you@example.com" />
-            </div>
-            <div>
-              <label className={label}>Phone</label>
+            </label>
+            <label className={label}>Phone
               <input className={inp} type="tel" value={personal.phone} onChange={(e) => setPersonal((p) => ({ ...p, phone: e.target.value }))} placeholder="+972 50 000 0000" />
-            </div>
+            </label>
           </div>
 
-          <div>
-            <label className={label}>Location</label>
+          <label className={label}>Location
             <input className={inp} value={personal.location} onChange={(e) => setPersonal((p) => ({ ...p, location: e.target.value }))} placeholder="Tel Aviv, Israel" />
-          </div>
+          </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={label}>LinkedIn URL <span className="text-xs text-gray-400">(optional)</span></label>
+            <label className={label}>LinkedIn URL <span className="font-normal text-ink-subtle">(optional)</span>
               <input className={inp} value={personal.linkedin} onChange={(e) => setPersonal((p) => ({ ...p, linkedin: e.target.value }))} placeholder="linkedin.com/in/yourname" />
-            </div>
-            <div>
-              <label className={label}>GitHub / Portfolio <span className="text-xs text-gray-400">(optional)</span></label>
+            </label>
+            <label className={label}>GitHub / Portfolio <span className="font-normal text-ink-subtle">(optional)</span>
               <input className={inp} value={personal.portfolio} onChange={(e) => setPersonal((p) => ({ ...p, portfolio: e.target.value }))} placeholder="github.com/yourname" />
-            </div>
+            </label>
           </div>
         </div>
       )}
@@ -307,93 +337,76 @@ export default function CVBuilderPage() {
       {/* ── Step 2: Work experience ─────────────────────────────────────────── */}
       {step === 2 && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white">Work experience</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className={stepHeading}>Work experience</h2>
             <button
               type="button"
+              aria-pressed={skipExperience}
               onClick={() => setSkipExperience((v) => !v)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                skipExperience
-                  ? "bg-gray-900 text-white border-gray-900 dark:bg-gray-600 dark:border-gray-600"
-                  : "text-gray-500 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:border-gray-500 dark:hover:border-gray-300"
-              }`}
+              className={chipStyles({ selected: skipExperience })}
             >
               {skipExperience ? "✓ No experience" : "Skip — no experience"}
             </button>
           </div>
 
           {skipExperience && (
-            <div className="rounded-lg p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 flex items-start gap-3">
-              <span className="text-blue-500 dark:text-blue-400 text-base leading-tight mt-0.5">ℹ</span>
-              <p className="text-blue-800 dark:text-blue-200 text-sm">
-                No work experience will be included in your CV.
-                Claude will focus on your education, skills, and projects.
-              </p>
-            </div>
+            <Notice tone="info">
+              No work experience will be included in your CV. Claude will focus on your education, skills and projects.
+            </Notice>
           )}
 
           {!skipExperience && (<>
           {experiences.map((exp, i) => (
-            <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 relative">
+            <div key={i} className={entryCard}>
               {experiences.length > 1 && (
-                <button type="button" onClick={() => removeExp(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
+                <button type="button" onClick={() => removeExp(i)} className={removeBtn}>
                   Remove
                 </button>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>Job title <span className="text-red-400">*</span></label>
+                <label className={label}>Job title <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
                   <input className={inp} value={exp.jobTitle} onChange={(e) => updateExp(i, "jobTitle", e.target.value)} placeholder="e.g. Software Engineer" />
-                </div>
-                <div>
-                  <label className={label}>Company <span className="text-red-400">*</span></label>
+                </label>
+                <label className={label}>Company <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
                   <input className={inp} value={exp.company} onChange={(e) => updateExp(i, "company", e.target.value)} placeholder="e.g. Google" />
-                </div>
+                </label>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
-                <div>
-                  <label className={label}>Start</label>
+                <label className={label}>Start<span className="sr-only"> month</span>
                   <select className={inp} value={exp.startMonth} onChange={(e) => updateExp(i, "startMonth", e.target.value)}>
                     <option value="">Month</option>
                     {MONTHS.map((m) => <option key={m}>{m}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className={label}>&nbsp;</label>
+                </label>
+                <label className={label}><span aria-hidden="true">&nbsp;</span><span className="sr-only">Start year</span>
                   <select className={inp} value={exp.startYear} onChange={(e) => updateExp(i, "startYear", e.target.value)}>
                     <option value="">Year</option>
                     {YEARS.map((y) => <option key={y}>{y}</option>)}
                   </select>
-                </div>
+                </label>
                 {!exp.current && (
                   <>
-                    <div>
-                      <label className={label}>End</label>
+                    <label className={label}>End<span className="sr-only"> month</span>
                       <select className={inp} value={exp.endMonth} onChange={(e) => updateExp(i, "endMonth", e.target.value)}>
                         <option value="">Month</option>
                         {MONTHS.map((m) => <option key={m}>{m}</option>)}
                       </select>
-                    </div>
-                    <div>
-                      <label className={label}>&nbsp;</label>
+                    </label>
+                    <label className={label}><span aria-hidden="true">&nbsp;</span><span className="sr-only">End year</span>
                       <select className={inp} value={exp.endYear} onChange={(e) => updateExp(i, "endYear", e.target.value)}>
                         <option value="">Year</option>
                         {YEARS.map((y) => <option key={y}>{y}</option>)}
                       </select>
-                    </div>
+                    </label>
                   </>
                 )}
                 {exp.current && <div className="col-span-2" />}
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
-                <input type="checkbox" checked={exp.current} onChange={(e) => updateExp(i, "current", e.target.checked)} />
-                Currently working here
-              </label>
+              <Checkbox label="I currently work here" checked={exp.current} onChange={(e) => updateExp(i, "current", e.target.checked)} />
 
-              <div>
-                <label className={label}>What did you do?</label>
+              <label className={label}>What did you do?
                 <textarea
                   className={`${inp} resize-none`}
                   rows={4}
@@ -401,11 +414,11 @@ export default function CVBuilderPage() {
                   onChange={(e) => updateExp(i, "description", e.target.value)}
                   placeholder="Describe what you worked on, what you built, what technologies you used. Don't worry about wording — Claude will polish it."
                 />
-              </div>
+              </label>
             </div>
           ))}
 
-          <button type="button" onClick={addExp} className="text-sm text-purple-600 hover:underline font-medium">
+          <button type="button" onClick={addExp} className={addLink}>
             + Add another role
           </button>
           </>)}
@@ -415,51 +428,46 @@ export default function CVBuilderPage() {
       {/* ── Step 3: Education ───────────────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-6">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-white">Education</h2>
+          <h2 className={stepHeading}>Education</h2>
 
           {educations.map((edu, i) => (
-            <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 relative">
+            <div key={i} className={entryCard}>
               {educations.length > 1 && (
-                <button type="button" onClick={() => removeEdu(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
+                <button type="button" onClick={() => removeEdu(i)} className={removeBtn}>
                   Remove
                 </button>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>Degree type</label>
+                <label className={label}>Degree type
                   <select className={inp} value={edu.degree} onChange={(e) => updateEdu(i, "degree", e.target.value)}>
                     <option value="">Select…</option>
                     {DEGREE_TYPES.map((d) => <option key={d}>{d}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className={label}>Field of study</label>
+                </label>
+                <label className={label}>Field of study
                   <input className={inp} value={edu.field} onChange={(e) => updateEdu(i, "field", e.target.value)} placeholder="e.g. Computer Science" />
-                </div>
+                </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>Institution <span className="text-red-400">*</span></label>
+                <label className={label}>Institution <span className="text-danger-text" aria-hidden="true">*</span><span className="sr-only">(required)</span>
                   <input className={inp} value={edu.institution} onChange={(e) => updateEdu(i, "institution", e.target.value)} placeholder="e.g. Tel Aviv University" />
-                </div>
-                <div>
-                  <label className={label}>Graduation year</label>
+                </label>
+                <label className={label}>Graduation year
                   <select className={inp} value={edu.year} onChange={(e) => updateEdu(i, "year", e.target.value)}>
                     <option value="">Year</option>
                     {YEARS.map((y) => <option key={y}>{y}</option>)}
                   </select>
-                </div>
+                </label>
               </div>
 
-              <div>
-                <label className={label}>Notable achievement <span className="text-xs text-gray-400">(optional)</span></label>
+              <label className={label}>Notable achievement <span className="font-normal text-ink-subtle">(optional)</span>
                 <input className={inp} value={edu.achievement} onChange={(e) => updateEdu(i, "achievement", e.target.value)} placeholder="e.g. Graduated with honors, GPA 3.9, thesis on ML" />
-              </div>
+              </label>
             </div>
           ))}
 
-          <button type="button" onClick={addEdu} className="text-sm text-purple-600 hover:underline font-medium">
+          <button type="button" onClick={addEdu} className={addLink}>
             + Add another
           </button>
         </div>
@@ -469,7 +477,7 @@ export default function CVBuilderPage() {
       {step === 4 && (
         <div className="space-y-6">
           <div>
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white mb-3">Skills</h2>
+            <h2 className={cn(stepHeading, "mb-4")}>Skills</h2>
             <TagInput
               tags={skillsInfo.skills}
               onChange={(tags) => setSkillsInfo((p) => ({ ...p, skills: tags }))}
@@ -479,8 +487,8 @@ export default function CVBuilderPage() {
           </div>
 
           <div>
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white mb-1">Languages</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">e.g. Hebrew (native), English (fluent)</p>
+            <h3 className="text-title-card text-ink">Languages</h3>
+            <p className="mb-3 mt-0.5 text-body-sm text-ink-muted">With your level, e.g. English (fluent)</p>
             <TagInput
               tags={skillsInfo.languages}
               onChange={(tags) => setSkillsInfo((p) => ({ ...p, languages: tags }))}
@@ -491,36 +499,34 @@ export default function CVBuilderPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-800 dark:text-white">Projects <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(optional, up to 3)</span></h2>
+                <h3 className="text-title-card text-ink">Projects <span className="text-body-sm font-normal text-ink-subtle">(optional, up to 3)</span></h3>
               </div>
               {skillsInfo.projects.length < 3 && (
-                <button type="button" onClick={addProject} className="text-sm text-purple-600 hover:underline font-medium">+ Add project</button>
+                <button type="button" onClick={addProject} className={addLink}>+ Add project</button>
               )}
             </div>
 
             {skillsInfo.projects.length === 0 && (
-              <p className="text-sm text-gray-400 italic">No projects added.</p>
+              <p className="text-body-sm italic text-ink-subtle">No projects added.</p>
             )}
 
+            <div className="space-y-3">
             {skillsInfo.projects.map((proj, i) => (
-              <div key={i} className="border dark:border-gray-600 rounded-xl p-4 space-y-3 mb-3 relative">
-                <button type="button" onClick={() => removeProject(i)} className="absolute top-3 right-3 text-xs text-gray-400 hover:text-red-500">
+              <div key={i} className={entryCard}>
+                <button type="button" onClick={() => removeProject(i)} className={removeBtn}>
                   Remove
                 </button>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={label}>Project name</label>
+                  <label className={label}>Project name
                     <input className={inp} value={proj.name} onChange={(e) => updateProject(i, "name", e.target.value)} placeholder="e.g. JobAgent" />
-                  </div>
-                  <div>
-                    <label className={label}>Link <span className="text-xs text-gray-400">(optional)</span></label>
+                  </label>
+                  <label className={label}>Link <span className="font-normal text-ink-subtle">(optional)</span>
                     <input className={inp} value={proj.link} onChange={(e) => updateProject(i, "link", e.target.value)} placeholder="github.com/…" />
-                  </div>
+                  </label>
                 </div>
-                <div>
-                  <label className={label}>One-line description</label>
+                <label className={label}>One-line description
                   <input className={inp} value={proj.description} onChange={(e) => updateProject(i, "description", e.target.value)} placeholder="e.g. AI-powered job search assistant" />
-                </div>
+                </label>
                 <div>
                   <label className={label}>Technologies used</label>
                   <TagInput
@@ -531,41 +537,42 @@ export default function CVBuilderPage() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
+
+          {existingCvDate && (
+            <Notice tone="attention" title="This replaces your current CV">
+              Generating a new CV replaces the one on file (last updated {existingCvDate}). If you uploaded that one, the original file is removed too — download it from My CV first if you want to keep it.
+            </Notice>
+          )}
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
+      {error && <Notice tone="danger" className="mt-5">{error}</Notice>}
 
       {/* Navigation */}
-      <div className="flex gap-3 mt-8 pb-8">
-        <button
+      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row">
+        <Button
           type="button"
+          variant="secondary"
+          size="lg"
+          className="sm:flex-1"
           onClick={() => step === 1 ? router.push("/dashboard/onboarding") : setStep((s) => s - 1)}
-          className="flex-1 border dark:border-gray-600 dark:text-gray-300 py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
         >
-          {step === 1 ? "Cancel" : "← Back"}
-        </button>
+          {step === 1 ? "Cancel" : "Back"}
+        </Button>
 
         {step < TOTAL_STEPS ? (
-          <button
-            type="button"
-            disabled={!canProceed()}
-            onClick={() => setStep((s) => s + 1)}
-            className="flex-1 bg-black text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-40"
-          >
-            Next →
-          </button>
+          <Button type="button" size="lg" className="sm:flex-1" disabled={!canProceed()} onClick={() => setStep((s) => s + 1)}>
+            Next
+          </Button>
         ) : (
-          <button
-            type="button"
-            disabled={generating}
-            onClick={handleGenerate}
-            className="flex-1 bg-purple-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
-          >
-            Generate my CV →
-          </button>
+          <Button type="button" variant="accent" size="lg" className="sm:flex-1" disabled={generating} onClick={handleGenerate}>
+            Generate my CV
+          </Button>
         )}
+      </div>
+      </section>
       </div>
     </div>
   );

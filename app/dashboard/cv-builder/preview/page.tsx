@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import CVScoreCard from "@/app/components/CVScoreCard";
+import { showToast } from "@/app/components/Toast";
+import { DownloadIcon, PageHero, Skeleton, Spinner, StatePanel, buttonStyles, heroControlStyles } from "@/app/components/ui";
+import { cn } from "@/lib/cn";
 
 const SECTION_HEADERS = new Set([
   "summary", "work experience", "experience", "education",
@@ -21,14 +24,14 @@ function CVPreview({ cvText }: { cvText: string }) {
     <>
       {/* Carlito is metric-compatible with Calibri — used as fallback on non-Windows */}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}</style>
-    <div className="px-8 py-7 text-[13px] leading-relaxed text-gray-800 dark:text-gray-200 max-h-[70vh] overflow-y-auto" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
+    <div className="max-h-[75vh] overflow-y-auto px-6 py-8 text-[13px] leading-relaxed text-ink sm:px-12 sm:py-12" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
       {lines.map((line, i) => {
         const trimmed = line.trim();
 
         if (!nameWritten && trimmed) {
           nameWritten = true;
           return (
-            <div key={i} className="text-base font-bold text-center text-gray-900 dark:text-white mb-1">
+            <div key={i} className="mb-1 text-center text-lg font-bold text-brand-text">
               {trimmed}
             </div>
           );
@@ -36,23 +39,23 @@ function CVPreview({ cvText }: { cvText: string }) {
         if (nameWritten && !contactWritten && trimmed) {
           contactWritten = true;
           return (
-            <div key={i} className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
+            <div key={i} className="mb-5 text-center text-xs text-ink-muted">
               {trimmed}
             </div>
           );
         }
         if (SECTION_HEADERS.has(trimmed.toLowerCase().replace(/:$/, ""))) {
           return (
-            <div key={i} className="mt-4 mb-1 font-bold text-xs text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-600 pb-0.5">
+            <div key={i} className="mb-1.5 mt-5 border-b border-brand/40 pb-0.5 text-xs font-bold uppercase tracking-wider text-brand-text">
               {trimmed.replace(/:$/, "")}
             </div>
           );
         }
         if (trimmed.startsWith("•")) {
-          return <div key={i} className="pl-4 text-gray-700 dark:text-gray-300">{trimmed}</div>;
+          return <div key={i} className="pl-4 text-ink">{trimmed}</div>;
         }
         if (!trimmed) return <div key={i} className="h-2" />;
-        return <div key={i} className="text-gray-700 dark:text-gray-300">{trimmed}</div>;
+        return <div key={i} className="text-ink">{trimmed}</div>;
       })}
     </div>
     </>
@@ -68,7 +71,6 @@ function PreviewContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cvId) {
@@ -85,18 +87,13 @@ function PreviewContent() {
       .finally(() => setLoading(false));
   }, [cvId, router]);
 
-  function showToast(msg: string) {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
-  }
-
   async function handleDownload() {
     setDownloading(true);
     try {
       const res = await fetch(`/api/cv/download-generated?cv_id=${cvId}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        showToast(data.error ?? "Download failed");
+        showToast(data.error ?? "Download failed", "error");
         return;
       }
       const blob = await res.blob();
@@ -107,103 +104,99 @@ function PreviewContent() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      showToast("Download failed. Try again.");
+      showToast("Download failed. Try again.", "error");
     } finally {
       setDownloading(false);
     }
   }
 
+  const heroAction = cn(heroControlStyles({ size: "custom" }), "inline-flex h-10 items-center gap-2 px-4 text-sm font-semibold");
+  const hero = (
+    <PageHero
+      title="Your CV is ready"
+      subtitle={cvText ? "Read it through, then download it or head to your matches." : undefined}
+      meta={cvText && (
+        <>
+          <Link href="/dashboard/cv-builder" className={heroAction}>Edit answers</Link>
+          <button type="button" onClick={handleDownload} disabled={downloading} className={heroAction}>
+            {downloading ? <Spinner size="sm" decorative /> : <DownloadIcon className="h-4 w-4" />}
+            {downloading ? "Preparing…" : "Download .docx"}
+          </button>
+        </>
+      )}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto mt-20 text-center">
-        <div className="inline-block w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-sm text-gray-500">Loading your CV…</p>
+      <div className="w-full" aria-busy="true">
+        {hero}
+        <div className="relative mx-auto -mt-14 max-w-6xl sm:-mt-16">
+          <div className={cn(cardCls, "p-6 sm:p-10 lg:w-2/3")}>
+            <Skeleton className="mx-auto h-5 w-1/3" />
+            <Skeleton className="mx-auto mt-2 h-3 w-1/2" />
+            {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="mt-4 h-3 w-full" />)}
+          </div>
+        </div>
+        <span className="sr-only" role="status">Loading your CV</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto mt-20 text-center">
-        <p className="text-red-600 text-sm mb-4">{error}</p>
-        <Link href="/dashboard/cv-builder" className="text-sm font-medium underline">
-          ← Back to builder
-        </Link>
+      <div className="w-full">
+        {hero}
+        <div className="relative mx-auto -mt-14 max-w-2xl sm:-mt-16">
+          <StatePanel
+            role="alert"
+            title="Couldn't load your new CV"
+            action={<Link href="/dashboard/cv-builder" className={buttonStyles({ variant: "secondary", size: "lg" })}>Back to the builder</Link>}
+          >
+            {error}
+          </StatePanel>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {toastMsg && (
-        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toastMsg}
+    <div className="w-full">
+      {hero}
+      <div className="relative mx-auto -mt-14 grid max-w-6xl items-start gap-6 pb-24 sm:-mt-16 sm:pb-10 lg:grid-cols-3">
+        <div className="space-y-6 lg:sticky lg:top-6 lg:order-2">
+          <CVScoreCard />
+          <div className={cn(cardCls, "p-5 sm:p-6")}>
+            <p className="text-body-sm text-ink-muted">Your matches use this CV from now on.</p>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.removeItem("cv_builder_draft");
+                router.push("/dashboard/matches");
+              }}
+              className={cn(buttonStyles({ size: "lg", block: true }), "mt-4")}
+            >
+              See your matches
+            </button>
+            <Link href="/dashboard/profile" className="mt-3 block text-center text-body-sm font-medium text-brand-text underline-offset-4 hover:underline">
+              Update job preferences
+            </Link>
+          </div>
         </div>
-      )}
 
-      <div className="flex items-start justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your CV is ready</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Review it below, then download or go to your dashboard.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/dashboard/cv-builder"
-            className="text-xs font-medium border dark:border-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            ← Regenerate
-          </Link>
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="text-xs font-medium bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {downloading ? "Preparing…" : "Download .docx"}
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-sm overflow-hidden mb-6">
-        <div className="bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 px-5 py-2 flex items-center justify-between">
-          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">preview</span>
-        </div>
-        {cvText && <CVPreview cvText={cvText} />}
-      </div>
-
-      <div className="mb-6">
-        <CVScoreCard />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => {
-            sessionStorage.removeItem("cv_builder_draft");
-            router.push("/dashboard");
-          }}
-          className="text-sm font-medium bg-black text-white px-5 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-        >
-          Go to dashboard →
-        </button>
-        <Link
-          href="/dashboard/onboarding"
-          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
-        >
-          Update job preferences
-        </Link>
+        <section aria-label="Your new CV" className={cn(cardCls, "overflow-hidden lg:order-1 lg:col-span-2")}>
+          {cvText && <CVPreview cvText={cvText} />}
+        </section>
       </div>
     </div>
   );
 }
 
+const cardCls = "rounded-[1.375rem] bg-surface-raised shadow-dossier ring-1 ring-line/60";
+
 export default function CVBuilderPreviewPage() {
   return (
-    <Suspense fallback={
-      <div className="max-w-2xl mx-auto mt-20 text-center">
-        <div className="inline-block w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<div className="flex justify-center pt-24"><Spinner size="lg" label="Loading your CV" /></div>}>
       <PreviewContent />
     </Suspense>
   );
