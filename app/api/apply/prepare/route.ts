@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
@@ -5,8 +6,31 @@ import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementCvTailoring } from "@/lib/usage";
 
+// The apply page calls this on every load. A draft for this user and job is
+// returned as is (no Claude call, no tailoring credit) while it was tailored
+// from the CV text the user still has (tailored_cv_hash = SHA-256 of
+// raw_text). Claude is called, and a credit spent, only for a first visit or
+// after the CV has changed. It used to charge and call Claude before looking
+// for the draft, so every reload cost a credit and a Sonnet call.
+
+type Tailoring = { cover_letter: string; cv_changes: string[]; tailored_cv: string };
+
+const hashCvText = (text: string) => createHash("sha256").update(text).digest("hex");
+
+const asChangeList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((c): c is string => typeof c === "string") : [];
+
+function isTailoring(v: unknown): v is Tailoring {
+  const t = v as Tailoring;
+  return (
+    !!t &&
+    typeof t.cover_letter === "string" && !!t.cover_letter.trim() &&
+    typeof t.tailored_cv === "string" && !!t.tailored_cv.trim() &&
+    Array.isArray(t.cv_changes)
+  );
+}
+
 export async function POST(req: NextRequest) {
-  const anthropic = new Anthropic({ maxRetries: 5, timeout: 120_000 });
   try {
     const supabase = createServerClient();
     const {
@@ -20,21 +44,6 @@ export async function POST(req: NextRequest) {
     const { job_id } = await req.json();
     if (!job_id) {
       return NextResponse.json({ error: "job_id required" }, { status: 400 });
-    }
-
-    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
-    const plan = normalizePlan(dbUser?.plan);
-    const { allowed } = await checkAndIncrementCvTailoring(user.id, plan);
-    if (!allowed) {
-      return NextResponse.json(
-        {
-          error: "limit_reached",
-          feature: "cvTailoring",
-          message: "You've reached your monthly CV tailoring limit.",
-          upgrade_url: "/pricing",
-        },
-        { status: 403 }
-      );
     }
 
     // Fetch CV
@@ -69,6 +78,49 @@ export async function POST(req: NextRequest) {
     }
     const job = jobRows[0];
     const matchScore: number | null = job.match_score;
+    const cvHash = hashCvText(raw_text);
+
+    // Reuse the draft for this user+job when there is one.
+    const existing = await db.$queryRaw<{
+      id: string;
+      cover_letter: string | null;
+      tailored_cv: string | null;
+      cv_changes: unknown;
+      tailored_cv_hash: string | null;
+    }[]>`
+      SELECT id, cover_letter, tailored_cv, cv_changes, tailored_cv_hash FROM "Application"
+      WHERE user_id = ${user.id} AND job_id = ${job_id} AND status = 'draft'
+      LIMIT 1
+    `;
+    const draft = existing[0];
+    // A draft from before the hash existed (null) is reused as it is.
+    if (draft?.tailored_cv && draft.cover_letter && (!draft.tailored_cv_hash || draft.tailored_cv_hash === cvHash)) {
+      return NextResponse.json({
+        application_id: draft.id,
+        cover_letter: draft.cover_letter,
+        tailored_cv: draft.tailored_cv,
+        cv_changes: asChangeList(draft.cv_changes),
+        job_title: job.title,
+        company: job.company,
+        job_url: job.url,
+        match_score: matchScore,
+      });
+    }
+
+    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+    const plan = normalizePlan(dbUser?.plan);
+    const { allowed } = await checkAndIncrementCvTailoring(user.id, plan);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "limit_reached",
+          feature: "cvTailoring",
+          message: "You've reached your monthly CV tailoring limit.",
+          upgrade_url: "/pricing",
+        },
+        { status: 403 }
+      );
+    }
 
     // Call Claude Sonnet to tailor CV
     const prompt =
@@ -98,6 +150,7 @@ export async function POST(req: NextRequest) {
       `Job: ${job.title} at ${job.company}\n` +
       `Description: ${job.description.slice(0, 2000)}`;
 
+    const anthropic = new Anthropic({ maxRetries: 5, timeout: 120_000 });
     let message;
     try {
       message = await anthropic.messages.create({
@@ -126,33 +179,29 @@ export async function POST(req: NextRequest) {
       if (fence !== -1) raw = raw.slice(0, fence).trim();
     }
 
-    const extracted = JSON.parse(raw) as {
-      cover_letter: string;
-      cv_changes: string[];
-      tailored_cv: string;
-    };
+    const extracted: unknown = JSON.parse(raw);
+    if (!isTailoring(extracted)) {
+      console.error("[apply/prepare] unexpected response shape, not saving:", raw.slice(0, 200));
+      return NextResponse.json({ error: "Couldn't tailor your CV. Please try again." }, { status: 502 });
+    }
+    const changes = asChangeList(extracted.cv_changes);
 
-    // Reuse existing draft for this user+job if one exists (prevents duplicates on page reload)
-    const existing = await db.$queryRaw<{ id: string; cover_letter: string | null; tailored_cv: string | null }[]>`
-      SELECT id, cover_letter, tailored_cv FROM "Application"
-      WHERE user_id = ${user.id} AND job_id = ${job_id} AND status = 'draft'
-      LIMIT 1
-    `;
-    if (existing.length) {
-      // Backfill tailored_cv / cover_letter if missing (e.g. draft created before this feature)
-      if (!existing[0].tailored_cv || !existing[0].cover_letter) {
-        await db.$executeRaw`
-          UPDATE "Application"
-          SET tailored_cv   = COALESCE(tailored_cv,   ${extracted.tailored_cv}),
-              cover_letter  = COALESCE(cover_letter,  ${extracted.cover_letter})
-          WHERE id = ${existing[0].id}
-        `;
-      }
+    // The draft was tailored from a CV the user has since changed (or is
+    // missing its CV or letter): replace it, keeping the same application.
+    if (draft) {
+      await db.$executeRaw`
+        UPDATE "Application"
+        SET tailored_cv = ${extracted.tailored_cv},
+            cover_letter = ${extracted.cover_letter},
+            cv_changes = ${JSON.stringify(changes)}::jsonb,
+            tailored_cv_hash = ${cvHash}
+        WHERE id = ${draft.id}
+      `;
       return NextResponse.json({
-        application_id: existing[0].id,
-        cover_letter: existing[0].cover_letter ?? extracted.cover_letter,
-        tailored_cv: existing[0].tailored_cv ?? extracted.tailored_cv,
-        cv_changes: extracted.cv_changes,
+        application_id: draft.id,
+        cover_letter: extracted.cover_letter,
+        tailored_cv: extracted.tailored_cv,
+        cv_changes: changes,
         job_title: job.title,
         company: job.company,
         job_url: job.url,
@@ -162,9 +211,10 @@ export async function POST(req: NextRequest) {
 
     // Insert draft Application row, return generated id
     const appRows = await db.$queryRaw<{ id: string }[]>`
-      INSERT INTO "Application" (id, user_id, job_id, status, tailored_cv, cover_letter, applied_at)
+      INSERT INTO "Application" (id, user_id, job_id, status, tailored_cv, cover_letter, applied_at, cv_changes, tailored_cv_hash)
       VALUES (gen_random_uuid(), ${user.id}, ${job_id}, 'draft',
-              ${extracted.tailored_cv}, ${extracted.cover_letter}, now())
+              ${extracted.tailored_cv}, ${extracted.cover_letter}, now(),
+              ${JSON.stringify(changes)}::jsonb, ${cvHash})
       RETURNING id
     `;
 
@@ -172,7 +222,7 @@ export async function POST(req: NextRequest) {
       application_id: appRows[0].id,
       cover_letter: extracted.cover_letter,
       tailored_cv: extracted.tailored_cv,
-      cv_changes: extracted.cv_changes,
+      cv_changes: changes,
       job_title: job.title,
       company: job.company,
       job_url: job.url,

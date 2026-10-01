@@ -87,7 +87,13 @@ draft → applied → interviewing → offer / rejected / cancelled
 ## Claude API usage rules (cost control)
 - CV extraction on upload: claude-haiku-3-5 (once per CV)
 - Job batch scoring: claude-haiku-3-5 (once per day per user, all jobs in ONE call)
-- CV tailoring on apply: claude-sonnet-4-20250514 (only when user clicks Apply)
+- CV tailoring on apply: claude-sonnet-4-20250514 (only when user clicks Apply).
+  The apply page calls `/api/apply/prepare` on every load, so the route
+  returns the existing draft — no Claude call, no tailoring credit — while
+  `Application.tailored_cv_hash` (SHA-256 of the CV `raw_text` it was tailored
+  from) still matches the user's CV. `Application.cv_changes` stores the
+  change list with it. It used to charge and call Sonnet before looking for
+  the draft, so every reload cost a credit.
 - Chat assistant: claude-haiku-3-5 (per message)
 - NEVER call the API per-job per-user for matching — use pgvector for that
 
@@ -123,6 +129,19 @@ Tailor & Apply are not charged — Tailor & Apply is capped by
 3. Only after Confirm → Playwright opens LinkedIn Easy Apply and submits
 4. If job is not LinkedIn Easy Apply → show manual link, no automation
 5. Screenshot taken before every submit and stored
+
+**Known gaps in Tailor & Apply** (found 2026-10-01, not fixed):
+- **A blocked LinkedIn tab is reported as open.** The fallback
+  `window.open(job_url)` result isn't checked, so "LinkedIn is open in a new
+  tab" shows even when the browser blocked it. The application is already
+  `pending_extension` by then.
+- **No retry after a failed submission.** The error screens only offer "Back
+  to matches". Reopening the job reuses the draft now (no new charge), but the
+  application may no longer be `draft` after a failed submit, in which case
+  it tailors again and spends another credit.
+- **The cover letter and CV scroll inside their own boxes.** On a phone the
+  letter shows two paragraphs and the CV is capped at 70vh, so Confirm can be
+  reached without seeing the end of either. Same on desktop with a long CV.
 
 ## Billing (Dodo Payments)
 - Checkout: `/api/dodo/checkout` creates a hosted Dodo Checkout Session

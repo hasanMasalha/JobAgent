@@ -149,6 +149,12 @@ model Application {
   /// refunded, so a failure can refund at most once. See lib/usage.ts.
   auto_apply_charged Boolean @default(false)
 
+  // Tailoring cache (/api/apply/prepare). A draft is reused, with no Claude
+  // call and no tailoring credit, while tailored_cv_hash equals SHA-256 of
+  // the user's CV raw_text. cv_changes is Claude's change list for that CV.
+  cv_changes       Json?
+  tailored_cv_hash String?
+
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
 }
