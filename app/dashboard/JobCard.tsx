@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 import { JobDescription } from "./components/JobDescription";
 import { cn } from "@/lib/cn";
+import { DIRECT_APPLY_ATS_DOMAINS, displayApplyType, isLinkedInListing } from "@/lib/detect-apply-type";
 import {
   Badge,
   Button,
@@ -78,21 +79,20 @@ function isATSJob(url?: string): boolean {
   return ATS_URL_PATTERNS.some((p) => (url ?? "").toLowerCase().includes(p));
 }
 
-const ATS_DOMAINS = [
-  "greenhouse.io", "lever.co", "workable.com",
-  "ashbyhq.com", "comeet.com", "bamboohr.com",
-];
-function isAutoApplicable(job: Job): boolean {
-  if (job.apply_type === "external") return false;
-  const url = (job.url || "").toLowerCase();
-  return ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
-}
-
 // LinkedIn Easy Apply sends the résumé on the user's LinkedIn profile, so a
 // tailored CV is only useful there as a download.
 function isLinkedInOnly(job: Job): boolean {
+  return isLinkedInListing(job.url);
+}
+
+// Whether the card's Apply button does something. A LinkedIn listing always
+// does, whatever its apply_type: Apply opens the review screen and the
+// extension checks for Easy Apply on the page.
+function isAutoApplicable(job: Job): boolean {
+  if (isLinkedInOnly(job)) return true;
+  if (job.apply_type === "external") return false;
   const url = (job.url || "").toLowerCase();
-  return url.includes("linkedin.com") && !ATS_DOMAINS.some((d) => url.includes(d));
+  return DIRECT_APPLY_ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
 }
 
 export function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
@@ -182,6 +182,12 @@ export default function JobCard({
     e.stopPropagation();
     e.preventDefault();
     if (quickApplying || quickApplied) return;
+    // LinkedIn: nothing to submit from here. The review screen shows what
+    // LinkedIn will receive; Confirm there hands over to the extension.
+    if (isLinkedInOnly(job)) {
+      router.push(`/dashboard/apply/${job.id}`);
+      return;
+    }
     setQuickApplying(true);
     try {
       const res = await fetch("/api/apply/quick", {
@@ -418,7 +424,7 @@ export default function JobCard({
               {featuredLabel && (
                 <Badge tone={strong && featuredLabel === "Top match" ? "accent" : "brand"}>{featuredLabel}</Badge>
               )}
-              {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
+              {(job.apply_type || isLinkedInOnly(job)) && <ApplyTypeBadge type={displayApplyType(job)} url={job.url} />}
               {showSource && job.source && <SourcePill source={job.source} />}
               <span className="text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>
             </div>
@@ -467,7 +473,7 @@ export default function JobCard({
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
         {showScore ? <InlineScore score={score} /> : <span className="flex-1 text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>}
         <div className="flex flex-wrap items-center gap-1.5">
-          {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
+          {(job.apply_type || isLinkedInOnly(job)) && <ApplyTypeBadge type={displayApplyType(job)} url={job.url} />}
           {showSource && job.source && <SourcePill source={job.source} />}
         </div>
       </div>

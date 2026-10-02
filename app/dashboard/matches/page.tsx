@@ -6,6 +6,7 @@ import JobCard, { Job } from "@/app/dashboard/JobCard";
 import JobFilters, { DEFAULT_FILTERS, Filters } from "@/app/components/JobFilters";
 import { showToast } from "@/app/components/Toast";
 import { cn } from "@/lib/cn";
+import { displayApplyType } from "@/lib/detect-apply-type";
 import {
   Button,
   buttonStyles,
@@ -496,7 +497,7 @@ export default function MatchesPage() {
   const filteredJobs = useMemo(() => {
     const filtered = jobs
       .filter((job) => !appliedJobIds.has(job.id))
-      .filter((job) => applyTypeFilter === "all" || (job.apply_type ?? "external") === applyTypeFilter)
+      .filter((job) => applyTypeFilter === "all" || displayApplyType(job) === applyTypeFilter)
       .filter((job) => workTypeMatch(job, filters.workTypes))
       .filter((job) => jobTypeMatch(job, filters.jobTypes))
       .filter((job) => dateMatch(job, filters.daysPosted))
