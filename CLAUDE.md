@@ -121,23 +121,48 @@ There are two supported apply paths — know which one a change affects:
    the `apply_type === "external"` branch, which would otherwise record the
    job as applied manually.
 
-**LinkedIn listings are routed by URL, not by `apply_type`.** Nothing has
-ever recorded whether a listing is Easy Apply — JobSpy takes `easy_apply` as a
-search filter but doesn't return it, and `is_easy_apply` was never set — so
-every stored LinkedIn row is `external` or `auto` and none is `extension`.
-`isLinkedInListing()` (`lib/detect-apply-type.ts`: a `linkedin.com` URL with
-no ATS domain) decides instead: the job card's Apply is enabled and goes
-straight to `/dashboard/apply/[jobId]` (the LinkedIn review screen), and
-`displayApplyType()` gives the card its "Extension" badge and fills the
-Extension tab on Matches. Non-LinkedIn `external` jobs keep the disabled
-Apply. The extension finds out on the page: with no Easy Apply button it
-stops, reports `manual` (credit refunded) and leaves the tab open, and the
-review screen says so before Confirm. From 2026-06-17 (`a343957`) to
-2026-10-02 the card disabled Apply for every `external` job, which made the
-extension route unreachable. **Batch apply is deliberately unchanged** — it
-still selects on stored `apply_type`, so LinkedIn `external` jobs get no
-checkbox: most aren't Easy Apply and a batch would mostly end in `manual`.
-Don't try to detect Easy Apply at scrape time without a real data source.
+**`apply_type = 'extension'` means a confirmed LinkedIn Easy Apply job.**
+The only source is LinkedIn's own marker on the logged-out job page:
+`public_jobs_apply-link-onsite` / `-simple_onsite` (the application happens on
+LinkedIn) versus `-offsite` (`ai-service/linkedin_easy_apply.py`,
+`detect_easy_apply`). `linkedin_fetcher.py` reads it from the page it already
+opens for the description and passes `is_easy_apply` True / False / None;
+`_detect_apply_type` stores `extension` only for True, and a recruiter email or
+ATS URL still wins (`auto`). `backfill_easy_apply.py` is the one-off for rows
+scraped before 2026-10-02. Unknown is stored as `external` — never guess True.
+The marker names are LinkedIn internals: if detection stops finding Easy Apply
+jobs, check them first. Until 2026-10-02 nothing set this at all (JobSpy takes
+`easy_apply` as a search filter but doesn't return it, and it is only used for
+Indeed anyway), so no row was ever `extension`; the Extension badge showed for
+every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
+- **Card:** badge, Extension tab, batch checkbox and the enabled Apply all go
+  by the stored type. A confirmed job's Apply opens `/dashboard/apply/[jobId]`
+  (the LinkedIn review screen). A LinkedIn listing that isn't confirmed is
+  external like any other: External badge, Apply disabled.
+- **The extension still checks on the page.** Easy Apply can be withdrawn
+  after the scrape; with no button it stops, reports `manual` (credit
+  refunded) and leaves the tab open. The review screen says which case the job
+  is in (`easy_apply_confirmed` from `/api/apply/prepare`).
+- **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
+  with a user's saved login, one browser per job.
+
+**Batch extension apply** (Matches → select Easy Apply jobs → Apply):
+`/api/apply/batch-mark-pending` marks each job `pending_extension` and charges
+one auto-apply, then the page sends `START_APPLY_QUEUE` to the extension.
+- The page calls `extensionReadiness()` (`lib/extension-client.ts`) **before**
+  marking or charging — it used to charge first and then find no extension.
+  If the hand-over fails after marking, it reports each job `manual` to get
+  the credits back.
+- The route queues LinkedIn listings only, at most `MAX_EXTENSION_BATCH` (12,
+  `lib/extension-batch.ts` — the extension's `MAX_APPLIES_PER_HOUR`); the rest
+  come back in `overBatchLimit`, not charged.
+- Nothing resumes a stopped queue. When the hourly cap or a LinkedIn
+  verification stops it, the extension's `releaseUnprocessed()` reports every
+  job it didn't reach as `manual` so the credits return.
+- `update-status` ignores `manual` / `failed` for an application that is
+  already `applied` or later, so a late release can't undo a submission.
+- No review screen in batch: the server still sends only answers the user
+  gave, and the six Application details only once confirmed.
 
 **Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
 where JobAgent submits for the user spends one credit via

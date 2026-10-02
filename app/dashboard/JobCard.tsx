@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 import { JobDescription } from "./components/JobDescription";
 import { cn } from "@/lib/cn";
-import { DIRECT_APPLY_ATS_DOMAINS, displayApplyType, isLinkedInListing } from "@/lib/detect-apply-type";
+import { DIRECT_APPLY_ATS_DOMAINS, isLinkedInListing } from "@/lib/detect-apply-type";
 import {
   Badge,
   Button,
@@ -85,11 +85,12 @@ function isLinkedInOnly(job: Job): boolean {
   return isLinkedInListing(job.url);
 }
 
-// Whether the card's Apply button does something. A LinkedIn listing always
-// does, whatever its apply_type: Apply opens the review screen and the
-// extension checks for Easy Apply on the page.
+// Whether the card's Apply button does something: a job on an ATS we submit
+// to, or a LinkedIn listing the scraper confirmed as Easy Apply
+// (apply_type "extension"). A LinkedIn listing that isn't confirmed is
+// external like any other — no Apply that opens LinkedIn only to find there
+// is nothing to automate.
 function isAutoApplicable(job: Job): boolean {
-  if (isLinkedInOnly(job)) return true;
   if (job.apply_type === "external") return false;
   const url = (job.url || "").toLowerCase();
   return DIRECT_APPLY_ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
@@ -182,9 +183,9 @@ export default function JobCard({
     e.stopPropagation();
     e.preventDefault();
     if (quickApplying || quickApplied) return;
-    // LinkedIn: nothing to submit from here. The review screen shows what
-    // LinkedIn will receive; Confirm there hands over to the extension.
-    if (isLinkedInOnly(job)) {
+    // LinkedIn Easy Apply: nothing to submit from here. The review screen shows
+    // what LinkedIn will receive; Confirm there hands over to the extension.
+    if (isLinkedInOnly(job) && job.apply_type === "extension") {
       router.push(`/dashboard/apply/${job.id}`);
       return;
     }
@@ -424,7 +425,7 @@ export default function JobCard({
               {featuredLabel && (
                 <Badge tone={strong && featuredLabel === "Top match" ? "accent" : "brand"}>{featuredLabel}</Badge>
               )}
-              {(job.apply_type || isLinkedInOnly(job)) && <ApplyTypeBadge type={displayApplyType(job)} url={job.url} />}
+              {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
               {showSource && job.source && <SourcePill source={job.source} />}
               <span className="text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>
             </div>
@@ -473,7 +474,7 @@ export default function JobCard({
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
         {showScore ? <InlineScore score={score} /> : <span className="flex-1 text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>}
         <div className="flex flex-wrap items-center gap-1.5">
-          {(job.apply_type || isLinkedInOnly(job)) && <ApplyTypeBadge type={displayApplyType(job)} url={job.url} />}
+          {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
           {showSource && job.source && <SourcePill source={job.source} />}
         </div>
       </div>

@@ -6,7 +6,8 @@ import JobCard, { Job } from "@/app/dashboard/JobCard";
 import JobFilters, { DEFAULT_FILTERS, Filters } from "@/app/components/JobFilters";
 import { showToast } from "@/app/components/Toast";
 import { cn } from "@/lib/cn";
-import { displayApplyType } from "@/lib/detect-apply-type";
+import { EXTENSION_ID, extensionReadiness } from "@/lib/extension-client";
+import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
 import {
   Button,
   buttonStyles,
@@ -354,6 +355,20 @@ export default function MatchesPage() {
         else if (data.error === "limit_reached") showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
       }
       if (extensionJobs.length > 0) {
+        // Is the extension there, and new enough? Asked before anything is
+        // marked pending or charged: this used to mark and charge first, then
+        // find no extension and leave the credits spent.
+        const ready = await extensionReadiness();
+        if (ready !== "ok") {
+          showToast(
+            ready === "outdated"
+              ? "Your JobAgent extension is out of date. Update it, then try again. Nothing was queued or charged."
+              : "The JobAgent extension isn't answering in this browser. Install it, reload this page, then try again. Nothing was queued or charged.",
+            "error",
+          );
+          return;
+        }
+
         const res = await fetch("/api/apply/batch-mark-pending", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -370,18 +385,37 @@ export default function MatchesPage() {
         }
         // Some jobs weren't queued because the monthly limit ran out mid-batch.
         const skipped: number = data.limitReached?.length ?? 0;
-        const skippedNote = skipped > 0 ? ` ${skipped} not queued — monthly auto-apply limit reached.` : "";
-        const queueJobs = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
+        // And some because one batch holds at most MAX_EXTENSION_BATCH jobs.
+        const overBatch: number = data.overBatchLimit?.length ?? 0;
+        const skippedNote =
+          (skipped > 0 ? ` ${skipped} not queued — monthly auto-apply limit reached.` : "") +
+          (overBatch > 0 ? ` ${overBatch} not queued — a batch is limited to ${MAX_EXTENSION_BATCH} jobs. Nothing was charged for them.` : "");
+        const queueJobs: { id: string; url: string }[] = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
           id: r.applicationId,
           url: r.jobUrl,
         }));
-        const extensionId = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
-        if (!extensionId) { showToast("Extension ID not configured", "error"); return; }
+        // The jobs are marked pending and charged by now. If the queue can't
+        // be handed to the extension, give them back rather than leave them
+        // pending: "manual" refunds each credit.
+        const releaseQueued = () =>
+          Promise.all(
+            queueJobs.map((j) =>
+              fetch("/api/applications/update-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ applicationId: j.id, status: "manual" }),
+              }).catch(() => null),
+            ),
+          );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const chromeRuntime = (window as any).chrome?.runtime;
-        if (!chromeRuntime?.sendMessage) { showToast("Extension not detected.", "error"); return; }
+        if (!EXTENSION_ID || !chromeRuntime?.sendMessage) {
+          await releaseQueued();
+          showToast("The extension stopped answering, so nothing was started. Your auto-applies were returned.", "error");
+          return;
+        }
         chromeRuntime.sendMessage(
-          extensionId,
+          EXTENSION_ID,
           { type: "START_APPLY_QUEUE", jobs: queueJobs },
           (response: unknown) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -391,7 +425,9 @@ export default function MatchesPage() {
                 showToast(`Starting extension apply for ${queueJobs.length} job${queueJobs.length !== 1 ? "s" : ""}…${skippedNote}`, "success");
                 return;
               }
-              showToast(`Extension error: ${err.message}`, "error");
+              releaseQueued().then(() =>
+                showToast(`Extension error: ${err.message}. Nothing was started and your auto-applies were returned.`, "error"),
+              );
             } else {
               console.log("batch response:", response);
               showToast(`Starting extension apply for ${queueJobs.length} job${queueJobs.length !== 1 ? "s" : ""}…${skippedNote}`, "success");
@@ -497,7 +533,7 @@ export default function MatchesPage() {
   const filteredJobs = useMemo(() => {
     const filtered = jobs
       .filter((job) => !appliedJobIds.has(job.id))
-      .filter((job) => applyTypeFilter === "all" || displayApplyType(job) === applyTypeFilter)
+      .filter((job) => applyTypeFilter === "all" || (job.apply_type ?? "external") === applyTypeFilter)
       .filter((job) => workTypeMatch(job, filters.workTypes))
       .filter((job) => jobTypeMatch(job, filters.jobTypes))
       .filter((job) => dateMatch(job, filters.daysPosted))

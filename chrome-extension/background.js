@@ -67,32 +67,51 @@ function openApplyWindow(jobUrl, applicationId) {
     .catch(e => console.error('[JobAgent bg] tabs.create failed:', e.message))
 }
 
+// Hand back applications the extension is not going to get to: the hourly cap
+// was reached, or LinkedIn stopped us. Each one was marked pending and charged
+// an auto-apply when it was queued, so leaving it there strands the credit.
+// Reporting "manual" refunds it (/api/applications/update-status) and shows
+// the job under "Action needed". Returns how many were handed back.
+async function releaseUnprocessed() {
+  const stored = await chrome.storage.local.get([
+    'extensionToken', 'applyQueue', 'applyQueueIndex', 'activeApplicationId'
+  ])
+  const queue = stored.applyQueue || []
+  const ids = queue.slice(stored.applyQueueIndex || 0).map(j => j.id)
+  if (stored.activeApplicationId && !ids.includes(stored.activeApplicationId)) {
+    ids.push(stored.activeApplicationId)
+  }
+
+  await chrome.storage.local.set({ isProcessingQueue: false })
+  await chrome.storage.local.remove(['applyQueue', 'applyQueueIndex', 'activeApplicationId'])
+
+  const url = await getServerUrl()
+  let released = 0
+  for (const id of ids) {
+    try {
+      const res = await fetch(`${url}/api/applications/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
+        body: JSON.stringify({ applicationId: id, status: 'manual' }),
+      })
+      if (res.ok) released++
+      else console.error('[JobAgent bg] could not release application', id, res.status)
+    } catch (e) {
+      console.error('[JobAgent bg] could not release application', id, e)
+    }
+  }
+  console.log('[JobAgent bg] released', released, 'of', ids.length, 'unprocessed applications')
+  return released
+}
+
 async function processNextInQueue() {
   console.log('[JobAgent bg] processNextInQueue called')
   const stored = await chrome.storage.local.get([
-    'applyQueue', 'applyQueueIndex', 'activeApplyTab'
+    'applyQueue', 'applyQueueIndex', 'activeApplyTab', 'applyQueueResults'
   ])
   const queue = stored.applyQueue || []
   const index = stored.applyQueueIndex || 0
   console.log('[JobAgent bg] queue length:', queue.length, 'index:', index, 'activeTab:', stored.activeApplyTab)
-
-  // Rate limit: pause if the hourly cap is reached
-  const rateData = await chrome.storage.local.get(['sessionApplyCount', 'sessionStartTime'])
-  const now = Date.now()
-  const oneHour = 60 * 60 * 1000
-  if (!rateData.sessionStartTime || now - rateData.sessionStartTime > oneHour) {
-    await chrome.storage.local.set({ sessionApplyCount: 0, sessionStartTime: now })
-  } else if ((rateData.sessionApplyCount || 0) >= MAX_APPLIES_PER_HOUR) {
-    console.log('[JobAgent] Rate limit reached — pausing for safety')
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icon48.png',
-      title: 'JobAgent — Paused',
-      message: `Applied to ${MAX_APPLIES_PER_HOUR} jobs this hour. Resuming in 1 hour to stay safe.`
-    })
-    await chrome.storage.local.set({ isProcessingQueue: false })
-    return
-  }
 
   if (index >= queue.length) {
     // Close the LinkedIn tab when the whole queue is done
@@ -100,14 +119,43 @@ async function processNextInQueue() {
       try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
     }
     await chrome.storage.local.set({ isProcessingQueue: false })
-    await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
+    await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId', 'applyQueue', 'applyQueueIndex'])
+    // Say what actually happened, not "applied to all": some jobs stop at a
+    // question or turn out not to offer Easy Apply.
+    const results = stored.applyQueueResults || { applied: 0, notApplied: 0 }
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon48.png',
-      title: 'JobAgent ✅',
-      message: `Applied to all ${queue.length} jobs!`,
+      title: 'JobAgent — Batch finished',
+      message: results.notApplied > 0
+        ? `${results.applied} of ${queue.length} submitted. ${results.notApplied} need you to finish them yourself; their auto-applies were returned.`
+        : `${results.applied} of ${queue.length} submitted.`,
     })
-    console.log('[JobAgent bg] queue complete')
+    console.log('[JobAgent bg] queue complete', results)
+    return
+  }
+
+  // Rate limit: stop if the hourly cap is reached. Nothing resumes a stopped
+  // queue, so the jobs it didn't reach are handed back rather than left
+  // pending with their credits spent.
+  const rateData = await chrome.storage.local.get(['sessionApplyCount', 'sessionStartTime'])
+  const now = Date.now()
+  const oneHour = 60 * 60 * 1000
+  if (!rateData.sessionStartTime || now - rateData.sessionStartTime > oneHour) {
+    await chrome.storage.local.set({ sessionApplyCount: 0, sessionStartTime: now })
+  } else if ((rateData.sessionApplyCount || 0) >= MAX_APPLIES_PER_HOUR) {
+    console.log('[JobAgent] Rate limit reached — stopping for safety')
+    if (stored.activeApplyTab) {
+      try { await chrome.tabs.remove(stored.activeApplyTab) } catch {}
+      await chrome.storage.local.remove(['activeApplyTab'])
+    }
+    const released = await releaseUnprocessed()
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon48.png',
+      title: 'JobAgent — Stopped for this hour',
+      message: `${MAX_APPLIES_PER_HOUR} applications this hour is the limit. ${released} job${released !== 1 ? 's were' : ' was'} not attempted and the auto-applies were returned. Queue them again in an hour.`
+    })
     return
   }
 
@@ -191,6 +239,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         applyQueue: message.jobs,
         applyQueueIndex: 0,
         isProcessingQueue: true,
+        applyQueueResults: { applied: 0, notApplied: 0 },
       })
       console.log('[JobAgent bg] queue started, jobs:', message.jobs.length)
       await processNextInQueue()
@@ -232,14 +281,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'LINKEDIN_BLOCKED') {
     ;(async () => {
-      await chrome.storage.local.set({ isProcessingQueue: false })
+      // The blocked application, and any queued behind it, were charged when
+      // they were marked pending. Nothing will retry them: hand them back.
+      const released = await releaseUnprocessed()
+      const returned = released > 0
+        ? ` ${released} application${released !== 1 ? 's were' : ' was'} not submitted and the auto-applies were returned.`
+        : ''
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'icon48.png',
         title: 'JobAgent — LinkedIn Verification Required',
-        message: message.blockType === 'captcha'
+        message: (message.blockType === 'captcha'
           ? 'LinkedIn wants to verify you are human. Please complete the verification then try again.'
-          : 'LinkedIn detected unusual activity. Please wait 30 minutes before applying again.'
+          : 'LinkedIn detected unusual activity. Please wait 30 minutes before applying again.') + returned
       })
       sendResponse({ success: true })
     })()
@@ -294,6 +348,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
           await chrome.storage.local.remove(['activeApplyTab', 'activeApplicationId'])
         }
+        // This application is settled either way. Left behind, a later
+        // releaseUnprocessed() would report it again.
+        await chrome.storage.local.remove(['activeApplicationId'])
 
         // Notify the user (only for single applications, not mid-queue)
         const queueState = await chrome.storage.local.get([
@@ -314,9 +371,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 : 'JobAgent could not submit this application. Apply on LinkedIn yourself.',
           })
         } else {
-          // Advance the queue
+          // Advance the queue, keeping count for the notice at the end
           const nextIndex = (queueState.applyQueueIndex || 0) + 1
-          await chrome.storage.local.set({ applyQueueIndex: nextIndex })
+          const counted = await chrome.storage.local.get(['applyQueueResults'])
+          const results = counted.applyQueueResults || { applied: 0, notApplied: 0 }
+          if (status === 'applied') results.applied++
+          else results.notApplied++
+          await chrome.storage.local.set({ applyQueueIndex: nextIndex, applyQueueResults: results })
           console.log('[JobAgent bg] queue advancing to index', nextIndex)
           const advanceDelay = Math.floor(Math.random() * (8000 - 3000) + 3000)
           setTimeout(processNextInQueue, advanceDelay)
@@ -355,6 +416,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         applyQueue: message.jobs,
         applyQueueIndex: 0,
         isProcessingQueue: true,
+        applyQueueResults: { applied: 0, notApplied: 0 },
       })
       console.log('[JobAgent bg] queue stored, calling processNextInQueue')
       await processNextInQueue()

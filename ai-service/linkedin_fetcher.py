@@ -6,6 +6,8 @@ import re
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
+from linkedin_easy_apply import detect_easy_apply, linkedin_job_id
+
 LINKEDIN_SEARCH_TERMS = [
     "software engineer",
     "backend developer",
@@ -482,10 +484,21 @@ async def fetch_linkedin_jobs_for_term(
 
             # Page is already at the LinkedIn job detail URL after _fetch_full_description.
             # Attempt to extract the real ATS apply URL while still on this page.
+            # Same page: does LinkedIn mark the apply button on-site (Easy Apply)?
+            # Only trusted when the page really is this job — a failed
+            # navigation leaves the previous job's page open.
+            is_easy_apply = None
+            try:
+                job_id = linkedin_job_id(meta["url"])
+                if job_id and job_id in page.url:
+                    is_easy_apply = detect_easy_apply(await page.content())
+            except Exception as e:
+                print(f"[linkedin] easy apply check error: {e}")
+
             ats_url = await extract_ats_url(page)
             if ats_url:
                 print(f"[linkedin] Found ATS apply URL: {ats_url[:80]}")
-            elif session_path:
+            elif session_path and is_easy_apply is not True:
                 ats_url = await extract_apply_url_with_session(meta["url"], session_path)
 
             if desc and len(desc) >= 100:
@@ -503,6 +516,9 @@ async def fetch_linkedin_jobs_for_term(
                     "location": meta["location"],
                     "url": meta["url"],      # LinkedIn URL — used for viewing the job
                     "apply_url": ats_url,    # ATS URL — used for auto-applying (None if Easy Apply / not found)
+                    # True / False / None (unknown) — routes/jobs.py stores
+                    # apply_type 'extension' only for True.
+                    "is_easy_apply": is_easy_apply,
                     "source": "linkedin",
                     "salary_min": None,
                     "salary_max": None,

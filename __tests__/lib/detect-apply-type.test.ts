@@ -1,9 +1,8 @@
-import { displayApplyType, isLinkedInListing } from "@/lib/detect-apply-type";
+import { isLinkedInListing } from "@/lib/detect-apply-type";
 
-// A LinkedIn listing applies through the extension whatever its stored
-// apply_type: nothing has ever recorded whether a listing is Easy Apply, so
-// every LinkedIn row is "external" or "auto". Job cards and the Matches tabs
-// go by the URL instead.
+// A LinkedIn listing with no ATS to submit to. Whether the extension can apply
+// to it is a separate, stored fact: apply_type "extension" is written only when
+// the scraper saw LinkedIn's Easy Apply marker (ai-service/linkedin_easy_apply.py).
 
 describe("isLinkedInListing", () => {
   it.each([
@@ -21,19 +20,5 @@ describe("isLinkedInListing", () => {
     ["no URL", null],
   ])("is false for %s", (_what, url) => {
     expect(isLinkedInListing(url)).toBe(false);
-  });
-});
-
-describe("displayApplyType", () => {
-  const linkedin = "https://www.linkedin.com/jobs/view/1";
-
-  it.each(["external", "auto", "extension", null, undefined])("shows a LinkedIn listing stored as %s as extension", (apply_type) => {
-    expect(displayApplyType({ url: linkedin, apply_type })).toBe("extension");
-  });
-
-  it("keeps the stored type for everything else", () => {
-    expect(displayApplyType({ url: "https://acme.example/careers/1", apply_type: "external" })).toBe("external");
-    expect(displayApplyType({ url: "https://boards.greenhouse.io/acme/jobs/1", apply_type: "auto" })).toBe("auto");
-    expect(displayApplyType({ url: "https://acme.example/careers/1" })).toBe("external");
   });
 });

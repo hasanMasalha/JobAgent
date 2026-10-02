@@ -3,6 +3,8 @@ import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
 import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usage";
+import { isLinkedInListing } from "@/lib/detect-apply-type";
+import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
 
 // Creates Application rows (status = pending_extension) for each job so
 // the extension queue can pick them up. Does not call Claude — the
@@ -24,10 +26,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch job URLs for the requested IDs
-    const jobs = await db.job.findMany({
+    const found = await db.job.findMany({
       where: { id: { in: jobIds } },
       select: { id: true, url: true },
     });
+
+    // The extension only works on LinkedIn listings; anything else would be
+    // charged for a tab the extension can do nothing with.
+    const linkedin = found.filter((j) => isLinkedInListing(j.url));
+    // One batch holds at most MAX_EXTENSION_BATCH jobs (the extension's hourly
+    // cap). The rest are not queued and not charged.
+    const jobs = linkedin.slice(0, MAX_EXTENSION_BATCH);
+    const overBatchLimit = linkedin.slice(MAX_EXTENSION_BATCH).map((j) => j.id);
 
     const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
     const plan = normalizePlan(dbUser?.plan);
@@ -79,7 +89,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, results, limitReached });
+    return NextResponse.json({ success: true, results, limitReached, overBatchLimit });
   } catch (err) {
     console.error("[batch-mark-pending]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

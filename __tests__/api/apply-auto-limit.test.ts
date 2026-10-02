@@ -31,6 +31,7 @@ import * as usage from "@/lib/usage";
 import { POST as quickApply } from "@/app/api/apply/quick/route";
 import { POST as batchMarkPending } from "@/app/api/apply/batch-mark-pending/route";
 import { POST as updateStatus } from "@/app/api/applications/update-status/route";
+import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
 
 const mdb = db as unknown as {
   $queryRaw: jest.Mock;
@@ -196,6 +197,32 @@ describe("POST /api/apply/batch-mark-pending", () => {
     await batchMarkPending(post("/api/apply/batch-mark-pending", { jobIds: ["j1", "j2"] }));
     expect(charge).not.toHaveBeenCalled();
   });
+
+  it("queues and charges only LinkedIn listings", async () => {
+    mdb.job.findMany.mockResolvedValue([
+      { id: "j1", url: "https://www.linkedin.com/jobs/view/1" },
+      { id: "j2", url: "https://acme.example/careers/2" },
+      { id: "j3", url: "https://boards.greenhouse.io/acme/jobs/3" },
+    ]);
+    const data = await (await batchMarkPending(post("/api/apply/batch-mark-pending", { jobIds: ["j1", "j2", "j3"] }))).json();
+    expect(data.results.map((r: { jobId: string }) => r.jobId)).toEqual(["j1"]);
+    expect(charge).toHaveBeenCalledTimes(1);
+  });
+
+  // The extension stops after MAX_EXTENSION_BATCH applications in an hour, so
+  // a bigger batch could never finish. The rest must cost nothing.
+  it("queues at most MAX_EXTENSION_BATCH jobs and charges nothing for the rest", async () => {
+    const many = Array.from({ length: MAX_EXTENSION_BATCH + 3 }, (_, i) => ({
+      id: `j${i}`,
+      url: `https://www.linkedin.com/jobs/view/${4000000000 + i}`,
+    }));
+    mdb.job.findMany.mockResolvedValue(many);
+    const data = await (await batchMarkPending(post("/api/apply/batch-mark-pending", { jobIds: many.map((j) => j.id) }))).json();
+    expect(data.results).toHaveLength(MAX_EXTENSION_BATCH);
+    expect(data.overBatchLimit).toHaveLength(3);
+    expect(charge).toHaveBeenCalledTimes(MAX_EXTENSION_BATCH);
+    expect(mdb.application.create).toHaveBeenCalledTimes(MAX_EXTENSION_BATCH);
+  });
 });
 
 describe("POST /api/applications/update-status", () => {
@@ -207,5 +234,25 @@ describe("POST /api/applications/update-status", () => {
   it("keeps the credit when the extension reports applied", async () => {
     await updateStatus(post("/api/applications/update-status", { applicationId: "app-1", status: "applied" }));
     expect(refundForApp).not.toHaveBeenCalled();
+  });
+
+  // When a batch stops, the extension hands back everything it didn't get to.
+  // That list can include an application that had just been submitted.
+  it.each(["applied", "interviewing", "offer", "rejected"])(
+    "doesn't refund or change an application that is already %s",
+    async (current) => {
+      mdb.$queryRaw.mockResolvedValue([{ status: current }]);
+      const res = await updateStatus(post("/api/applications/update-status", { applicationId: "app-1", status: "manual" }));
+      expect(await res.json()).toMatchObject({ success: true, unchanged: true });
+      expect(refundForApp).not.toHaveBeenCalled();
+      expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refunds and marks manual an application that is still pending", async () => {
+    mdb.$queryRaw.mockResolvedValue([{ status: "pending_extension" }]);
+    await updateStatus(post("/api/applications/update-status", { applicationId: "app-1", status: "manual" }));
+    expect(refundForApp).toHaveBeenCalledWith("app-1", "u1");
+    expect(mdb.$executeRaw).toHaveBeenCalledTimes(1);
   });
 });

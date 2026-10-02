@@ -17,8 +17,8 @@ import {
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
 import { isVersionAtLeast } from "@/lib/extension-version";
+import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
 
-const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "extension_required" | "extension_launched" | "applying_background";
 
@@ -52,32 +52,11 @@ interface PrepareResult {
   match_score: number | null;
   /** LinkedIn Easy Apply job: nothing was tailored, see /api/apply/prepare. */
   linkedin?: boolean;
+  /** The scraper saw LinkedIn's Easy Apply marker on this job's public page. */
+  easy_apply_confirmed?: boolean;
 }
 
 const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
-
-// The installed extension's version: null if it doesn't answer, "0" if it
-// answers without one (versions before 1.5.0 didn't report it). Asked twice,
-// because the first message can find its service worker still waking up.
-function extensionVersion(): Promise<string | null> {
-  const ask = () =>
-    new Promise<string | null>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) return resolve(null);
-      const timer = setTimeout(() => resolve(null), 1500);
-      try {
-        chrome.runtime.sendMessage(EXTENSION_ID, { type: "PING" }, (response) => {
-          clearTimeout(timer);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if ((chrome.runtime as any).lastError) return resolve(null);
-          resolve(typeof response?.version === "string" ? response.version : "0");
-        });
-      } catch {
-        clearTimeout(timer);
-        resolve(null);
-      }
-    });
-  return ask().then((v) => v ?? ask());
-}
 
 // What /api/profile returns for the answers the extension may type into
 // Easy Apply. The last six only count once the user has confirmed them.
@@ -639,7 +618,9 @@ export default function ApplyPage() {
           LinkedIn Easy Apply sends the résumé saved on your LinkedIn profile. JobAgent doesn&apos;t send a CV or a cover letter for this job, so nothing was tailored and no CV tailoring was used.
         </p>
         <Notice tone="info" className="mt-4">
-          We&apos;ll check whether this job offers Easy Apply when LinkedIn opens. If it doesn&apos;t, nothing is submitted, your auto-apply is returned, and you finish on LinkedIn yourself.
+          {d.easy_apply_confirmed
+            ? "LinkedIn listed this job as Easy Apply when we last checked. If that has changed, nothing is submitted, your auto-apply is returned, and you finish on LinkedIn yourself."
+            : "We haven't seen Easy Apply on this job, so it probably needs an application on the company's site. We'll check when LinkedIn opens, which takes about 20 seconds. If there is no Easy Apply, nothing is submitted, your auto-apply is returned, and you finish on LinkedIn yourself."}
         </Notice>
         <p className="mt-3 text-body-sm text-ink-muted">
           Want a CV tailored to this role to upload yourself?{" "}
