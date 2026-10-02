@@ -3,6 +3,9 @@ import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { db } from "@/lib/db";
 import { refundAutoApplyForApplication } from "@/lib/usage";
 
+// Statuses that mean the application went out. "manual"/"failed" never replace these.
+const SUBMITTED_STATUSES = new Set(["applied", "interviewing", "offer", "rejected"]);
+
 export async function POST(req: NextRequest) {
   try {
     // Session, or the extension's signed token (its service worker can't send
@@ -26,6 +29,18 @@ export async function POST(req: NextRequest) {
     // The extension couldn't submit: give back the auto-apply credit the
     // application holds, if any (at most once — see refundAutoApplyForApplication).
     if (status !== "applied") {
+      // A late or repeated report must not undo an application that was
+      // submitted: the extension hands back everything it didn't get to when
+      // a batch stops, and its list can include one that had just gone through.
+      const current = await db.$queryRaw<{ status: string }[]>`
+        SELECT status FROM "Application"
+        WHERE id = ${applicationId} AND user_id = ${userId}
+        LIMIT 1
+      `;
+      if (SUBMITTED_STATUSES.has(current?.[0]?.status ?? "")) {
+        console.warn("[update-status] ignoring", status, "for an application already", current[0].status, applicationId);
+        return NextResponse.json({ success: true, unchanged: true });
+      }
       await refundAutoApplyForApplication(applicationId, userId);
     }
 

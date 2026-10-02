@@ -62,9 +62,10 @@ export async function POST(req: NextRequest) {
       company: string;
       description: string;
       url: string;
+      apply_type: string | null;
       match_score: number | null;
     }[]>`
-      SELECT j.title, j.company, j.description, j.url,
+      SELECT j.title, j.company, j.description, j.url, j.apply_type,
              CASE WHEN c.embedding IS NOT NULL AND j.embedding IS NOT NULL
                   THEN CAST(1 - (c.embedding <=> j.embedding) AS FLOAT)
                   ELSE NULL END AS match_score
@@ -112,6 +113,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         application_id: applicationId,
         linkedin: true,
+        // Whether the scraper saw LinkedIn's Easy Apply marker; the review
+        // screen words its expectation accordingly.
+        easy_apply_confirmed: job.apply_type === "extension",
         cover_letter: "",
         tailored_cv: "",
         cv_changes: [],
