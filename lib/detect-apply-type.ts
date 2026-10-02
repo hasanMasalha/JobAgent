@@ -43,6 +43,29 @@ export function detectApplyType(job: {
   return "external";
 }
 
+// ATS hosts JobAgent submits to directly from a job card.
+export const DIRECT_APPLY_ATS_DOMAINS = [
+  "greenhouse.io", "lever.co", "workable.com",
+  "ashbyhq.com", "comeet.com", "bamboohr.com",
+];
+
+/**
+ * A job whose listing is on LinkedIn with no ATS to submit to. These apply
+ * through the extension whatever `apply_type` says: nothing has ever told us
+ * at scrape time whether a listing offers Easy Apply (JobSpy doesn't return
+ * it), so stored LinkedIn rows are all "external" or "auto". The extension
+ * finds out on the page, and reports `manual` when there is no Easy Apply.
+ */
+export function isLinkedInListing(url: string | null | undefined): boolean {
+  const u = (url ?? "").toLowerCase();
+  return u.includes("linkedin.com") && !DIRECT_APPLY_ATS_DOMAINS.some((d) => u.includes(d));
+}
+
+/** The apply route a job card offers — what its badge and the Matches tabs show. */
+export function displayApplyType(job: { url?: string | null; apply_type?: string | null }): string {
+  return isLinkedInListing(job.url) ? "extension" : job.apply_type ?? "external";
+}
+
 export function extractRecruiterEmail(description: string): string | null {
   const match = description?.match(EMAIL_RE);
   return match ? match[0] : null;

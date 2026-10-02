@@ -307,6 +307,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             title: applied ? 'JobAgent — Application Submitted ✅' : 'JobAgent — Finish this one yourself',
             message: applied
               ? 'Your application was submitted successfully!'
+              : message.reason === 'no_easy_apply'
+                ? "This job doesn't offer Easy Apply, so nothing was submitted. Apply in the LinkedIn tab yourself."
               : keepTab
                 ? 'JobAgent stopped at a question it has no answer from you for. Nothing was submitted. Finish in the LinkedIn tab.'
                 : 'JobAgent could not submit this application. Apply on LinkedIn yourself.',

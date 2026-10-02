@@ -77,8 +77,11 @@ async function startEasyApply(application) {
 
   const el = await waitForEasyApplyButton(20000)
   if (!el) {
-    console.log('JobAgent: Easy Apply element not found')
-    await reportResult(application.id, 'manual')
+    // Most LinkedIn listings aren't Easy Apply, and nothing tells us which
+    // before we get here. Stop, hand the credit back ("manual"), and leave
+    // the tab open so the user can apply on this page themselves.
+    console.log('JobAgent: no Easy Apply button on this job, stopping')
+    await reportResult(application.id, 'manual', { keepTab: true, reason: 'no_easy_apply' })
     return
   }
 
@@ -145,15 +148,14 @@ async function waitForEasyApplyPanel(timeout = 15000) {
   })
 }
 
-// LinkedIn renders Easy Apply as <a href="...apply/..."> not a <button>.
-// Search buttons, links, and ARIA roles; also match Hebrew text.
+// LinkedIn renders Easy Apply as a <button>, or as <a href="...apply/...">.
+//
+// Only the Easy Apply control itself counts. This runs on every LinkedIn job
+// we open, and most of them have a plain "Apply" button that leaves for the
+// company's site — so the match is strict (jaIsEasyApplyLabel, answers.js),
+// and links to another job or to a search are skipped. No match means no
+// Easy Apply: startEasyApply stops and reports manual.
 function findEasyApplyElement() {
-  const easyApplyTexts = [
-    'Easy Apply',
-    'הגש מועמדות בקלות',
-    'הגש מועמדות',
-  ]
-
   const candidates = document.querySelectorAll(
     'button, a, [role="link"], [role="button"]'
   )
@@ -161,17 +163,18 @@ function findEasyApplyElement() {
   for (const el of candidates) {
     if (el.offsetParent === null) continue  // not visible
 
-    const text = el.textContent.trim()
-    const ariaLabel = el.getAttribute('aria-label') || ''
     const href = el.getAttribute('href') || ''
-
-    if (easyApplyTexts.some(t => text.includes(t) || ariaLabel.includes(t))) {
-      console.log('JobAgent: found Easy Apply element by text:', el.tagName, text)
-      return el
-    }
 
     if (href.includes('/apply/') && href.includes('openSDUIApplyFlow')) {
       console.log('JobAgent: found Easy Apply element by href:', href.substring(0, 80))
+      return el
+    }
+
+    // A link that goes to another job or a search is never the apply control.
+    if (href.includes('/jobs/view/') || href.includes('/jobs/search')) continue
+
+    if (jaIsEasyApplyLabel(el.textContent, el.getAttribute('aria-label'))) {
+      console.log('JobAgent: found Easy Apply element by label:', el.tagName)
       return el
     }
   }
@@ -607,7 +610,8 @@ async function humanType(element, text) {
 // All network calls go through background.js — content scripts cannot make
 // cross-origin fetches on pages with strict CSP (LinkedIn blocks them).
 // keepTab: leave the LinkedIn tab open so the user can finish the form.
-async function reportResult(applicationId, status, { keepTab = false } = {}) {
+// reason: why it stopped, for the notification only — it isn't sent to the server.
+async function reportResult(applicationId, status, { keepTab = false, reason = null } = {}) {
   console.log('[JobAgent] reportResult called:', applicationId, status)
   try {
     const response = await chrome.runtime.sendMessage({
@@ -615,6 +619,7 @@ async function reportResult(applicationId, status, { keepTab = false } = {}) {
       applicationId,
       status,
       keepTab,
+      reason,
       jobUrl: window.location.href
     })
     console.log('[JobAgent] reportResult response:', response)

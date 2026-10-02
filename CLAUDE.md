@@ -117,7 +117,27 @@ There are two supported apply paths — know which one a change affects:
 3. Batch auto-apply sends a tailored application email per job directly
 4. If the job is a LinkedIn listing with no resolved ATS `apply_url` →
    no automation here; return `needs_extension` and route to the
-   Tailor & Apply flow / browser extension instead
+   Tailor & Apply flow / browser extension instead. This check runs before
+   the `apply_type === "external"` branch, which would otherwise record the
+   job as applied manually.
+
+**LinkedIn listings are routed by URL, not by `apply_type`.** Nothing has
+ever recorded whether a listing is Easy Apply — JobSpy takes `easy_apply` as a
+search filter but doesn't return it, and `is_easy_apply` was never set — so
+every stored LinkedIn row is `external` or `auto` and none is `extension`.
+`isLinkedInListing()` (`lib/detect-apply-type.ts`: a `linkedin.com` URL with
+no ATS domain) decides instead: the job card's Apply is enabled and goes
+straight to `/dashboard/apply/[jobId]` (the LinkedIn review screen), and
+`displayApplyType()` gives the card its "Extension" badge and fills the
+Extension tab on Matches. Non-LinkedIn `external` jobs keep the disabled
+Apply. The extension finds out on the page: with no Easy Apply button it
+stops, reports `manual` (credit refunded) and leaves the tab open, and the
+review screen says so before Confirm. From 2026-06-17 (`a343957`) to
+2026-10-02 the card disabled Apply for every `external` job, which made the
+extension route unreachable. **Batch apply is deliberately unchanged** — it
+still selects on stored `apply_type`, so LinkedIn `external` jobs get no
+checkbox: most aren't Easy Apply and a batch would mostly end in `manual`.
+Don't try to detect Easy Apply at scrape time without a real data source.
 
 **Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
 where JobAgent submits for the user spends one credit via

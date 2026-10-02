@@ -46,6 +46,20 @@ export async function POST(req: NextRequest) {
     if (!jobRows.length) return NextResponse.json({ error: "Job not found" }, { status: 404 });
     const job = jobRows[0];
 
+    // A LinkedIn listing with no ATS apply_url goes through the extension,
+    // whatever its apply_type — stored LinkedIn rows are "external" or "auto"
+    // because nothing knows at scrape time whether a listing is Easy Apply.
+    // This must come before the external branch, which would record the job as
+    // applied manually. Nothing is created or charged here; the review screen's
+    // Confirm does that.
+    if (!job.apply_url && (job.url ?? "").toLowerCase().includes("linkedin.com")) {
+      return NextResponse.json({
+        success: false,
+        needs_extension: true,
+        message: "LinkedIn jobs require the browser extension",
+      });
+    }
+
     // External jobs have no automation — return early so the client opens the URL
     if (job.apply_type === "external") {
       await db.$executeRaw`
@@ -76,15 +90,6 @@ export async function POST(req: NextRequest) {
     // apply_url is the confirmed ATS URL (scraped from LinkedIn page).
     // Fall back to url only if apply_url is not set.
     const applyUrl = job.apply_url ?? job.url ?? "";
-
-    // LinkedIn listing URL with no ATS apply_url — cannot auto-apply
-    if (!job.apply_url && applyUrl.includes("linkedin.com")) {
-      return NextResponse.json({
-        success: false,
-        needs_extension: true,
-        message: "LinkedIn jobs require the browser extension",
-      });
-    }
 
     const atsPlatform = detectATS(applyUrl);
 

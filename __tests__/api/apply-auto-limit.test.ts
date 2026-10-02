@@ -120,6 +120,40 @@ describe("POST /api/apply/quick", () => {
   });
 });
 
+describe("POST /api/apply/quick for a LinkedIn listing", () => {
+  // Stored LinkedIn rows are "external" or "auto": nothing knows at scrape
+  // time whether a listing is Easy Apply. They go to the extension flow by
+  // URL, and must not be recorded as applied manually on the way.
+  it.each([
+    ["external", { ...ATS_JOB, apply_type: "external", url: "https://www.linkedin.com/jobs/view/1" }],
+    ["auto", { ...ATS_JOB, apply_type: "auto", url: "https://www.linkedin.com/jobs/view/1" }],
+    ["extension", { ...ATS_JOB, apply_type: "extension", url: "https://www.linkedin.com/jobs/view/1" }],
+  ])("routes an %s one to the extension, creating and charging nothing", async (_type, job) => {
+    sqlRouter(job);
+    const res = await quickApply(post("/api/apply/quick", { jobId: "j1" }));
+    expect(await res.json()).toMatchObject({ needs_extension: true });
+    expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    const inserts = mdb.$queryRaw.mock.calls.filter(([s]) => s.join("?").includes("INSERT"));
+    expect(inserts).toHaveLength(0);
+    expect(charge).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("still treats a non-LinkedIn external job as external", async () => {
+    sqlRouter({ ...ATS_JOB, apply_type: "external", url: "https://acme.example/careers/1" });
+    const res = await quickApply(post("/api/apply/quick", { jobId: "j1" }));
+    expect(await res.json()).toMatchObject({ status: "external", external_url: "https://acme.example/careers/1" });
+  });
+
+  it("submits to the ATS when a LinkedIn listing has a resolved apply_url", async () => {
+    sqlRouter({ ...ATS_JOB, apply_type: "auto", url: "https://www.linkedin.com/jobs/view/1", apply_url: "https://boards.greenhouse.io/acme/jobs/1" });
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ success: true, status: "applying" }) });
+    const res = await quickApply(post("/api/apply/quick", { jobId: "j1" }));
+    expect((await res.json()).needs_extension).toBeUndefined();
+    expect(charge).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("POST /api/apply/batch-mark-pending", () => {
   beforeEach(() => {
     mdb.job.findMany.mockResolvedValue([

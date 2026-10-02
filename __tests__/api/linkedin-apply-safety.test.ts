@@ -37,6 +37,7 @@ const answers = require("../../chrome-extension/answers.js") as {
   jaSavedAnswer: (label: string, application: Record<string, unknown>) => string | null;
   jaMatchOption: (options: string[], answer: string | null) => number;
   jaYesNoOption: (options: string[], wantYes: boolean) => number;
+  jaIsEasyApplyLabel: (text: string | null, ariaLabel: string | null) => boolean;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const manifests = ["manifest.json", "manifest.prod.json"].map((f) => require(`../../chrome-extension/${f}`)) as {
@@ -212,5 +213,33 @@ describe("extension answers (chrome-extension/answers.js)", () => {
     expect(jaYesNoOption(["Yes", "No"], false)).toBe(1);
     expect(jaYesNoOption(["כן", "לא"], true)).toBe(0);
     expect(jaYesNoOption(["Citizen", "Permanent resident"], true)).toBe(-1);
+  });
+});
+
+// The extension is opened on every LinkedIn listing, and most have an
+// ordinary Apply button that leaves for the company's site. Only LinkedIn's
+// own Easy Apply control may be clicked; anything else means stop and report
+// manual.
+describe("Easy Apply button detection (chrome-extension/answers.js)", () => {
+  const { jaIsEasyApplyLabel } = answers;
+
+  it.each([
+    ["the button's own text", "Easy Apply", null],
+    ["text split across nodes", "  Easy\n   Apply ", ""],
+    ["an aria-label naming the job", "", "Easy Apply to Senior Engineer at Acme"],
+    ["the Hebrew label", "הגש מועמדות בקלות", null],
+  ])("accepts %s", (_what, text, aria) => {
+    expect(jaIsEasyApplyLabel(text, aria)).toBe(true);
+  });
+
+  it.each([
+    ["the ordinary Apply button", "Apply", "Apply to Senior Engineer on company website"],
+    ["the bare Hebrew Apply", "הגש מועמדות", null],
+    ["a job card that mentions Easy Apply", "Senior Engineer Acme Tel Aviv Easy Apply", null],
+    ["the Easy Apply search filter", "Easy Apply", "Easy Apply filter."],
+    ["Save", "Save", "Save Senior Engineer at Acme"],
+    ["nothing", null, null],
+  ])("rejects %s", (_what, text, aria) => {
+    expect(jaIsEasyApplyLabel(text, aria)).toBe(false);
   });
 });

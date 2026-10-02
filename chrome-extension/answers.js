@@ -143,6 +143,24 @@ function jaYesNoOption(options, wantYes) {
   return wantYes ? yesIdx : noIdx
 }
 
+// Whether an element's own label says it is LinkedIn's Easy Apply control.
+// The same rule as for answers: no match means stop, not "close enough".
+//   - the text has to BE the label, or the aria-label has to start with it
+//     ("Easy Apply to Senior Engineer at Acme"). Text that merely contains
+//     the words is a job card elsewhere on the page ("… · Easy Apply").
+//   - the bare Hebrew "הגש מועמדות" ("Apply") is not accepted: it is also the
+//     label of the ordinary Apply button that leaves for the company's site.
+//   - a filter control ("Easy Apply filter.") is not the apply button.
+const JA_EASY_APPLY_LABELS = ['easy apply', 'הגש מועמדות בקלות']
+
+function jaIsEasyApplyLabel(text, ariaLabel) {
+  const clean = v => (v || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const t = clean(text)
+  const a = clean(ariaLabel)
+  if (a.includes('filter')) return false
+  return JA_EASY_APPLY_LABELS.some(l => t === l || a.startsWith(l))
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption }
+  module.exports = { jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaIsEasyApplyLabel }
 }

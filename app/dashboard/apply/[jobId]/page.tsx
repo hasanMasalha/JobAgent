@@ -530,7 +530,7 @@ export default function ApplyPage() {
       return shell(
         <>
           <StatePanel role="status" title="Finish this one yourself" action={<div className="flex flex-col items-center gap-3 sm:flex-row">{openJob("Open the job")}{toApplications}</div>}>
-            JobAgent stopped before submitting, usually because LinkedIn asked something you haven&apos;t given it an answer for. Nothing was sent and your auto-apply was returned. Finish the application in the LinkedIn tab.
+            JobAgent stopped before submitting. Either this job doesn&apos;t offer Easy Apply, or LinkedIn asked something you haven&apos;t given it an answer for. Nothing was sent and your auto-apply was returned. Finish the application in the LinkedIn tab.
           </StatePanel>
           {coverLetterCopy}
         </>
@@ -638,6 +638,9 @@ export default function ApplyPage() {
         <p className="mt-3 text-body text-ink">
           LinkedIn Easy Apply sends the résumé saved on your LinkedIn profile. JobAgent doesn&apos;t send a CV or a cover letter for this job, so nothing was tailored and no CV tailoring was used.
         </p>
+        <Notice tone="info" className="mt-4">
+          We&apos;ll check whether this job offers Easy Apply when LinkedIn opens. If it doesn&apos;t, nothing is submitted, your auto-apply is returned, and you finish on LinkedIn yourself.
+        </Notice>
         <p className="mt-3 text-body-sm text-ink-muted">
           Want a CV tailored to this role to upload yourself?{" "}
           <Link href={`/dashboard/apply/${jobId}?mode=download`} className="font-semibold text-brand-text underline underline-offset-4">
