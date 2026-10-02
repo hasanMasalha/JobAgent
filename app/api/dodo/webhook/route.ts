@@ -27,6 +27,17 @@ async function resolveUserId(
   return byEmail?.id ?? null;
 }
 
+// The user already linked to this subscription comes first: it's the only match that
+// survives a subscription with no metadata.userId whose Dodo customer email differs from
+// the account email. resolveUserId covers the first event, before anything is linked.
+async function resolveSubscriptionUserId(tx: Tx, sub: Subscription): Promise<string | null> {
+  const linked = await tx.user.findFirst({
+    where: { dodoSubscriptionId: sub.subscription_id },
+    select: { id: true },
+  });
+  return linked?.id ?? (await resolveUserId(tx, sub.customer.email, sub.metadata));
+}
+
 function planFromSubscription(sub: Subscription): PaidPlan | null {
   return planFromProductId(sub.product_id);
 }
@@ -48,8 +59,9 @@ async function lookupUserContact(tx: Tx, sub: Subscription): Promise<UserContact
 
 async function handleSubscriptionUpsert(tx: Tx, sub: Subscription): Promise<(UserContact & { plan: PaidPlan }) | null> {
   const plan = planFromSubscription(sub);
-  const userId = await resolveUserId(tx, sub.customer.email, sub.metadata);
+  const userId = await resolveSubscriptionUserId(tx, sub);
 
+  // Still acknowledged and claimed: a retry would resolve no better than this did.
   if (!userId || !plan) {
     console.error("[dodo/webhook] could not resolve user/plan for subscription", sub.subscription_id, { userId, plan });
     return null;
@@ -70,11 +82,7 @@ async function handleSubscriptionUpsert(tx: Tx, sub: Subscription): Promise<(Use
 }
 
 async function handleSubscriptionDowngrade(tx: Tx, sub: Subscription): Promise<UserContact | null> {
-  const linked = await tx.user.findFirst({
-    where: { dodoSubscriptionId: sub.subscription_id },
-    select: { id: true },
-  });
-  const userId = linked?.id ?? (await resolveUserId(tx, sub.customer.email, sub.metadata));
+  const userId = await resolveSubscriptionUserId(tx, sub);
 
   if (!userId) {
     console.error("[dodo/webhook] could not resolve user for downgraded subscription", sub.subscription_id);
@@ -191,6 +199,43 @@ export async function POST(req: NextRequest) {
             "[dodo/webhook] refund.succeeded — NO plan change made, manual review needed",
             { refundId: refund.refund_id, paymentId: refund.payment_id, customerId: refund.customer.customer_id, amount: refund.amount }
           );
+          return { kind: "none" };
+        }
+
+        case "payment.failed": {
+          // No plan change here either way. A failed subscription payment is a renewal or
+          // a plan-change charge: with on_payment_failure: prevent_change Dodo keeps the
+          // old plan and sends no subscription.plan_changed, so this log is the only
+          // server-side trace that a customer's upgrade didn't happen.
+          const payment = event.data;
+          const details = {
+            paymentId: payment.payment_id,
+            subscriptionId: payment.subscription_id,
+            customerId: payment.customer.customer_id,
+            amount: payment.total_amount,
+            currency: payment.currency,
+            errorCode: payment.error_code,
+            errorMessage: payment.error_message,
+          };
+          if (payment.subscription_id) {
+            console.error("[dodo/webhook] payment.failed on a SUBSCRIPTION — renewal or plan change not charged", details);
+          } else {
+            console.warn("[dodo/webhook] payment.failed", details);
+          }
+          return { kind: "none" };
+        }
+
+        case "subscription.on_hold": {
+          // Deliberately no plan change: on_hold is recoverable (the customer updates
+          // their payment method) and subscription.expired / cancelled do the downgrade.
+          // But it means this customer's billing is broken, so it must not pass silently.
+          const sub = event.data;
+          console.error("[dodo/webhook] subscription.on_hold — a charge failed, NO plan change made", {
+            subscriptionId: sub.subscription_id,
+            customerId: sub.customer.customer_id,
+            productId: sub.product_id,
+            nextBillingDate: sub.next_billing_date,
+          });
           return { kind: "none" };
         }
 
