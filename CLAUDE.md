@@ -165,18 +165,39 @@ stay free of a tailoring charge.
   and updates `User.plan` / `planExpiresAt` on subscription events. Product ID
   → plan mapping is env-var driven (`lib/plan-limits.ts`) since test and live
   mode have entirely separate product catalogs.
-- **Known gap:** the webhook handler has no idempotency/dedup table — a
-  retried delivery just re-applies the same upsert, which is harmless today
-  because the handler only writes plan/customer/expiry fields with no other
-  side effects. If we ever add something non-idempotent on a webhook event
-  (an email, a charge, anything else with an external effect) this needs a
-  `webhook-id`-keyed claim table first (see the `webhook-integration` Dodo
-  skill's idempotency pattern) — otherwise a retried delivery double-fires it.
+- Webhook idempotency: each delivery claims its `webhook-id` in
+  `WebhookEvent` (unique) in the same transaction as the plan write, and
+  confirmation emails are sent only for a delivery that won the claim. Anything
+  new with an external effect must sit behind that claim too. The user is
+  matched by `dodoSubscriptionId` first, then `metadata.userId`, then customer
+  email; an event whose user or plan can't be resolved is logged and still
+  claimed (a retry would resolve no better).
 - Existing subscribers never get a second checkout: `/api/dodo/checkout`
   calls `subscriptions.changePlan` (`prorated_immediately`; upgrades and
   monthly→annual apply now, downgrades and annual→monthly at the next billing
   date) and rejects a request for the plan they already have with 409.
-  `User.plan` is still updated only by the `subscription.plan_changed` webhook.
+  Dodo's own 409 (a change already pending or scheduled) is passed on as a
+  409 with a plain message. `User.plan` is still updated only by the
+  `subscription.plan_changed` webhook.
+- **An accepted `changePlan` is not a changed plan.** With
+  `on_payment_failure: prevent_change` Dodo keeps the old plan when the
+  prorated charge fails and sends no `subscription.plan_changed`. Checkout
+  returns `{ changed, effective, paymentId }` (the `changePlan` response has
+  `payment_id` but no `effective_at`; `paymentId` is null when nothing was
+  charged), and the pricing page and onboarding plan picker poll
+  `GET /api/dodo/plan-change-status` (`waitForPlanChange`, `lib/plan-change.ts`,
+  3s × 45s) before saying anything: `applied` only when the subscription's
+  `product_id` is the target, `failed` when the payment failed or the
+  subscription is `on_hold` (shows Dodo's `error_message`, which is written
+  for merchants — reword if it reads badly), otherwise `pending` → "not
+  confirmed yet". The status route is read-only and takes the subscription
+  from the user's row; a client-supplied `paymentId` is only read if it
+  belongs to that subscription. Never show success from the checkout response
+  alone — until 2026-10-02 the UI did, and a failed upgrade looked like one
+  that was "being updated".
+- `payment.failed` (for a subscription) and `subscription.on_hold` are
+  log-only at error level, no plan change: on_hold is recoverable, and
+  `subscription.expired` / `cancelled` do the downgrade.
 - **Known gap:** no double-click / in-flight guard on checkout — a free user
   double-clicking a plan button can still create two Checkout Sessions.
 - Plan limits: `PLAN_LIMITS` in `lib/plan-limits.ts` lists only limits that

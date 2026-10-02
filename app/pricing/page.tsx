@@ -6,10 +6,17 @@ import { cn } from "@/lib/cn";
 import { SiteHeader } from "@/app/components/SiteHeader";
 import { INCLUDED_IN_EVERY_PLAN, PLAN_PRICES_USD, planFeatureList, type PlanKey } from "@/lib/plan-limits";
 import {
+  PLAN_CHANGE_SCHEDULED_MESSAGE,
+  PLAN_CHANGE_UNCONFIRMED_MESSAGE,
+  planChangeFailedMessage,
+  waitForPlanChange,
+} from "@/lib/plan-change";
+import {
   Badge,
   Button,
   buttonStyles,
   Notice,
+  type NoticeTone,
   PageHero,
   CheckIcon,
   AppWindowIcon,
@@ -117,18 +124,35 @@ export default function PricingPage() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState("");
-  const [checkoutNotice, setCheckoutNotice] = useState("");
+  const [checkoutNotice, setCheckoutNotice] = useState<{ tone: NoticeTone; text: string } | null>(null);
   // null = not loaded yet, or logged out — buttons then behave as for a new customer.
   const [current, setCurrent] = useState<CurrentPlan | null>(null);
 
+  async function loadCurrentPlan(): Promise<CurrentPlan | null> {
+    try {
+      const r = await fetch("/api/plan", { cache: "no-store" });
+      const d: CurrentPlan | null = r.ok ? await r.json() : null;
+      if (d?.plan) {
+        setCurrent(d);
+        return d;
+      }
+    } catch {}
+    return null;
+  }
+
   useEffect(() => {
-    fetch("/api/plan")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: CurrentPlan | null) => {
-        if (d?.plan) setCurrent(d);
-      })
-      .catch(() => {});
+    loadCurrentPlan();
   }, []);
+
+  // Dodo confirming the change comes a moment before the webhook writes User.plan, which
+  // is what /api/plan reads — so give it a few tries before leaving the buttons stale.
+  async function refreshPlanUntil(plan: PlanKey, interval: Billing) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const d = await loadCurrentPlan();
+      if (d?.plan === plan && (d.interval === null || d.interval === interval)) return;
+      if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
 
   // What the button for `tier` should do given the user's current plan.
   function ctaFor(tier: Tier): { label: string; disabled: boolean } {
@@ -146,13 +170,14 @@ export default function PricingPage() {
   async function handleUpgrade(tier: Tier) {
     if (!tier.planKey) return;
     setCheckoutError("");
-    setCheckoutNotice("");
+    setCheckoutNotice(null);
     setCheckoutLoading(tier.planKey);
+    const interval = billing;
     try {
       const res = await fetch("/api/dodo/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: tier.planKey, interval: billing }),
+        body: JSON.stringify({ plan: tier.planKey, interval }),
       });
 
       if (res.status === 401) {
@@ -165,12 +190,34 @@ export default function PricingPage() {
       if (!res.ok) throw new Error(data.error ?? "Failed to start checkout");
 
       if (data.changed) {
-        // Existing subscriber: the subscription was changed in place, no checkout.
-        setCheckoutNotice(
-          data.effective === "immediately"
-            ? "Your plan is being updated — this can take a moment to show."
-            : "Your plan will change at the start of your next billing period."
-        );
+        // Existing subscriber: the change was requested on the subscription in place, no
+        // checkout. Requested isn't applied — the prorated charge can still fail — so
+        // nothing is called a success until Dodo reports the new plan.
+        if (data.effective !== "immediately") {
+          setCheckoutNotice({ tone: "success", text: PLAN_CHANGE_SCHEDULED_MESSAGE });
+          return;
+        }
+
+        const isUpgrade = !current || PLAN_RANK[tier.planKey] > PLAN_RANK[current.plan];
+        setCheckoutNotice({
+          tone: "waiting",
+          text: isUpgrade ? "Processing your upgrade…" : "Processing your plan change…",
+        });
+        const outcome = await waitForPlanChange({ plan: tier.planKey, interval, paymentId: data.paymentId });
+
+        if (outcome.status === "applied") {
+          await refreshPlanUntil(tier.planKey, interval);
+          setCheckoutNotice({ tone: "success", text: `You're now on the ${tier.name} plan.` });
+          return;
+        }
+
+        setCheckoutNotice(null);
+        if (outcome.status === "failed") {
+          setCheckoutError(planChangeFailedMessage(outcome.reason));
+        } else {
+          setCheckoutNotice({ tone: "attention", text: PLAN_CHANGE_UNCONFIRMED_MESSAGE });
+        }
+        await loadCurrentPlan();
         return;
       }
       if (!data.checkoutUrl) throw new Error("Failed to start checkout");
@@ -300,7 +347,7 @@ export default function PricingPage() {
 
         {(checkoutNotice || checkoutError) && (
           <div className="mx-auto mt-8 max-w-xl">
-            {checkoutNotice && <Notice tone="success">{checkoutNotice}</Notice>}
+            {checkoutNotice && <Notice tone={checkoutNotice.tone}>{checkoutNotice.text}</Notice>}
             {checkoutError && <Notice tone="danger">{checkoutError}</Notice>}
           </div>
         )}

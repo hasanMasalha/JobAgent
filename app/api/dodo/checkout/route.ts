@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import DodoPayments from "dodopayments";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { getDodo } from "@/lib/dodo";
@@ -63,16 +64,46 @@ export async function POST(req: NextRequest) {
       const rankDiff = planRank(plan as PaidPlan) - planRank(currentPlan);
       const immediate = rankDiff > 0 || (rankDiff === 0 && interval === "annual");
 
-      await dodo.subscriptions.changePlan(dbUser.dodoSubscriptionId, {
-        product_id: productId,
-        quantity: 1,
-        proration_billing_mode: "prorated_immediately",
-        effective_at: immediate ? "immediately" : "next_billing_date",
-        on_payment_failure: "prevent_change",
+      const effective = immediate ? "immediately" : "next_billing_date";
+
+      let change;
+      try {
+        change = await dodo.subscriptions.changePlan(dbUser.dodoSubscriptionId, {
+          product_id: productId,
+          quantity: 1,
+          proration_billing_mode: "prorated_immediately",
+          effective_at: effective,
+          on_payment_failure: "prevent_change",
+        });
+      } catch (err) {
+        // Dodo answers 409 while an earlier change is still pending, or one is scheduled.
+        if (err instanceof DodoPayments.ConflictError) {
+          console.warn("[dodo/checkout] plan change rejected, one is already pending or scheduled", {
+            userId: user.id,
+            subscriptionId: dbUser.dodoSubscriptionId,
+            productId,
+          });
+          return NextResponse.json(
+            { error: "A plan change is already pending or scheduled for your subscription. Please wait for it to finish before making another." },
+            { status: 409 }
+          );
+        }
+        throw err;
+      }
+
+      const paymentId = change?.payment_id ?? null;
+      console.log("[dodo/checkout] plan change requested", {
+        userId: user.id,
+        subscriptionId: dbUser.dodoSubscriptionId,
+        productId,
+        effectiveAt: effective,
+        paymentId,
       });
 
-      // The subscription.plan_changed webhook updates User.plan; don't write it here.
-      return NextResponse.json({ changed: true, effective: immediate ? "immediately" : "next_billing_date" });
+      // Accepted is not applied: with prevent_change Dodo keeps the old plan if the
+      // prorated charge fails. The client confirms via /api/dodo/plan-change-status, and
+      // the subscription.plan_changed webhook updates User.plan; don't write it here.
+      return NextResponse.json({ changed: true, effective, paymentId });
     }
 
     const email = dbUser.email ?? user.email;

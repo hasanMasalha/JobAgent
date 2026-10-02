@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JOB_CATEGORIES, SENIORITY_LEVELS, CATEGORY_KEYWORDS } from "@/lib/job-categories";
 import { INCLUDED_IN_EVERY_PLAN, PLAN_PRICES_USD, planFeatureList } from "@/lib/plan-limits";
+import {
+  PLAN_CHANGE_SCHEDULED_MESSAGE,
+  PLAN_CHANGE_UNCONFIRMED_MESSAGE,
+  planChangeFailedMessage,
+  waitForPlanChange,
+} from "@/lib/plan-change";
 import { cn } from "@/lib/cn";
 import {
   Badge,
@@ -11,6 +17,8 @@ import {
   chipStyles,
   inputStyles,
   Notice,
+  noticeLinkStyles,
+  type NoticeTone,
   PageHero,
   RemovableTag,
   Spinner,
@@ -127,6 +135,8 @@ export default function OnboardingPage() {
   // Plan step
   const [planActionLoading, setPlanActionLoading] = useState<string | null>(null);
   const [planError, setPlanError] = useState("");
+  // Outcome of an in-place plan change for someone who already subscribes.
+  const [planNotice, setPlanNotice] = useState<{ tone: NoticeTone; text: string } | null>(null);
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -321,6 +331,7 @@ export default function OnboardingPage() {
 
   async function handlePlanChoice(tier: PlanTier) {
     setPlanError("");
+    setPlanNotice(null);
     setPlanActionLoading(tier.key);
     try {
       const completeRes = await fetch("/api/onboarding/complete", { method: "POST" });
@@ -336,8 +347,28 @@ export default function OnboardingPage() {
         if (!checkoutRes.ok) throw new Error(data.error ?? "Failed to start checkout");
 
         if (data.changed) {
-          // Existing subscriber: plan was changed in place, no checkout needed.
-          router.push("/dashboard");
+          // Existing subscriber: the change was requested in place, no checkout needed.
+          // Requested isn't applied — the prorated charge can still fail — so only go
+          // on as if it worked once Dodo reports the new plan.
+          if (data.effective !== "immediately") {
+            setPlanNotice({ tone: "success", text: PLAN_CHANGE_SCHEDULED_MESSAGE });
+            setPlanActionLoading(null);
+            return;
+          }
+
+          setPlanNotice({ tone: "waiting", text: "Processing your plan change…" });
+          const outcome = await waitForPlanChange({ plan: tier.key, interval: "monthly", paymentId: data.paymentId });
+          if (outcome.status === "applied") {
+            router.push("/dashboard");
+            return;
+          }
+
+          setPlanNotice(
+            outcome.status === "failed"
+              ? { tone: "danger", text: planChangeFailedMessage(outcome.reason) }
+              : { tone: "attention", text: PLAN_CHANGE_UNCONFIRMED_MESSAGE },
+          );
+          setPlanActionLoading(null);
           return;
         }
         if (!data.checkoutUrl) throw new Error("Failed to start checkout");
@@ -822,6 +853,19 @@ export default function OnboardingPage() {
 
             <p className="mx-auto mt-6 max-w-2xl text-center text-body-sm text-ink-muted">{INCLUDED_IN_EVERY_PLAN}</p>
             {planError && <Notice tone="danger" className="mx-auto mt-6 max-w-lg">{planError}</Notice>}
+            {planNotice && (
+              <Notice
+                tone={planNotice.tone}
+                className="mx-auto mt-6 max-w-lg"
+                action={
+                  planNotice.tone !== "waiting" && (
+                    <a href="/dashboard" className={noticeLinkStyles()}>Continue to dashboard</a>
+                  )
+                }
+              >
+                {planNotice.text}
+              </Notice>
+            )}
 
             <div className="mt-6 flex justify-center">
               <Button
