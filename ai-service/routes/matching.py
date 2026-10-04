@@ -8,6 +8,8 @@ import asyncpg
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from locations import CITY_COUNTRY as _CITY_COUNTRY_SYNONYMS
+
 router = APIRouter()
 _client = anthropic.Anthropic()
 
@@ -213,36 +215,6 @@ async def _ensure_cache_table(conn) -> None:
 
 
 # ── location helpers ──────────────────────────────────────────────────────────
-
-_CITY_COUNTRY_SYNONYMS = {
-    "tel aviv": "israel",
-    "jerusalem": "israel",
-    "haifa": "israel",
-    "new york": "united states",
-    "san francisco": "united states",
-    "los angeles": "united states",
-    "chicago": "united states",
-    "austin": "united states",
-    "seattle": "united states",
-    "boston": "united states",
-    "london": "united kingdom",
-    "manchester": "united kingdom",
-    "berlin": "germany",
-    "munich": "germany",
-    "paris": "france",
-    "amsterdam": "netherlands",
-    "dublin": "ireland",
-    "toronto": "canada",
-    "vancouver": "canada",
-    "sydney": "australia",
-    "melbourne": "australia",
-    "singapore": "singapore",
-    "dubai": "united arab emirates",
-    "bangalore": "india",
-    "bengaluru": "india",
-    "mumbai": "india",
-}
-
 
 def _expand_location_terms(locations: list[str]) -> list[str]:
     """Turn user location preferences into ILIKE patterns, expanding well-known
