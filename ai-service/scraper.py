@@ -1,5 +1,7 @@
 import asyncio
+import os
 import re
+import time
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -7,6 +9,8 @@ from jobspy import scrape_jobs
 
 from company_scraper import scrape_all_company_careers
 from linkedin_fetcher import fetch_all_linkedin_jobs
+from locations import ScrapeLocation
+from scrape_timing import PhaseTimer
 from scraper_alljobs import scrape_alljobs
 from scraper_drushim import scrape_drushim
 
@@ -22,21 +26,55 @@ SEARCH_TERMS = [
 ]
 
 
-async def scrape_israel_jobs() -> list[dict]:
+# Indeed's share of the daily scrape's 55 min (see LINKEDIN_BUDGET_SECONDS).
+INDEED_BUDGET_SECONDS = float(os.environ.get("INDEED_SCRAPE_BUDGET_MIN", "10")) * 60
+
+
+async def scrape_all_jobs(
+    locations: list[ScrapeLocation],
+    known_linkedin: dict[str, str] | None = None,
+    timer: PhaseTimer | None = None,
+) -> list[dict]:
+    """LinkedIn and Indeed for every location, then the Israeli boards
+    (Drushim, AllJobs) and company career pages.
+
+    LinkedIn jobs in known_linkedin come back as {"known": True, ...} records
+    (see linkedin_fetcher.fetch_linkedin_jobs_for_term) instead of full jobs.
+    """
+    timer = timer or PhaseTimer()
     seen_urls: set[str] = set()
     results: list[dict] = []
 
-    for term in SEARCH_TERMS:
-        try:
-            df = await asyncio.to_thread(
-                scrape_jobs,
-                site_name=["indeed"],
-                search_term=term,
-                results_wanted=50,
-                hours_old=24,
+    # Indeed needs a country (JobSpy defaults to the US without one), so a
+    # location whose country isn't known is searched on LinkedIn only.
+    indeed_locations = [loc for loc in locations if loc.indeed_country]
+    for loc in locations:
+        if not loc.indeed_country:
+            print(f"[scraper] Indeed: no country for '{loc.linkedin}', LinkedIn only")
+
+    deadline = time.monotonic() + INDEED_BUDGET_SECONDS
+    searches = [(term, loc) for term in SEARCH_TERMS for loc in indeed_locations]
+    done = 0
+    for term, loc in searches:
+        if time.monotonic() > deadline:
+            print(
+                f"[scraper] Indeed: time budget reached after {done}/{len(searches)} searches"
             )
+            break
+        done += 1
+        try:
+            with timer.phase("indeed: search", loc.linkedin):
+                df = await asyncio.to_thread(
+                    scrape_jobs,
+                    site_name=["indeed"],
+                    search_term=term,
+                    location=loc.indeed_location,
+                    country_indeed=loc.indeed_country,
+                    results_wanted=50,
+                    hours_old=24,
+                )
         except Exception as e:
-            print(f"[scraper] error scraping '{term}': {e}")
+            print(f"[scraper] error scraping '{term}' in {loc.linkedin}: {e}")
             await asyncio.sleep(2)
             continue
 
@@ -67,12 +105,15 @@ async def scrape_israel_jobs() -> list[dict]:
                 }
             )
 
-        await asyncio.sleep(2)
+        with timer.phase("indeed: pacing sleep", loc.linkedin):
+            await asyncio.sleep(2)
 
     # Add LinkedIn feed results, deduplicating by URL
     print("Starting LinkedIn feed scrape...")
     try:
-        linkedin_jobs = await fetch_all_linkedin_jobs()
+        linkedin_jobs = await fetch_all_linkedin_jobs(
+            [loc.linkedin for loc in locations], known=known_linkedin, timer=timer
+        )
         print(f"[scraper] LinkedIn returned {len(linkedin_jobs)} jobs")
         for job in linkedin_jobs[:3]:
             print(f"[scraper] Sample job: {job.get('title')} | {job.get('url', '')[:60]} | source={job.get('source')}")
@@ -90,7 +131,9 @@ async def scrape_israel_jobs() -> list[dict]:
         print(f"[scraper] LinkedIn feed scrape failed: {e}")
 
     # Add Drushim and Alljobs results, deduplicating by URL
-    for extra in await asyncio.gather(scrape_drushim(), scrape_alljobs(), return_exceptions=True):
+    with timer.phase("israeli boards (drushim + alljobs)"):
+        extras = await asyncio.gather(scrape_drushim(), scrape_alljobs(), return_exceptions=True)
+    for extra in extras:
         if isinstance(extra, Exception):
             print(f"[scraper] extra scraper failed: {extra}")
             continue
@@ -103,7 +146,8 @@ async def scrape_israel_jobs() -> list[dict]:
     # Add company careers results, deduplicating by URL
     print("Starting company careers scrape...")
     try:
-        company_jobs = await scrape_all_company_careers()
+        with timer.phase("company careers"):
+            company_jobs = await scrape_all_company_careers()
         for job in company_jobs:
             url = job.get("url", "").strip()
             if url and url not in seen_urls:

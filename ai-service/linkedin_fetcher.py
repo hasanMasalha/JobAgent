@@ -2,11 +2,14 @@ import asyncio
 import json
 import os
 import re
+import time
+from urllib.parse import quote, urlencode
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
 from linkedin_easy_apply import detect_easy_apply, linkedin_job_id
+from scrape_timing import PhaseTimer
 
 LINKEDIN_SEARCH_TERMS = [
     "software engineer",
@@ -19,6 +22,10 @@ LINKEDIN_SEARCH_TERMS = [
     "mobile developer",
     "machine learning engineer",
 ]
+
+# The daily scrape (/scrape-and-store) must finish inside the workflow's 55 min
+# SSH timeout, with Indeed, the other scrapers and embedding still to run.
+LINKEDIN_BUDGET_SECONDS = float(os.environ.get("LINKEDIN_SCRAPE_BUDGET_MIN", "25")) * 60
 
 _EXPAND_SELECTORS = [
     "button.show-more-less-html__button--more",
@@ -377,15 +384,58 @@ async def extract_apply_url_with_session(
         return None
 
 
+def _card_location(card) -> str:
+    """The location line of a search result card, and nothing else.
+
+    The location sits inside the card's metadata block next to the posted time
+    and badges such as "Be an early applicant". Reading the whole block ran
+    them together ("New York, NY17 hours ago"), so only the location element
+    itself is read.
+    """
+    el = card.find(class_="job-search-card__location") or card.find(
+        class_=re.compile(r"location")
+    )
+    if not el:
+        return ""
+    return " ".join(el.get_text(" ", strip=True).split())
+
+
+def _search_url(search_term: str, location: str, start: int) -> str:
+    # location is required: without it LinkedIn answers for wherever the
+    # requesting IP is, which made every LinkedIn job American.
+    query = urlencode(
+        {"keywords": search_term, "location": location, "f_TPR": "r86400", "start": start},
+        quote_via=quote,
+    )
+    return f"https://www.linkedin.com/jobs/search?{query}"
+
+
 async def fetch_linkedin_jobs_for_term(
     search_term: str,
+    location: str,
     browser_context,
+    deadline: float | None = None,
+    known: dict[str, str] | None = None,
+    timer: PhaseTimer | None = None,
+    handled: set[str] | None = None,
 ) -> list[dict]:
     """
-    Two-phase scrape for a single search term.
+    Two-phase scrape for a single search term in one location.
     Phase 1: fast HTML scan of search result cards → collect URLs + metadata.
     Phase 2: navigate to each job detail page → expand and extract full description.
+    Phase 2 stops early at the deadline (time.monotonic()), keeping what it has.
+
+    known maps LinkedIn job ids already stored with a full description to
+    their stored URL. Those jobs skip phase 2 — the detail visit is the slow
+    part — and come back as {"known": True, url, location} so the caller can
+    mark them seen without re-scraping them.
+
+    handled is shared across a run's searches: a job id in it was already
+    dealt with by an earlier search and is skipped here.
     """
+    known = known or {}
+    timer = timer or PhaseTimer()
+    handled = handled if handled is not None else set()
     page = await browser_context.new_page()
     preliminary: list[dict] = []
     seen_urls: set[str] = set()
@@ -393,12 +443,8 @@ async def fetch_linkedin_jobs_for_term(
     try:
         # ── Phase 1: collect metadata from search result pages ────────────────
         for start in [0, 25, 50]:
-            url = (
-                "https://www.linkedin.com/jobs/search"
-                f"?keywords={search_term.replace(' ', '%20')}"
-                "&f_TPR=r86400"
-                f"&start={start}"
-            )
+            url = _search_url(search_term, location, start)
+            search_started = time.perf_counter()
 
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=15000)
@@ -431,8 +477,7 @@ async def fetch_linkedin_jobs_for_term(
                         company_el = card.find(class_=re.compile(r"company|subtitle"))
                         company = company_el.get_text(strip=True) if company_el else ""
 
-                        location_el = card.find(class_=re.compile(r"location|metadata"))
-                        location = location_el.get_text(strip=True) if location_el else ""
+                        card_location = _card_location(card)
 
                         link_el = card.find("a", href=True)
                         job_url = ""
@@ -456,7 +501,7 @@ async def fetch_linkedin_jobs_for_term(
                             {
                                 "title": title,
                                 "company": company,
-                                "location": location,
+                                "location": card_location,
                                 "url": job_url,
                                 "snippet": snippet,
                                 "source": "linkedin",
@@ -475,12 +520,34 @@ async def fetch_linkedin_jobs_for_term(
             except Exception as e:
                 print(f"  Page error for '{search_term}': {e}")
                 break
+            finally:
+                timer.add("linkedin: search pages", location, time.perf_counter() - search_started)
 
         # ── Phase 2: navigate to each job page for full description + ATS URL ──
         jobs: list[dict] = []
         session_path = get_linkedin_session_path()
         for meta in preliminary:
-            desc = await _fetch_full_description(page, meta["url"])
+            if deadline is not None and time.monotonic() > deadline:
+                print(f"  LinkedIn: time budget reached during '{search_term}' in {location}")
+                break
+
+            job_id = linkedin_job_id(meta["url"]) or meta["url"]
+            if job_id in handled:
+                # Already returned by an earlier search this run.
+                timer.count("linkedin: repeat in this run, skipped", location)
+                continue
+            handled.add(job_id)
+
+            stored_url = known.get(job_id)
+            if stored_url:
+                timer.count("linkedin: known, detail skipped", location)
+                jobs.append(
+                    {"known": True, "url": stored_url, "location": meta["location"], "source": "linkedin"}
+                )
+                continue
+
+            with timer.phase("linkedin detail: description", location):
+                desc = await _fetch_full_description(page, meta["url"])
 
             # Page is already at the LinkedIn job detail URL after _fetch_full_description.
             # Attempt to extract the real ATS apply URL while still on this page.
@@ -491,15 +558,19 @@ async def fetch_linkedin_jobs_for_term(
             try:
                 job_id = linkedin_job_id(meta["url"])
                 if job_id and job_id in page.url:
-                    is_easy_apply = detect_easy_apply(await page.content())
+                    with timer.phase("linkedin detail: easy apply check", location):
+                        is_easy_apply = detect_easy_apply(await page.content())
             except Exception as e:
                 print(f"[linkedin] easy apply check error: {e}")
 
-            ats_url = await extract_ats_url(page)
+            with timer.phase("linkedin detail: ats url on page", location):
+                ats_url = await extract_ats_url(page)
             if ats_url:
                 print(f"[linkedin] Found ATS apply URL: {ats_url[:80]}")
             elif session_path and is_easy_apply is not True:
-                ats_url = await extract_apply_url_with_session(meta["url"], session_path)
+                # Launches its own browser for each job.
+                with timer.phase("linkedin detail: session apply url", location):
+                    ats_url = await extract_apply_url_with_session(meta["url"], session_path)
 
             if desc and len(desc) >= 100:
                 description = desc
@@ -524,7 +595,8 @@ async def fetch_linkedin_jobs_for_term(
                     "salary_max": None,
                 }
             )
-            await asyncio.sleep(1)
+            with timer.phase("linkedin detail: pacing sleep", location):
+                await asyncio.sleep(1)
 
     finally:
         await page.close()
@@ -532,8 +604,23 @@ async def fetch_linkedin_jobs_for_term(
     return jobs
 
 
-async def fetch_all_linkedin_jobs() -> list[dict]:
-    """Fetch LinkedIn jobs using a shared Playwright browser across all search terms."""
+async def fetch_all_linkedin_jobs(
+    locations: list[str],
+    budget_seconds: float = LINKEDIN_BUDGET_SECONDS,
+    known: dict[str, str] | None = None,
+    timer: PhaseTimer | None = None,
+) -> list[dict]:
+    """Fetch LinkedIn jobs for every search term in every location, sharing one
+    Playwright browser.
+
+    Each new job costs a detail-page visit, so the run has a time budget. Terms
+    are the outer loop: when the budget runs out, the remaining terms are
+    dropped for every location alike instead of whole locations going
+    unsearched. Jobs in known (see fetch_linkedin_jobs_for_term) skip the visit.
+    """
+    timer = timer or PhaseTimer()
+    handled: set[str] = set()
+    deadline = time.monotonic() + budget_seconds
     try:
         all_jobs: list[dict] = []
         seen_urls: set[str] = set()
@@ -557,9 +644,15 @@ async def fetch_all_linkedin_jobs() -> list[dict]:
                 viewport={"width": 1280, "height": 800},
             )
 
-            for term in LINKEDIN_SEARCH_TERMS:
-                print(f"  LinkedIn: searching '{term}'...")
-                jobs = await fetch_linkedin_jobs_for_term(term, context)
+            searches = [(t, loc) for t in LINKEDIN_SEARCH_TERMS for loc in locations]
+            done = 0
+            for term, location in searches:
+                if time.monotonic() > deadline:
+                    break
+                print(f"  LinkedIn: searching '{term}' in {location}...")
+                jobs = await fetch_linkedin_jobs_for_term(
+                    term, location, context, deadline, known, timer, handled
+                )
 
                 for job in jobs:
                     url = job.get("url", "")
@@ -567,11 +660,19 @@ async def fetch_all_linkedin_jobs() -> list[dict]:
                         seen_urls.add(url)
                         all_jobs.append(job)
 
-                print(f"  LinkedIn '{term}': {len(jobs)} jobs")
-                await asyncio.sleep(3)
+                done += 1
+                new = sum(1 for j in jobs if not j.get("known"))
+                print(f"  LinkedIn '{term}' in {location}: {new} new, {len(jobs) - new} already stored")
+                with timer.phase("linkedin: pacing between searches", location):
+                    await asyncio.sleep(3)
 
             await browser.close()
 
+        if done < len(searches):
+            print(
+                f"LinkedIn: time budget ({budget_seconds / 60:.0f} min) reached after "
+                f"{done}/{len(searches)} searches; skipped: {searches[done:]}"
+            )
         print(f"LinkedIn total: {len(all_jobs)} unique jobs")
         return all_jobs
 

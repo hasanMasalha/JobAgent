@@ -2,6 +2,7 @@ import csv
 import html
 import os
 import re
+import time
 
 import asyncpg
 from fastapi import APIRouter
@@ -11,7 +12,10 @@ from pydantic import BaseModel
 from ats_discovery import auto_discover_israeli_companies
 from company_discovery import CSV_PATH, discover_all_companies, discover_one_company
 from embedder import embed
-from scraper import enrich_short_descriptions, scrape_israel_jobs
+from linkedin_easy_apply import linkedin_job_id
+from locations import fetch_user_locations, scrape_locations
+from scrape_timing import PhaseTimer
+from scraper import enrich_short_descriptions, scrape_all_jobs
 
 router = APIRouter()
 
@@ -78,13 +82,40 @@ def _detect_ats(url: str, apply_url: str = "") -> str | None:
 
 
 @router.post("/scrape-and-store")
-async def scrape_and_store():
-    jobs = await scrape_israel_jobs()
+async def scrape_and_store(skip_known: bool = True):
+    """skip_known=false visits every LinkedIn job's detail page again, as before
+    2026-10-04 — for measuring the full cost (?skip_known=false)."""
+    timer = PhaseTimer()
+    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+    try:
+        user_locations = await fetch_user_locations(conn)
+        known_linkedin = await _known_linkedin_jobs(conn) if skip_known else {}
+    finally:
+        await conn.close()
+    locations = scrape_locations(user_locations)
+    print(f"[scrape] searching {len(locations)} locations: {[loc.linkedin for loc in locations]}")
+    print(f"[scrape] {len(known_linkedin)} LinkedIn jobs already stored; their detail pages are skipped")
+
+    jobs = await scrape_all_jobs(locations, known_linkedin, timer)
+
+    # LinkedIn jobs we already hold: mark them seen without re-scraping.
+    seen_again = [j for j in jobs if j.get("known")]
+    jobs = [j for j in jobs if not j.get("known")]
+    if seen_again:
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            with timer.phase("db: mark stored linkedin jobs seen", items=len(seen_again)):
+                await _mark_seen(conn, seen_again)
+        finally:
+            await conn.close()
+
     if not jobs:
-        return {"new_jobs": 0, "total_processed": 0}
+        timer.print_report()
+        return {"new_jobs": 0, "total_processed": 0, "seen_again": len(seen_again), "timing": timer.report()}
 
     # Enrich Indeed jobs that have short descriptions
-    jobs = await enrich_short_descriptions(jobs)
+    with timer.phase("indeed: enrich short descriptions"):
+        jobs = await enrich_short_descriptions(jobs)
 
     # Drop jobs whose descriptions are still too short to be useful for matching
     jobs = [j for j in jobs if len((j.get("description") or "").strip()) >= 50]
@@ -104,10 +135,12 @@ async def scrape_and_store():
                 continue  # never store jobs without a description
             description = _clean_description(job["description"])
             embed_text = f"{job['title']} {description[:500]}"
-            embedding = embed(embed_text)
+            with timer.phase("embedding", job["source"]):
+                embedding = embed(embed_text)
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
             apply_url = job.get("apply_url") or None
+            upsert_started = time.perf_counter()
             row = await conn.fetchrow(
                 """
                 INSERT INTO "Job" (id, title, company, description, location,
@@ -127,6 +160,9 @@ async def scrape_and_store():
                                           THEN EXCLUDED.embedding
                                           ELSE "Job".embedding
                                         END,
+                        -- Re-scraping repairs a stored location (LinkedIn's used
+                        -- to carry the posted time); an empty one keeps the old.
+                        location      = COALESCE(NULLIF(EXCLUDED.location, ''), "Job".location),
                         apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
                         apply_type    = EXCLUDED.apply_type,
                         ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
@@ -147,6 +183,7 @@ async def scrape_and_store():
                 _detect_ats(job.get("url", ""), apply_url or ""),
                 apply_url,
             )
+            timer.add("db: upsert", job["source"], time.perf_counter() - upsert_started)
             if row is None:
                 pass  # conflict but description was already long enough — skip
             else:
@@ -162,8 +199,50 @@ async def scrape_and_store():
     indeed_saved = saved_by_source.get("indeed", 0)
     print(f"[scraper] Saved {linkedin_saved} LinkedIn jobs, {indeed_saved} Indeed jobs")
     print(f"[jobs] Saved by source: {saved_by_source}")
+    timer.print_report()
 
-    return {"new_jobs": new_jobs, "updated_jobs": updated_jobs, "total_processed": len(jobs)}
+    return {
+        "new_jobs": new_jobs,
+        "updated_jobs": updated_jobs,
+        "total_processed": len(jobs),
+        "seen_again": len(seen_again),
+        "timing": timer.report(),
+    }
+
+
+async def _known_linkedin_jobs(conn) -> dict[str, str]:
+    """LinkedIn job id → stored URL, for jobs already stored with a full
+    description (the detail-page scrape keeps a description only at ≥100
+    chars). Jobs stored with just a card snippet aren't here, so they get
+    another try at the detail page."""
+    rows = await conn.fetch(
+        """
+        SELECT url FROM "Job"
+        WHERE source = 'linkedin' AND length(COALESCE(description, '')) >= 100
+        """
+    )
+    known: dict[str, str] = {}
+    for r in rows:
+        job_id = linkedin_job_id(r["url"])
+        if job_id:
+            known[job_id] = r["url"]
+    return known
+
+
+async def _mark_seen(conn, jobs: list[dict]) -> None:
+    """A stored LinkedIn job came up in today's search: keep it active and
+    fresh (matching only shows jobs scraped in the last 30 days), and repair
+    its location from the card, as the upsert does."""
+    await conn.executemany(
+        """
+        UPDATE "Job"
+        SET scraped_at = now(),
+            is_active  = true,
+            location   = COALESCE(NULLIF($2, ''), location)
+        WHERE url = $1
+        """,
+        [(j["url"], j.get("location") or "") for j in jobs],
+    )
 
 
 @router.post("/companies/discover")
