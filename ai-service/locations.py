@@ -73,13 +73,24 @@ class ScrapeLocation:
 
 
 def _country(name: str) -> str | None:
-    """The JobSpy country for a country name, or None if it isn't one."""
+    """The country's full name ("united states" for "us"), or None if it isn't
+    a country JobSpy knows. JobSpy accepts the full name as country_indeed."""
     key = _COUNTRY_ALIASES.get(name, name)
     try:
-        Country.from_string(key)
+        country = Country.from_string(key)
     except ValueError:
         return None
-    return key
+    # JobSpy lists each country's spellings, e.g. "usa,us,united states".
+    return max(country.value[0].split(","), key=len)
+
+
+def api_location_name(loc: ScrapeLocation) -> str:
+    """The place as a job API wants it: full names, never "US" or "UAE"."""
+    if loc.indeed_location:
+        return loc.indeed_location
+    if loc.indeed_country:
+        return loc.indeed_country.title()
+    return loc.linkedin
 
 
 def scrape_locations(user_locations: list[str]) -> list[ScrapeLocation]:
@@ -89,12 +100,18 @@ def scrape_locations(user_locations: list[str]) -> list[ScrapeLocation]:
     already returns it. Other cities are searched on their own, so a user in
     Toronto doesn't pull in all of Canada.
     """
+    # A country is keyed by its full name, so "UK" and "United Kingdom" are
+    # one search, and searched under the full name.
     wanted: dict[str, str] = {}
     for raw in [*DEFAULT_SCRAPE_LOCATIONS, *user_locations]:
         name = " ".join((raw or "").split())
         key = name.lower()
-        if key and key not in _NOT_A_PLACE and key not in wanted:
-            wanted[key] = name
+        if not key or key in _NOT_A_PLACE:
+            continue
+        country = _country(key)
+        if country:
+            key, name = country, country.title()
+        wanted.setdefault(key, name)
 
     countries = {c for c in (_country(k) for k in wanted) if c}
 
