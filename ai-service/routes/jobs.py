@@ -14,6 +14,7 @@ from company_discovery import CSV_PATH, discover_all_companies, discover_one_com
 from embedder import embed
 from linkedin_easy_apply import linkedin_job_id
 from locations import fetch_user_locations, scrape_locations
+import scrape_runner
 from scrape_timing import PhaseTimer
 from scraper import enrich_short_descriptions, scrape_all_jobs
 
@@ -31,8 +32,10 @@ def _clean_description(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)                # collapse spaces/tabs
     return text.strip()
 
+# Quick apply submits only to jobs stored as 'auto'. Comeet was missing, so
+# Comeet jobs were stored 'external' and never quick-applied (until 2026-10-04).
 _AUTO_ATS = {
-    "greenhouse.io", "lever.co", "ashbyhq.com",
+    "greenhouse.io", "lever.co", "ashbyhq.com", "comeet.com",
     "smartrecruiters.com", "bamboohr.com", "workable.com",
 }
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
@@ -81,10 +84,94 @@ def _detect_ats(url: str, apply_url: str = "") -> str | None:
     return None
 
 
-@router.post("/scrape-and-store")
-async def scrape_and_store(skip_known: bool = True):
-    """skip_known=false visits every LinkedIn job's detail page again, as before
-    2026-10-04 — for measuring the full cost (?skip_known=false)."""
+async def upsert_job(conn, job: dict, timer: PhaseTimer | None = None) -> bool:
+    """Embed a job and insert it, or refresh the stored row with the same URL.
+    Returns True for a new row. Every source stores through here, so every
+    stored job has an embedding — matching skips rows without one.
+
+    On conflict the longer description (and its embedding) wins, a non-empty
+    location replaces the stored one, and the job is marked active and fresh.
+    """
+    timer = timer or PhaseTimer()
+    description = _clean_description(job.get("description") or "")
+    embed_text = f"{job['title']} {description[:500]}".strip()
+    with timer.phase("embedding", job["source"]):
+        embedding = embed(embed_text)
+    embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+    apply_url = job.get("apply_url") or None
+    upsert_started = time.perf_counter()
+    row = await conn.fetchrow(
+        """
+        INSERT INTO "Job" (id, title, company, description, location,
+                           url, apply_url, source, salary_min, salary_max,
+                           embedding, apply_type, ats_platform, scraped_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, $4,
+                $5, $12, $6, $7, $8,
+                $9::vector, $10, $11, now())
+        ON CONFLICT (url) DO UPDATE
+            SET description   = CASE
+                                  WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                  THEN EXCLUDED.description
+                                  ELSE "Job".description
+                                END,
+                embedding     = CASE
+                                  WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
+                                  THEN EXCLUDED.embedding
+                                  ELSE "Job".embedding
+                                END,
+                -- Re-scraping repairs a stored location (LinkedIn's used
+                -- to carry the posted time); an empty one keeps the old.
+                location      = COALESCE(NULLIF(EXCLUDED.location, ''), "Job".location),
+                apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
+                apply_type    = EXCLUDED.apply_type,
+                ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
+                is_active     = true,
+                scraped_at    = now()
+        RETURNING (xmax = 0) AS is_insert
+        """,
+        job["title"],
+        job["company"],
+        description,
+        job.get("location") or "",
+        job["url"],
+        job["source"],
+        job.get("salary_min"),
+        job.get("salary_max"),
+        embedding_str,
+        _detect_apply_type(job),
+        _detect_ats(job.get("url", ""), apply_url or ""),
+        apply_url,
+    )
+    timer.add("db: upsert", job["source"], time.perf_counter() - upsert_started)
+    return bool(row and row["is_insert"])
+
+
+@router.post("/scrape-and-store", status_code=202)
+async def start_scrape(skip_known: bool = True):
+    """Start the daily scrape in the background and return at once. It used to
+    run inside this request, which the workflow had to hold open within a 55 min
+    SSH timeout. 409 if a scrape is already running (one at a time).
+
+    skip_known=false visits every LinkedIn job's detail page again, as before
+    2026-10-04 — for measuring the full cost.
+    """
+    _, started = scrape_runner.ensure_running(run_scrape, trigger="api", skip_known=skip_known)
+    body = {"started": started, **scrape_runner.status()}
+    return body if started else JSONResponse(status_code=409, content=body)
+
+
+@router.get("/scrape-and-store/status")
+async def scrape_status():
+    """The running or most recent scrape: state, trigger, times, and its result
+    with the timing report once finished."""
+    return scrape_runner.status()
+
+
+async def run_scrape(skip_known: bool = True) -> dict:
+    """The daily scrape: LinkedIn and Indeed per location, the Israeli boards
+    and company career pages, stored with embeddings. Run it through
+    scrape_runner.ensure_running so only one runs at a time."""
     timer = PhaseTimer()
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
@@ -133,65 +220,11 @@ async def scrape_and_store(skip_known: bool = True):
         for job in jobs:
             if not (job.get("description") or "").strip():
                 continue  # never store jobs without a description
-            description = _clean_description(job["description"])
-            embed_text = f"{job['title']} {description[:500]}"
-            with timer.phase("embedding", job["source"]):
-                embedding = embed(embed_text)
-            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-
-            apply_url = job.get("apply_url") or None
-            upsert_started = time.perf_counter()
-            row = await conn.fetchrow(
-                """
-                INSERT INTO "Job" (id, title, company, description, location,
-                                   url, apply_url, source, salary_min, salary_max,
-                                   embedding, apply_type, ats_platform, scraped_at)
-                VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $12, $6, $7, $8,
-                        $9::vector, $10, $11, now())
-                ON CONFLICT (url) DO UPDATE
-                    SET description   = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.description
-                                          ELSE "Job".description
-                                        END,
-                        embedding     = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.embedding
-                                          ELSE "Job".embedding
-                                        END,
-                        -- Re-scraping repairs a stored location (LinkedIn's used
-                        -- to carry the posted time); an empty one keeps the old.
-                        location      = COALESCE(NULLIF(EXCLUDED.location, ''), "Job".location),
-                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
-                        apply_type    = EXCLUDED.apply_type,
-                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
-                        is_active     = true,
-                        scraped_at    = now()
-                RETURNING (xmax = 0) AS is_insert
-                """,
-                job["title"],
-                job["company"],
-                description,
-                job["location"],
-                job["url"],
-                job["source"],
-                job["salary_min"],
-                job["salary_max"],
-                embedding_str,
-                _detect_apply_type(job),
-                _detect_ats(job.get("url", ""), apply_url or ""),
-                apply_url,
-            )
-            timer.add("db: upsert", job["source"], time.perf_counter() - upsert_started)
-            if row is None:
-                pass  # conflict but description was already long enough — skip
+            if await upsert_job(conn, job, timer):
+                new_jobs += 1
             else:
-                if row["is_insert"]:
-                    new_jobs += 1
-                else:
-                    updated_jobs += 1
-                saved_by_source[job["source"]] = saved_by_source.get(job["source"], 0) + 1
+                updated_jobs += 1
+            saved_by_source[job["source"]] = saved_by_source.get(job["source"], 0) + 1
     finally:
         await conn.close()
 
@@ -373,54 +406,7 @@ async def scrape_and_store_company_careers():
             if not job.get("url", "").strip():
                 skipped += 1
                 continue
-            description = _clean_description(job.get("description", ""))
-            embed_text = f"{job['title']} {description[:500]}".strip()
-            embedding = embed(embed_text)
-            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-
-            apply_url = job.get("apply_url") or None
-            row = await conn.fetchrow(
-                """
-                INSERT INTO "Job" (id, title, company, description, location,
-                                   url, apply_url, source, salary_min, salary_max,
-                                   embedding, apply_type, ats_platform, scraped_at)
-                VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $12, $6, $7, $8,
-                        $9::vector, $10, $11, now())
-                ON CONFLICT (url) DO UPDATE
-                    SET description   = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.description
-                                          ELSE "Job".description
-                                        END,
-                        embedding     = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.embedding
-                                          ELSE "Job".embedding
-                                        END,
-                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
-                        apply_type    = EXCLUDED.apply_type,
-                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
-                        is_active     = true,
-                        scraped_at    = now()
-                RETURNING (xmax = 0) AS is_insert
-                """,
-                job["title"],
-                job["company"],
-                description,
-                job.get("location", ""),
-                job["url"],
-                job["source"],
-                job.get("salary_min"),
-                job.get("salary_max"),
-                embedding_str,
-                _detect_apply_type(job),
-                _detect_ats(job.get("url", ""), apply_url or ""),
-                apply_url,
-            )
-            if row is None:
-                pass
-            elif row["is_insert"]:
+            if await upsert_job(conn, job):
                 new_jobs += 1
             else:
                 updated_jobs += 1
@@ -478,54 +464,7 @@ async def scrape_api_companies_only():
             if not job.get("url", "").strip():
                 skipped += 1
                 continue
-            description = _clean_description(job.get("description", ""))
-            embed_text = f"{job['title']} {description[:500]}".strip()
-            embedding = embed(embed_text)
-            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-
-            apply_url = job.get("apply_url") or None
-            row = await conn.fetchrow(
-                """
-                INSERT INTO "Job" (id, title, company, description, location,
-                                   url, apply_url, source, salary_min, salary_max,
-                                   embedding, apply_type, ats_platform, scraped_at)
-                VALUES (gen_random_uuid(), $1, $2, $3, $4,
-                        $5, $12, $6, $7, $8,
-                        $9::vector, $10, $11, now())
-                ON CONFLICT (url) DO UPDATE
-                    SET description   = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.description
-                                          ELSE "Job".description
-                                        END,
-                        embedding     = CASE
-                                          WHEN length(EXCLUDED.description) > length(COALESCE("Job".description, ''))
-                                          THEN EXCLUDED.embedding
-                                          ELSE "Job".embedding
-                                        END,
-                        apply_url     = COALESCE(EXCLUDED.apply_url, "Job".apply_url),
-                        apply_type    = EXCLUDED.apply_type,
-                        ats_platform  = COALESCE("Job".ats_platform, EXCLUDED.ats_platform),
-                        is_active     = true,
-                        scraped_at    = now()
-                RETURNING (xmax = 0) AS is_insert
-                """,
-                job["title"],
-                job["company"],
-                description,
-                job.get("location", ""),
-                job["url"],
-                job["source"],
-                job.get("salary_min"),
-                job.get("salary_max"),
-                embedding_str,
-                _detect_apply_type(job),
-                _detect_ats(job.get("url", ""), apply_url or ""),
-                apply_url,
-            )
-            if row is None:
-                pass
-            elif row["is_insert"]:
+            if await upsert_job(conn, job):
                 new_jobs += 1
             else:
                 updated_jobs += 1

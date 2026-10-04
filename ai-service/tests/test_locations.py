@@ -3,7 +3,12 @@
 from urllib.parse import parse_qs, urlparse
 
 from linkedin_fetcher import _search_url
-from locations import DEFAULT_SCRAPE_LOCATIONS, ScrapeLocation, scrape_locations
+from locations import (
+    DEFAULT_SCRAPE_LOCATIONS,
+    ScrapeLocation,
+    api_location_name,
+    scrape_locations,
+)
 
 
 def _names(locs):
@@ -41,8 +46,17 @@ def test_unknown_place_is_linkedin_only():
 
 def test_onboarding_spellings():
     locs = scrape_locations(["UAE", "Remote"])
-    assert locs[-1] == ScrapeLocation("UAE", "united arab emirates", None)
+    assert locs[-1] == ScrapeLocation("United Arab Emirates", "united arab emirates", None)
     assert "Remote" not in _names(locs)
+
+
+def test_short_country_names_are_the_same_search():
+    assert _names(scrape_locations(["UK", "us", "USA", "United States"])) == DEFAULT_SCRAPE_LOCATIONS
+
+
+def test_api_names_are_full_names():
+    names = [api_location_name(loc) for loc in scrape_locations(["UAE", "Toronto", "Haifa area"])]
+    assert names[-3:] == ["United Arab Emirates", "Toronto", "Haifa area"]
 
 
 def test_blank_and_none_are_ignored():

@@ -372,6 +372,27 @@ is positioned as global and priced in USD, so both are real gaps.
   check (`/api/linkedin/session-status`), which used to run on every Profile
   visit for a section nobody could see. Turn both on together.
 
+## Daily job intake
+- **One scheduled trigger:** the AI service's APScheduler runs
+  `_run_daily_pipeline` at 05:00 UTC — scrape, then Active Jobs DB, then
+  matching for every user, each step after the last finishes
+  (`ai-service/scheduler.py`). Don't add a cron workflow that starts intake:
+  until 2026-10-04 the Daily Scrape and Fetch Active Jobs DB workflows ran
+  both a second time, two full scrapes at once every morning.
+- `POST /scrape-and-store` only *starts* a background scrape and returns
+  (409 while one runs; `scrape_runner.py` allows one at a time).
+  `GET /scrape-and-store/status` has the state and the timing report. The
+  "Run Scrape (manual)" workflow calls it; `skip_known=false` re-visits every
+  LinkedIn detail page, for measuring.
+- The scrape searches the default markets plus every `JobPreference`
+  location (`ai-service/locations.py`) and includes company career pages.
+- **Every source stores through `routes/jobs.py` `upsert_job`**, which
+  embeds the job. Matching reads only rows with an embedding: Active Jobs DB
+  rows were written without one until 2026-10-04 and never reached matches.
+- Active Jobs DB is billed per job: `ACTIVE_JOBS_MAX_PER_RUN` (default 200)
+  caps a run, shared across markets. Its location parameter is
+  `location_filter` (full names, "United States" not "US").
+
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved
   session in browser_profile/{user_id}/ — see the LinkedIn login flow in preferences.

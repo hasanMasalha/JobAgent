@@ -1,41 +1,36 @@
-name: Daily Scrape
+name: Run Scrape (manual)
+
+# The daily scrape is scheduled on the server (ai-service/scheduler.py, 05:00
+# UTC: scrape → Active Jobs DB → match). This workflow used to start it a second
+# time at the same minute. Now it only starts an extra run by hand; the server
+# refuses (409) while a scrape is already running.
 
 on:
-  schedule:
-    - cron: '0 5 * * *'
-  workflow_dispatch:  # allows manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      skip_known:
+        description: "Skip detail pages of LinkedIn jobs already stored (false = visit all, to measure the full cost)"
+        type: boolean
+        default: true
 
 jobs:
   scrape:
-    name: Daily Job Scrape
+    name: Start scrape
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 5
 
     steps:
-      - name: Scrape LinkedIn and Indeed jobs
+      - name: Start a background scrape on the server
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 55m
+          command_timeout: 2m
           script: |
-            echo "Starting LinkedIn/Indeed scrape..."
-            curl -s -X POST -H "X-Internal-Key: $(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)" http://localhost:8000/scrape-and-store \
-              --max-time 3000 \
-              && echo "LinkedIn/Indeed scrape completed" \
-              || echo "LinkedIn/Indeed scrape failed or timed out"
-
-      - name: Scrape company careers (API-based only)
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 10m
-          script: |
-            echo "Starting API company scrape (greenhouse/comeet/lever/ashby)..."
-            curl -s -X POST -H "X-Internal-Key: $(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)" http://localhost:8000/companies/scrape-api-only \
-              --max-time 300 \
-              && echo "API company scrape completed" \
-              || echo "API company scrape failed or timed out"
+            KEY="$(grep '^INTERNAL_API_KEY=' /home/ubuntu/jobagent/.env | cut -d= -f2-)"
+            curl -s -X POST -H "X-Internal-Key: $KEY" \
+              "http://localhost:8000/scrape-and-store?skip_known=${{ inputs.skip_known }}" --max-time 30
+            echo
+            echo "Started (or already running). Progress and the timing report:"
+            echo "  curl -s -H 'X-Internal-Key: ...' http://localhost:8000/scrape-and-store/status"

@@ -7,8 +7,9 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+import scrape_runner
 from active_jobs_fetcher import fetch_and_save_jobs as _fetch_active_jobs
-from routes.jobs import scrape_and_store, scrape_and_store_company_careers
+from routes.jobs import run_scrape
 from routes.matching import MatchRequest, match_jobs
 
 UTC = timezone.utc  # noqa: UP017 - datetime.UTC requires Python 3.11+
@@ -21,13 +22,26 @@ NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 
-async def _run_scrape():
+async def _run_scrape(trigger: str = "scheduler"):
+    """Run the daily scrape, or wait for the one already running (a manual
+    run via POST /scrape-and-store). Company career pages are part of it."""
     logger.info("[scheduler] Starting daily scrape…")
-    try:
-        result = await scrape_and_store()
-        logger.info("[scheduler] Scrape done: %s", result)
-    except Exception:
-        logger.exception("[scheduler] Scrape failed")
+    task, started = scrape_runner.ensure_running(run_scrape, trigger=trigger)
+    if not started:
+        logger.info("[scheduler] A scrape is already running; waiting for it")
+    result = await task
+    logger.info("[scheduler] Scrape done: %s", {k: v for k, v in (result or {}).items() if k != "timing"})
+
+
+async def _run_daily_pipeline():
+    """The only scheduled intake. Each step starts when the one before has
+    finished, so matching never reads a half-stored scrape — the scrape has no
+    time limit any more. Until 2026-10-04 these were separate jobs at fixed
+    times (05:00, 05:15, 05:30, 06:00) and GitHub workflows started the scrape
+    and the Active Jobs DB fetch a second time."""
+    await _run_scrape()
+    await _run_active_jobs_fetch()
+    await _run_match_all()
 
 
 async def _notify_user_if_matches(user_id: str, match_count: int):
@@ -53,15 +67,6 @@ async def _run_active_jobs_fetch():
         logger.info("[scheduler] Active Jobs DB fetch done: %s", result)
     except Exception:
         logger.exception("[scheduler] Active Jobs DB fetch failed")
-
-
-async def _run_company_scrape():
-    logger.info("[scheduler] Starting company careers scrape…")
-    try:
-        result = await scrape_and_store_company_careers()
-        logger.info("[scheduler] Company scrape done: %s", result)
-    except Exception:
-        logger.exception("[scheduler] Company scrape failed")
 
 
 async def _run_match_all():
@@ -99,7 +104,7 @@ async def _recovery_scrape_if_stale():
         if last_scraped is None or (now - last_scraped.replace(tzinfo=UTC)).total_seconds() > 86400:
             age = "never" if last_scraped is None else f"{(now - last_scraped.replace(tzinfo=UTC)).days}d ago"
             logger.info("[scheduler] Recovery scrape triggered — last scrape was %s", age)
-            await _run_scrape()
+            await _run_scrape(trigger="startup recovery")
         else:
             logger.info("[scheduler] No recovery scrape needed — last scrape was recent")
     except Exception:
@@ -107,17 +112,21 @@ async def _recovery_scrape_if_stale():
 
 
 def start_scheduler():
-    scheduler.add_job(_run_scrape, CronTrigger(hour=5, minute=0, timezone="UTC"), id="daily_scrape")
-    scheduler.add_job(_run_active_jobs_fetch, CronTrigger(hour=5, minute=15, timezone="UTC"), id="active_jobs_fetch")
-    scheduler.add_job(_run_company_scrape, CronTrigger(hour=5, minute=30, timezone="UTC"), id="company_scrape")
-    scheduler.add_job(_run_match_all, CronTrigger(hour=6, minute=0, timezone="UTC"), id="daily_match")
+    # The only scheduled intake trigger; GitHub workflows run it manually only.
+    scheduler.add_job(
+        _run_daily_pipeline,
+        CronTrigger(hour=5, minute=0, timezone="UTC"),
+        id="daily_pipeline",
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
     # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
     from datetime import datetime, timedelta
     scheduler.add_job(_recovery_scrape_if_stale, "date",
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — scrape@05:00 UTC, active_jobs@05:15 UTC, company_scrape@05:30 UTC, match@06:00 UTC, recovery check in 5s")
+    logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → match) @05:00 UTC, recovery check in 5s")
 
 
 def stop_scheduler():
