@@ -9,6 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 import scrape_runner
 from active_jobs_fetcher import fetch_and_save_jobs as _fetch_active_jobs
+from arbeitnow_fetcher import fetch_and_save_jobs as _fetch_arbeitnow
 from routes.jobs import run_scrape
 from routes.matching import MatchRequest, match_jobs
 
@@ -41,6 +42,7 @@ async def _run_daily_pipeline():
     and the Active Jobs DB fetch a second time."""
     await _run_scrape()
     await _run_active_jobs_fetch()
+    await _run_arbeitnow_fetch()
     await _run_match_all()
 
 
@@ -67,6 +69,15 @@ async def _run_active_jobs_fetch():
         logger.info("[scheduler] Active Jobs DB fetch done: %s", result)
     except Exception:
         logger.exception("[scheduler] Active Jobs DB fetch failed")
+
+
+async def _run_arbeitnow_fetch():
+    logger.info("[scheduler] Starting Arbeitnow fetch…")
+    try:
+        result = await _fetch_arbeitnow()
+        logger.info("[scheduler] Arbeitnow fetch done: %s", result)
+    except Exception:
+        logger.exception("[scheduler] Arbeitnow fetch failed")
 
 
 async def _run_match_all():
@@ -126,7 +137,7 @@ def start_scheduler():
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → match) @05:00 UTC, recovery check in 5s")
+    logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → Arbeitnow → match) @05:00 UTC, recovery check in 5s")
 
 
 def stop_scheduler():

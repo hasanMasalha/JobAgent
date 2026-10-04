@@ -68,7 +68,7 @@ def test_a_failed_run_is_recorded_not_raised():
     assert st["state"] == "failed" and "linkedin down" in st["error"] and st["running"] is False
 
 
-def test_daily_pipeline_runs_scrape_then_active_jobs_then_match():
+def test_daily_pipeline_runs_each_source_then_match():
     import scheduler
 
     order = []
@@ -80,11 +80,31 @@ def test_daily_pipeline_runs_scrape_then_active_jobs_then_match():
     with (
         patch.object(scheduler, "run_scrape", fake_scrape),
         patch.object(scheduler, "_fetch_active_jobs", AsyncMock(side_effect=lambda: order.append("active_jobs"))),
+        patch.object(scheduler, "_fetch_arbeitnow", AsyncMock(side_effect=lambda: order.append("arbeitnow"))),
         patch.object(scheduler, "_run_match_all", AsyncMock(side_effect=lambda: order.append("match"))),
     ):
         asyncio.run(scheduler._run_daily_pipeline())
 
-    assert order == ["scrape", "active_jobs", "match"]
+    assert order == ["scrape", "active_jobs", "arbeitnow", "match"]
+
+
+def test_a_failing_source_does_not_stop_matching():
+    import scheduler
+
+    order = []
+
+    async def fake_scrape(**_):
+        return {}
+
+    with (
+        patch.object(scheduler, "run_scrape", fake_scrape),
+        patch.object(scheduler, "_fetch_active_jobs", AsyncMock(side_effect=RuntimeError("quota"))),
+        patch.object(scheduler, "_fetch_arbeitnow", AsyncMock(side_effect=RuntimeError("down"))),
+        patch.object(scheduler, "_run_match_all", AsyncMock(side_effect=lambda: order.append("match"))),
+    ):
+        asyncio.run(scheduler._run_daily_pipeline())
+
+    assert order == ["match"]
 
 
 def test_scheduler_has_one_intake_job():

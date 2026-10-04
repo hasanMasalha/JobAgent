@@ -375,7 +375,7 @@ is positioned as global and priced in USD, so both are real gaps.
 ## Daily job intake
 - **One scheduled trigger:** the AI service's APScheduler runs
   `_run_daily_pipeline` at 05:00 UTC — scrape, then Active Jobs DB, then
-  matching for every user, each step after the last finishes
+  Arbeitnow, then matching for every user, each step after the last finishes
   (`ai-service/scheduler.py`). Don't add a cron workflow that starts intake:
   until 2026-10-04 the Daily Scrape and Fetch Active Jobs DB workflows ran
   both a second time, two full scrapes at once every morning.
@@ -392,6 +392,12 @@ is positioned as global and priced in USD, so both are real gaps.
 - Active Jobs DB is billed per job: `ACTIVE_JOBS_MAX_PER_RUN` (default 200)
   caps a run, shared across markets. Its location parameter is
   `location_filter` (full names, "United States" not "US").
+- Arbeitnow (`arbeitnow_fetcher.py`, free, no key): a job's `url` is
+  Arbeitnow's page and its `/apply` redirect is the employer's ATS, stored as
+  `apply_url`. Arbeitnow's Cloudflare returns 429 to lookups faster than about
+  one a second, so they run one at a time (`ARBEITNOW_APPLY_DELAY_S`, 2s);
+  a job whose lookup is refused is not stored that run — stored without its
+  link it would stay `external` for good.
 
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved
