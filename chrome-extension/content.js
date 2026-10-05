@@ -9,6 +9,12 @@ signal.id = 'jobagent-extension-installed'
 signal.style.display = 'none'
 document.documentElement.appendChild(signal)
 
+// For testing an unpacked build on a real job: fill every step, then stop at
+// Submit application without clicking it (reported manual, credit refunded).
+// Must be false in a release — __tests__/api/linkedin-apply-safety.test.ts
+// checks.
+const JA_DRY_RUN = false
+
 function randomDelay(min = 300, max = 1500) {
   const ms = Math.floor(Math.random() * (max - min) + min)
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -256,6 +262,7 @@ async function fillApplicationForm(application, panel) {
 
   let step = 0
   const maxSteps = 10
+  let submitClicked = false
 
   while (step < maxSteps) {
     await randomDelay(800, 2000)
@@ -282,33 +289,35 @@ async function fillApplicationForm(application, panel) {
       return
     }
 
-    // Named next/submit buttons (English + Hebrew)
-    const nextBtn = currentPanel.querySelector(
-      'button[aria-label="Continue to next step"], ' +
-      'button[aria-label="Review your application"], ' +
-      'button[aria-label="Submit application"], ' +
-      'button[aria-label="המשך לשלב הבא"], ' +
-      'button[aria-label="שלח מועמדות"], ' +
-      'button[aria-label="בדוק את מועמדותך"]'
-    )
+    // Next / Review / Submit application, by their own label (jaStepButton,
+    // answers.js). Nothing else is clicked: there used to be a fallback to
+    // any .artdeco-button--primary, a class the new form doesn't have.
+    let stepButton = null
+    let kind = null
+    for (const b of currentPanel.querySelectorAll('button')) {
+      kind = b.disabled ? null : jaStepButton(b.textContent, b.getAttribute('aria-label'))
+      if (kind) { stepButton = b; break }
+    }
 
-    console.log('JobAgent: next button:', nextBtn?.getAttribute('aria-label'))
+    if (!stepButton) {
+      logStep(`step ${step + 1}`, 'no Next / Review / Submit application button, stopping')
+      break
+    }
 
-    if (nextBtn) {
-      nextBtn.click()
-      step++
-    } else {
-      // Fallback: primary-styled button in the panel
-      const allBtns = Array.from(currentPanel.querySelectorAll('button'))
-      const primary = allBtns.find(b => b.classList.contains('artdeco-button--primary'))
-      if (primary) {
-        console.log('JobAgent: clicking primary btn:', primary.textContent.trim())
-        primary.click()
-        step++
-      } else {
-        console.log('JobAgent: no button found, stopping')
-        break
-      }
+    if (kind === 'submit' && JA_DRY_RUN) {
+      logStep('dry-run', 'reached Submit application — not clicking it. Nothing was submitted.')
+      await reportResult(application.id, 'manual', { keepTab: true, reason: 'dry_run' })
+      return
+    }
+
+    logStep(`step ${step + 1}`, `clicking ${kind}:`, stepButton.textContent.trim())
+    stepButton.click()
+    step++
+    if (kind === 'submit') {
+      submitClicked = true
+      // How LinkedIn's new form confirms a submission hasn't been seen yet;
+      // the success check at the top of the loop is from May.
+      logStep('submit', 'clicked Submit application. Waiting for a confirmation...')
     }
 
     // LinkedIn refused the step (a question it requires is still empty and
@@ -324,6 +333,10 @@ async function fillApplicationForm(application, panel) {
   // Loop ended without detecting a success message — report manual so the
   // dashboard polling can stop waiting.
   console.log('[JobAgent] form loop ended without success, reporting manual')
+  if (submitClicked) {
+    console.warn('JobAgent [submit] ⚠ Submit application WAS clicked but no confirmation was ' +
+      'recognised. Reporting manual (credit refunded), though LinkedIn may have received it.')
+  }
   logStep('end', 'no submitted confirmation recognised. The form now shows:',
     describeFormStep(getEasyApplyPanel() || scope))
   await reportResult(application.id, 'manual', { keepTab: true })
