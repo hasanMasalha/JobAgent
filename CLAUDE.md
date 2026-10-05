@@ -363,9 +363,18 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   containers; it used to get the Greenhouse filler, which matched nothing.
   Ashby runs invisible reCAPTCHA v3, which we can't solve: "We couldn't
   submit your application" is reported as `ashby_rejected`.
-- **Known gap:** Greenhouse's phone dial-code picker can only choose Israel,
-  so it's set only for an Israeli number; another country's number leaves it
-  unset, and a board that requires it fails.
+- **Phone country** (Greenhouse): taken from the user's own number
+  (`ai-service/phone_country.py`, `phonenumbers`). An option is chosen only
+  when its name *and* dial code match (+1 is the US and Canada, +44 the UK and
+  Guernsey). A number without a country code can't be placed (except Israeli
+  "05…", Profile's old format); the picker is left alone and, where the form
+  requires it, the application stops as a missing answer ("Phone country").
+  With the country set, the number is typed in national format. Profile
+  rejects a number whose country can't be told (`lib/phone.ts`,
+  `libphonenumber-js`, server-side). Checked on 4 live boards (2026-10-05:
+  IL, UK, Guernsey, US, Canada, DE); all 20 boards probed used the
+  react-select picker. Until then only Israel could be chosen, and the
+  intl-tel-input branch set Israel for every number.
 
 ## Service-to-service auth (INTERNAL_API_KEY)
 - The AI service requires `X-Internal-Key` on every route except `/health`

@@ -14,6 +14,7 @@ python-multipart
 httpx
 aiohttp>=3.9.0
 beautifulsoup4
+phonenumbers>=8.13
 reportlab
 pytest
 pytest-asyncio

@@ -264,14 +264,25 @@ function ProfileContent() {
     }
   }
 
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   async function handleSaveDefaults() {
     setSavingDefaults(true);
+    setPhoneError(null);
     try {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(defaults),
       });
+      if (res.status === 400) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error === "invalid_phone") {
+          setPhoneError(data.message);
+          showToast("Check your phone number", "error");
+          return;
+        }
+      }
       if (!res.ok) throw new Error("Failed to save");
       showToast("Auto Apply defaults saved", "success");
     } catch {
@@ -791,14 +802,24 @@ function ProfileContent() {
                 {([
                   { label: "First name", key: "first_name", placeholder: "", type: "text" },
                   { label: "Last name", key: "last_name", placeholder: "", type: "text" },
-                  { label: "Phone", key: "phone", placeholder: "+972-50-000-0000", type: "tel" },
+                  { label: "Phone", key: "phone", placeholder: "+44 7400 123456", type: "tel" },
                   { label: "City", key: "city", placeholder: "e.g. Tel Aviv, New York, London", type: "text" },
                 ] as const).map(({ label, key, placeholder, type }) => (
-                  <Field key={key} id={`default-${key}`} label={label}>
+                  <Field
+                    key={key}
+                    id={`default-${key}`}
+                    label={label}
+                    // Forms ask for the phone's country; JobAgent takes it from the number.
+                    hint={key === "phone" ? "Include your country code, e.g. +44 or +1." : undefined}
+                    error={key === "phone" ? phoneError : undefined}
+                  >
                     <Input
                       type={type}
                       value={defaults[key]}
-                      onChange={(e) => setDefaults({ ...defaults, [key]: e.target.value })}
+                      onChange={(e) => {
+                        if (key === "phone") setPhoneError(null);
+                        setDefaults({ ...defaults, [key]: e.target.value });
+                      }}
                       placeholder={placeholder || undefined}
                     />
                   </Field>

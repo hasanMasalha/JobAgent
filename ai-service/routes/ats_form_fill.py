@@ -7,6 +7,7 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 import anthropic
+import phonenumbers
 import httpx
 from playwright.async_api import async_playwright
 
@@ -19,6 +20,7 @@ from application_answers import (
     user_answer,
 )
 from captcha_solver import detect_and_solve_captcha
+from phone_country import PhoneInfo, match_country_option, parse_phone
 
 _claude_client = anthropic.Anthropic()
 
@@ -126,16 +128,167 @@ async def _ask_claude_for_answer(question: str, cv_text: str) -> str | None:
         return None
 
 
-class _CountryNotKnown(Exception):
-    """The phone country picker isn't filled: we only know the user's country
-    when their phone number is Israeli."""
+# ── Phone country pickers ────────────────────────────────────────────────────
+# Greenhouse boards ask for the phone's country in one of three widgets. The
+# country comes from the user's own number (phone_country.parse_phone) and an
+# option is chosen only when its name and dial code both match
+# (match_country_option) — +1 and +44 are shared, so a dial code alone isn't
+# enough. Until 2026-10-05 only Israel could be chosen, and the intl-tel-input
+# branch set Israel for every number.
+#
+# Each returns "absent" (no such picker on the form), "set" (chosen and
+# confirmed on the page) or "failed".
 
 
-def _is_israeli_phone(phone: str) -> bool:
-    """Greenhouse's phone dial-code picker below only knows how to choose
-    Israel (+972). Choose it only when the user's number is Israeli."""
-    digits = re.sub(r"[^\d+]", "", phone or "")
-    return digits.startswith(("+972", "972", "05"))
+def _dial_code_is_unique(info: PhoneInfo) -> bool:
+    return len(phonenumbers.region_codes_for_country_code(int(info.dial_code.lstrip("+")))) == 1
+
+
+async def _set_react_select_phone_country(page, info: PhoneInfo | None) -> str:
+    """New Greenhouse boards: a react-select inside .phone-input__country."""
+    container = page.locator(".phone-input__country").first
+    if await container.count() == 0:
+        return "absent"
+    if info is None:
+        return "failed"
+
+    async def confirmed() -> bool:
+        # The chip renders a flag div and "+ 44" (space after the plus). The
+        # flag class names the country; the chip text alone can't tell the UK
+        # from Guernsey, so it only counts for a dial code one country uses.
+        if await container.locator(f".iti__{info.region.lower()}").count() > 0:
+            return True
+        chip = " ".join(await container.locator('[class*="single-value"]').all_inner_texts())
+        if match_country_option([chip], info) == 0:
+            return True
+        return _dial_code_is_unique(info) and info.dial_code.lstrip("+") in re.sub(r"\D", "", chip)
+
+    try:
+        # The input itself is a ~3px, opacity-0 hit target on these boards;
+        # the visible .select__control is what opens the menu (found on live
+        # boards, 2026-05).
+        control = container.locator(".select__control").first
+        await control.scroll_into_view_if_needed(timeout=3000)
+        box = await control.bounding_box()
+        if box:
+            await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            await page.wait_for_timeout(300)
+        combo = container.locator('input[role="combobox"], #country').first
+        if await combo.count() > 0:
+            await combo.fill(info.country_name)
+        else:
+            await page.keyboard.type(info.country_name, delay=30)
+        await page.wait_for_timeout(600)
+
+        options = page.get_by_role("option")
+        texts = await options.all_inner_texts()
+        idx = match_country_option(texts, info)
+        print(f"[ats-form] Phone country: {info.country_name} {info.dial_code} → "
+              f"option {idx} of {len(texts)} {texts[:6]}")
+        if idx == -1:
+            await page.keyboard.press("Escape")
+            return "failed"
+        await options.nth(idx).click(timeout=3000)
+        await page.wait_for_timeout(300)
+        return "set" if await confirmed() else "failed"
+    except Exception as e:
+        print(f"[ats-form] Phone country (react-select) error: {e}")
+        return "failed"
+
+
+async def _set_select_phone_country(page, info: PhoneInfo | None) -> str:
+    """Old Greenhouse form: a native <select name="phone_country_code">."""
+    select = await page.query_selector('select[name="phone_country_code"]')
+    if not select:
+        return "absent"
+    if info is None:
+        return "failed"
+    try:
+        options = await select.evaluate(
+            "el => Array.from(el.options).map(o => ({value: o.value, text: o.text.trim()}))"
+        )
+        idx = next((i for i, o in enumerate(options) if o["value"].upper() == info.region), -1)
+        if idx == -1:
+            idx = match_country_option([o["text"] for o in options], info)
+        if idx == -1:
+            return "failed"
+        await select.select_option(value=options[idx]["value"])
+        chosen = await select.evaluate("el => el.value")
+        return "set" if chosen == options[idx]["value"] else "failed"
+    except Exception as e:
+        print(f"[ats-form] Phone country (select) error: {e}")
+        return "failed"
+
+
+async def _set_iti_phone_country(page, info: PhoneInfo | None) -> str:
+    """intl-tel-input (a flag dropdown wrapped around the tel input)."""
+    if await page.locator(".iti").count() == 0:
+        return "absent"
+    if info is None:
+        return "failed"
+    iso = info.region.lower()
+    try:
+        # Some builds only register the instance once the input has focus.
+        tel = page.locator('#phone, input[type="tel"]').first
+        if await tel.count() > 0:
+            await tel.click(timeout=3000)
+            await page.wait_for_timeout(300)
+
+        selected = await page.evaluate(
+            """(iso) => {
+                const el = document.querySelector('#phone, input[type="tel"]');
+                if (!el) return null;
+                const g = window.intlTelInputGlobals;
+                let iti = g && g.getInstance && g.getInstance(el);
+                if (!iti && g && g.instances) {
+                    const keys = Object.keys(g.instances);
+                    if (keys.length === 1) iti = g.instances[keys[0]];
+                }
+                if (!iti && el._iti) iti = el._iti;
+                if (!iti) return null;
+                iti.setCountry(iso);
+                const data = iti.getSelectedCountryData();
+                return data ? data.iso2 : null;
+            }""",
+            iso,
+        )
+        if selected == iso:
+            return "set"
+
+        # No reachable instance: open the flag list and click the country by
+        # its data-country-code — unique, so names can't be confused.
+        await page.locator(
+            "button.iti__selected-country, .iti__selected-flag, .iti__flag-container"
+        ).first.click(timeout=3000)
+        await page.wait_for_timeout(400)
+        item = page.locator(f'.iti__country[data-country-code="{iso}"]').first
+        if await item.count() == 0:
+            await page.keyboard.press("Escape")
+            return "failed"
+        await item.click(timeout=3000)
+        await page.wait_for_timeout(300)
+        shown = page.locator(
+            f".iti__selected-country .iti__{iso}, .iti__selected-flag .iti__{iso}"
+        )
+        return "set" if await shown.count() > 0 else "failed"
+    except Exception as e:
+        print(f"[ats-form] Phone country (intl-tel-input) error: {e}")
+        return "failed"
+
+
+async def _phone_country_required(page) -> bool:
+    """Whether the form marks its phone country picker as required."""
+    try:
+        return await page.evaluate(
+            """() => {
+                const label = document.querySelector('label[for="country"]');
+                if (label && label.textContent.trim().endsWith('*')) return true;
+                const input = document.querySelector('.phone-input__country input, #country');
+                return !!input && (input.required || input.getAttribute('aria-required') === 'true');
+            }"""
+        )
+    except Exception:
+        return False
 
 
 def _missing_answers_result(missing: list[str], filled: list[str]) -> dict:
@@ -795,6 +948,8 @@ async def _fill_greenhouse_form(
 
     filled: list[str] = []
     errors: list[str] = []
+    # A required phone country we couldn't set (see the phone section).
+    phone_missing: list[str] = []
 
     # Step 1: let the form finish rendering before touching any field —
     # Greenhouse's embedded form does its own client-side init after load.
@@ -917,215 +1072,14 @@ async def _fill_greenhouse_form(
         'input[id*="email"]',
     ], email, "email", react_sync=True)
 
-    # Country: react-select-style autocomplete. Playwright Codegen against
-    # the live board recorded the actual working sequence, with one concrete
-    # new fact the previous role-based attempt didn't have: the rendered
-    # option's accessible name is "Israel +..." (it includes the dial code),
-    # not "Israel" alone — which is exactly why that attempt's exact=True
-    # role match always found zero options. Codegen's sequence also opens
-    # with a real click on the Toggle flyout button BEFORE touching the
-    # combobox at all, which no earlier attempt in this block's history
-    # tried as the first step.
-    #
-    # It can only choose Israel, so it runs only for an Israeli phone number:
-    # for anyone else that would be a wrong country (it ran for everyone
-    # until 2026-10-04).
-    try:
-        if not _is_israeli_phone(phone):
-            raise _CountryNotKnown()
-
-        async def _country_chip_text() -> str:
-            chip = page.locator('.select__single-value, [class*="single-value"]')
-            return await chip.inner_text() if await chip.count() > 0 else ""
-
-        async def _country_single_value_confirmed() -> bool:
-            # The actual rendered single-value chip is:
-            #   <div class="iti__flag iti__il"></div><span>+ 972</span>
-            # Two consequences: (1) there's a SPACE between "+" and "972",
-            # so a plain "+972" substring match against chip_text always
-            # returned False even on a correct selection — that was the
-            # real bug, not react-select failing to select. (2) #country's
-            # own input_value() is ALWAYS empty for react-select (it never
-            # writes the selected value into the underlying input), so it
-            # can never be used as confirmation regardless of formatting —
-            # it's logged elsewhere purely for diagnostics, never checked
-            # here. The iti__il flag class is the sturdiest signal since
-            # it doesn't depend on text formatting at all; the chip-text
-            # check (space-normalized, plus an "israel" fallback) backs it
-            # up for boards that render the country control differently.
-            if await page.locator('.iti__il, .iti__flag.iti__il').count() > 0:
-                return True
-            chip_text = await _country_chip_text()
-            normalized = chip_text.replace(" ", "")
-            return "+972" in normalized or "israel" in chip_text.lower()
-
-        # click_reported tracks what each step SAYS it did — logged for
-        # visibility only. It is deliberately never trusted as the final
-        # answer: earlier attempts in this block's history self-reported
-        # "clicked"/"success" while react-select's actual state never
-        # changed, so country_confirmed below is always computed from the
-        # chip check, independent of what these clicks claim.
-        click_reported = False
-
-        # The #country input itself turned out to be a near-invisible
-        # react-select hit target (opacity: 0, measured bbox width
-        # ~3.5px — the surrounding container collapses it) — clicking its
-        # coordinates was landing on effectively nothing, which is why
-        # aria-expanded never flipped even via real mouse events. The
-        # actual visible/clickable surface is the .select__control div
-        # react-select renders around it; click that instead.
-        selected_via_input_click = False
-        control = page.locator(".phone-input__country .select__control").first
-        control_count = await control.count()
-        print(f"[ats-form] Country control (.phone-input__country scoped) count: {control_count}")
-        if control_count == 0:
-            control = page.locator(".select__control").first
-            control_count = await control.count()
-            print(f"[ats-form] Country control (unscoped .select__control fallback) count: {control_count}")
-
-        if control_count > 0:
-            await control.scroll_into_view_if_needed()
-            await page.wait_for_timeout(300)
-
-            bbox = await control.bounding_box()
-            print(f"[ats-form] Control bbox: {bbox}")
-
-            if bbox:
-                center_x = bbox["x"] + bbox["width"] / 2
-                center_y = bbox["y"] + bbox["height"] / 2
-
-                await page.mouse.move(center_x, center_y)
-                await page.wait_for_timeout(200)
-                await page.mouse.click(center_x, center_y)
-                await page.wait_for_timeout(500)
-
-                await page.screenshot(path="/app/screenshots/after_control_click.png")
-
-                country_html = await page.evaluate(
-                    """() => {
-                        const container = document.querySelector('.phone-input__country');
-                        return container ? container.innerHTML : 'not found';
-                    }"""
-                )
-                print(f"[ats-form] Country HTML after click: {country_html[:500]}")
-
-                expanded = await page.locator("#country").get_attribute("aria-expanded")
-                print(f"[ats-form] aria-expanded after control click: {expanded}")
-
-                if expanded == "true":
-                    print("[ats-form] MENU OPENED!")
-                    await page.keyboard.type("israel", delay=50)
-                    await page.wait_for_timeout(500)
-                    option = page.get_by_role("option", name="Israel", exact=False).first
-                    try:
-                        await option.wait_for(state="visible", timeout=2000)
-                        await option.click()
-                        click_reported = True
-                        selected_via_input_click = True
-                        print("[ats-form] Israel selected!")
-                    except Exception as e:
-                        # Unlike the confirmed option.click() above, a bare
-                        # Enter press isn't verified here — leave
-                        # selected_via_input_click False so the codegen
-                        # fallback block below still runs as a safety net,
-                        # same as the existing Enter-fallback precedent in
-                        # that block.
-                        print(f"[ats-form] Country: option click failed ({e}) — pressing Enter as fallback")
-                        await page.keyboard.press("Enter")
-                else:
-                    print("[ats-form] Country: menu still not open after control click")
-            else:
-                print("[ats-form] Control bbox unavailable — cannot mouse-click")
-        else:
-            print("[ats-form] Country: .select__control not found")
-
-        # Fallback to the codegen-recorded combobox fill/option-click flow
-        # only if the direct input click above didn't already confirm a
-        # selection — re-running it after a successful input-click selection
-        # would re-type into an already-filled chip for no reason.
-        combo = page.get_by_role("combobox", name="Country")
-        combo_count = await combo.count()
-        print(f"[ats-form] Country combobox by role count: {combo_count}")
-        if combo_count == 0:
-            combo = page.locator("#country")
-            combo_count = await combo.count()
-            print(f"[ats-form] Country combobox by #country fallback count: {combo_count}")
-
-        if combo_count > 0 and not selected_via_input_click:
-            await combo.first.fill("israel")
-            await page.wait_for_timeout(800)
-            print("[ats-form] Country: filled combobox with 'israel'")
-
-            # Diagnostic snapshot taken BEFORE any Enter-key fallback is
-            # pressed, so it captures react-select's actual post-fill state
-            # (menu open? options rendered?) rather than whatever state a
-            # keypress may have already changed.
-            await page.screenshot(path="/app/screenshots/country_after_fill.png")
-            print("[ats-form] Screenshot taken after fill")
-
-            dom_state = await page.evaluate(
-                """() => {
-                    return {
-                        menuExists: !!document.querySelector('[class*="select__menu"]'),
-                        optionCount: document.querySelectorAll('[role="option"]').length,
-                        singleValue: document.querySelector('.select__single-value')?.innerText || '',
-                        itiIL: !!document.querySelector('.iti__il'),
-                        ariaExpanded: document.querySelector('#country')?.getAttribute('aria-expanded'),
-                    }
-                }"""
-            )
-            print(f"[ats-form] DOM state after fill: {dom_state}")
-
-            # Match on "+972", not "Israel": codegen confirms the rendered
-            # option's accessible name is "🇮🇱 Israel +972", but matching on
-            # "Israel" is fragile against boards where the option text order
-            # or emoji rendering differs. The dial code is the stable part.
-            option = page.get_by_role("option", name="+972", exact=False).first
-            option2 = page.locator('[role="option"]').filter(has_text="+972").first
-            try:
-                await option.wait_for(state="visible", timeout=1000)
-                await option.click()
-                click_reported = True
-                print("[ats-form] Country: clicked +972 option")
-            except Exception as e:
-                print(f"[ats-form] Country: +972 option click failed: {e}")
-                try:
-                    await option2.wait_for(state="visible", timeout=500)
-                    await option2.click()
-                    click_reported = True
-                    print("[ats-form] Country: clicked +972 via filter")
-                except Exception as e2:
-                    print(f"[ats-form] Country: +972 filter fallback failed: {e2}")
-                    await page.keyboard.press("Enter")
-                    print("[ats-form] Country: pressed Enter as fallback")
-        elif selected_via_input_click:
-            print("[ats-form] Country: already selected via direct input click — skipped combobox fallback")
-        else:
-            print("[ats-form] Country: no combobox found by role or #country selector")
-
-        print(f"[ats-form] Country click reported success: {click_reported}")
-
-        chip_text = await _country_chip_text()
-        print(f"[ats-form] Country chip: {chip_text!r}")
-
-        country_confirmed = await _country_single_value_confirmed()
-        print(f"[ats-form] Country confirmed via iti__il flag / chip text: {country_confirmed}")
-
-        final_val = ""
-        if await page.locator("#country").count() > 0:
-            final_val = await page.input_value("#country")
-        print(f"[ats-form] Country after codegen sequence (raw, NOT proof of selection): {final_val!r}")
-
-        print(f"[ats-form] FINAL country state: confirmed={country_confirmed} raw_value={final_val!r}")
-        if country_confirmed:
-            filled.append("country")
-        else:
-            errors.append("Country not confirmed selected (react-select gave no single-value confirmation)")
-            print("[ats-form] WARNING: country left unconfirmed — submit will likely be rejected for missing Country")
-    except _CountryNotKnown:
-        print("[ats-form] Phone country: not an Israeli number, so not choosing one")
-    except Exception as e:
-        print(f"[ats-form] Country field error: {e}")
+    # Phone country: from the user's own number (see "Phone country pickers"
+    # above). Without a number the pickers are left alone.
+    phone_info = parse_phone(phone) if phone else None
+    phone_pickers: dict[str, str] = {}
+    if phone:
+        if phone_info is None:
+            print(f"[ats-form] Phone country: can't place {phone!r} (no country code) — pickers left alone")
+        phone_pickers["react-select"] = await _set_react_select_phone_country(page, phone_info)
 
     # Candidate location — separate free-text field some Greenhouse boards show
     # alongside (not instead of) the country autocomplete above. The user's
@@ -1169,13 +1123,8 @@ async def _fill_greenhouse_form(
                 print(f"[ats-form] location field {selector!r} error: {e}")
 
     # Greenhouse old form: country-code select dropdown
-    try:
-        country_select = await page.query_selector('select[name="phone_country_code"]')
-        if country_select and _is_israeli_phone(phone):
-            await country_select.select_option(value="IL")
-            print("[ats-form] Set phone country code to IL (select dropdown)")
-    except Exception:
-        pass
+    if phone:
+        phone_pickers["select"] = await _set_select_phone_country(page, phone_info)
 
     # Phone: ITI library wraps the tel input with a country-flag picker.
     # Only interact if we actually have a phone number — touching ITI with no
@@ -1183,169 +1132,24 @@ async def _fill_greenhouse_form(
     if not phone:
         print("[ats-form] No phone value — leaving phone field untouched")
     else:
-        # Normalize to local format: ITI manages the country code separately
-        clean_phone = phone
-        if clean_phone.startswith("+972"):
-            clean_phone = "0" + clean_phone[4:]
-        elif clean_phone.startswith("972"):
-            clean_phone = "0" + clean_phone[3:]
-
-        try:
-            # Click the phone field first — some ITI builds only fully
-            # initialize (and register the instance getInstance() looks up)
-            # once the input has actually received focus.
-            phone_field_for_iti = page.locator('#phone, input[type="tel"]')
-            if await phone_field_for_iti.count() > 0:
-                await phone_field_for_iti.first.click()
-                await page.wait_for_timeout(500)
-
-            iti_result = await page.evaluate("""() => {
-                const phoneEl = document.querySelector('#phone, input[type="tel"]');
-                if (!phoneEl) return 'no_phone_el';
-
-                // Primary: the documented API, keyed to this exact element.
-                let iti = window.intlTelInputGlobals
-                    && window.intlTelInputGlobals.getInstance(phoneEl);
-
-                // Fallback: getInstance() relies on a data-intl-tel-input-id
-                // attribute being set on the input, which some builds omit —
-                // in that case, reach into the instances collection directly
-                // and just take the first (usually only) one on the page.
-                if (!iti && window.intlTelInputGlobals && window.intlTelInputGlobals.instances) {
-                    const keys = Object.keys(window.intlTelInputGlobals.instances);
-                    if (keys.length > 0) iti = window.intlTelInputGlobals.instances[keys[0]];
-                }
-
-                // Some builds stash the instance directly on the element
-                // instead of (or in addition to) the global registry.
-                if (!iti && phoneEl._iti) {
-                    iti = phoneEl._iti;
-                }
-
-                if (!iti) {
-                    const flagBtn = document.querySelector(
-                        '.iti__flag-container, .iti__selected-flag'
-                    );
-                    return flagBtn ? 'no_instance_flag_found' : 'no_instance_no_flag';
-                }
-                iti.setCountry('il');
-                return 'set';
-            }""")
-            await page.wait_for_timeout(300)
-            print(f"[ats-form] Set ITI country to IL (result: {iti_result})")
-
-            flag_count = await page.locator(
-                '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
-            ).count()
-            print(f"[ats-form] ITI flag elements: {flag_count}")
-
-            dial_code_locator = page.locator('.iti__selected-dial-code')
-            if await dial_code_locator.count() > 0:
-                dial_code_text = await dial_code_locator.first.inner_text()
-                print(f"[ats-form] Phone dial code: {dial_code_text!r}")
-
-            if flag_count == 0:
-                # The intlTelInputGlobals JS API found nothing to call —
-                # either the widget wasn't initialized yet or this board
-                # uses different class names entirely. Fall back to driving
-                # it as a real user would: click each candidate container
-                # until one opens a dropdown, then click the Israel entry.
-                print("[ats-form] WARNING: ITI flag not found via JS API — trying interactive click fallback")
-
-                israel_selected = False
-                # Confirmed from the actual rendered HTML: this ITI build uses
-                # the newer v18+ markup (button.iti__selected-country +
-                # ul.iti__country-list), not the older .iti__flag-container/
-                # .iti__country names the generic fallback below was written
-                # against — try the real selectors first.
-                try:
-                    iti_country_btn = page.locator(
-                        'button.iti__selected-country, button[aria-label="Select country"]'
-                    ).first
-                    if await iti_country_btn.count() > 0:
-                        await iti_country_btn.click()
-                        await page.wait_for_timeout(500)
-                        print("[ats-form] Clicked ITI flag button (iti__selected-country)")
-
-                        search = page.locator(
-                            '#iti-0__search-input, input[id$="__search-input"]'
-                        ).first
-                        if await search.count() > 0:
-                            await search.type("Israel", delay=50)
-                            await page.wait_for_timeout(500)
-                        else:
-                            print("[ats-form] ITI: no search input found after opening country list")
-
-                        israel_item = page.locator("ul.iti__country-list li").filter(has_text="Israel").first
-                        if await israel_item.count() > 0:
-                            await israel_item.click()
-                            await page.wait_for_timeout(200)
-                            print("[ats-form] Selected Israel in ITI (iti__country-list)")
-                            israel_selected = True
-                        else:
-                            print("[ats-form] ITI: no Israel item found in iti__country-list")
-                    else:
-                        print("[ats-form] ITI: button.iti__selected-country not found")
-                except Exception as e:
-                    print(f"[ats-form] ITI: iti__selected-country flow failed: {e}")
-
-                if not israel_selected:
-                    iti_selectors = [
-                        '.iti__flag-container',
-                        '.iti__selected-flag',
-                        '[class*="iti__flag"]',
-                        '.iti',
-                        '#phone',  # click phone first — some ITI builds only mount the widget on focus
-                    ]
-                    for iti_sel in iti_selectors:
-                        try:
-                            el = await page.query_selector(iti_sel)
-                            if not el:
-                                continue
-                            await el.click()
-                            await page.wait_for_timeout(300)
-                            israel_option = await page.query_selector(
-                                '[data-country-code="il"], li:has-text("Israel"), '
-                                '.iti__country:has-text("Israel")'
-                            )
-                            if israel_option:
-                                await israel_option.click()
-                                await page.wait_for_timeout(200)
-                                print(f"[ats-form] ITI: selected Israel via {iti_sel!r} click")
-                                israel_selected = True
-                                break
-                            print(f"[ats-form] ITI: clicked {iti_sel!r}, no Israel option found in dropdown")
-                        except Exception as e:
-                            print(f"[ats-form] ITI: {iti_sel!r} click failed: {e}")
-
-                if not israel_selected:
-                    # None of our selectors matched a clickable "Israel"
-                    # element in the opened list — instead of matching
-                    # markup, drive the dropdown's own keyboard type-ahead
-                    # (the same accessibility feature a native <select>
-                    # supports): open the flag, type the country name, and
-                    # press Enter to select whatever it lands on.
-                    try:
-                        flag = page.locator('.iti__selected-flag').first
-                        if await flag.count() > 0:
-                            await flag.click()
-                            await page.wait_for_timeout(500)
-                            await page.keyboard.type("Israel")
-                            await page.wait_for_timeout(500)
-                            await page.keyboard.press("Enter")
-                            await page.wait_for_timeout(300)
-                            print("[ats-form] ITI: selected Israel via keyboard type-ahead")
-                        else:
-                            print("[ats-form] ITI: keyboard fallback skipped — .iti__selected-flag not found")
-                    except Exception as e:
-                        print(f"[ats-form] ITI: keyboard type-ahead fallback failed: {e}")
-
-                flag_count = await page.locator(
-                    '.iti__flag, .iti__selected-flag, [class*="iti__flag"]'
-                ).count()
-                print(f"[ats-form] ITI flag elements after fallback: {flag_count}")
-        except Exception as e:
-            print(f"[ats-form] ITI country set error: {e}")
+        # New boards wrap the react-select chip in an .iti element too; the
+        # intl-tel-input dropdown is only a picker of its own where there's no
+        # react-select (seen on 20 live boards, 2026-10-05: all react-select).
+        if phone_pickers["react-select"] == "absent":
+            phone_pickers["intl-tel-input"] = await _set_iti_phone_country(page, phone_info)
+        print(f"[ats-form] Phone country pickers: {phone_pickers}")
+        # With the country chosen in a picker, the field takes the national
+        # number; otherwise the full international one, which names its
+        # country itself. A number we can't place is typed as saved.
+        if "set" in phone_pickers.values():
+            filled.append("phone_country")
+            clean_phone = phone_info.national_digits
+        elif phone_info:
+            clean_phone = phone_info.e164
+        else:
+            clean_phone = phone
+        if phone_pickers["react-select"] == "failed" and await _phone_country_required(page):
+            phone_missing.append("Phone country")
 
         try:
             phone_el = await page.query_selector(
@@ -1602,7 +1406,7 @@ async def _fill_greenhouse_form(
     # Required questions the user gave us no answer for — the form is not
     # submitted if any (see application_answers). Until 2026-10-04 these got
     # made-up defaults, a Claude-picked or the first option, or a Claude answer.
-    missing: list[str] = []
+    missing: list[str] = list(phone_missing)
     for q in custom_questions:
         q_id = await q.get_attribute("id") or ""
         tag_name = await q.evaluate("el => el.tagName.toLowerCase()")

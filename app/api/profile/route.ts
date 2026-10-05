@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
+import { phoneProblem } from "@/lib/phone";
 import { db } from "@/lib/db";
 
 export async function GET(_req: NextRequest) {
@@ -115,6 +116,13 @@ export async function PATCH(req: NextRequest) {
       highest_education, work_authorized, requires_sponsorship,
       willing_to_relocate, confirm_application_details,
     } = body;
+
+    // Application forms ask for the phone's country and the AI service takes
+    // it from the number (phone_country.py), so it has to name its country.
+    const badPhone = phone !== undefined ? phoneProblem(phone) : null;
+    if (badPhone) {
+      return NextResponse.json({ error: "invalid_phone", message: badPhone }, { status: 400 });
+    }
 
     // Saving the application details, or approving them on the apply review
     // screen, is what makes them the user's own answers.
