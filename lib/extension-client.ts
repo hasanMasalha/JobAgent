@@ -6,6 +6,11 @@ import { isVersionAtLeast } from "@/lib/extension-version";
 
 export const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? "";
 
+/** The extension's Chrome Web Store page. Linked only after the LinkedIn
+ *  automation notice has been accepted (/dashboard/linkedin-extension). */
+export const EXTENSION_STORE_URL =
+  "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
+
 /**
  * The installed extension's version: null if it doesn't answer, "0" if it
  * answers without one (versions before 1.5.0 didn't report it). Asked twice,

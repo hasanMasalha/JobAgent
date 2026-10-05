@@ -5,6 +5,8 @@ import { normalizePlan } from "@/lib/plan-limits";
 import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usage";
 import { isLinkedInListing } from "@/lib/detect-apply-type";
 import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
+import { LINKEDIN_CONSENT_REQUIRED_RESPONSE } from "@/lib/linkedin-consent";
+import { linkedInAutomationConsentAt } from "@/lib/linkedin-consent.server";
 
 // Creates Application rows (status = pending_extension) for each job so
 // the extension queue can pick them up. Does not call Claude — the
@@ -19,6 +21,12 @@ export async function POST(req: NextRequest) {
     const supabase = createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Nothing goes to the extension until the user has accepted the LinkedIn
+    // automation notice (/dashboard/linkedin-extension).
+    if (!(await linkedInAutomationConsentAt(user.id))) {
+      return NextResponse.json(LINKEDIN_CONSENT_REQUIRED_RESPONSE, { status: 403 });
+    }
 
     const { jobIds } = await req.json() as { jobIds: string[] };
     if (!Array.isArray(jobIds) || jobIds.length === 0) {

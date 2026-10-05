@@ -49,13 +49,30 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "error").mockImplementation(() => {});
-  mdb.user.findUnique.mockResolvedValue({ plan: "free", name: "Test User", email: "u1@example.com", email_notifications: false });
+  mdb.user.findUnique.mockResolvedValue({
+    plan: "free", name: "Test User", email: "u1@example.com", email_notifications: false,
+    linkedin_automation_consent_at: new Date("2026-10-05T10:00:00Z"),
+  });
   charge.mockResolvedValue({ allowed: true, remaining: 3 });
   sendEmail.mockResolvedValue({ id: "email-1" });
   mdb.application.create.mockResolvedValue({ id: "app-1", applied_at: new Date() });
 });
 
 describe("POST /api/apply/mark-pending-extension", () => {
+  it.each([[{ jobId: "j1" }], [{ application_id: "app-1" }]])(
+    "refuses %p without the LinkedIn automation consent, charging and marking nothing",
+    async (body) => {
+      mdb.user.findUnique.mockResolvedValue({ plan: "free", linkedin_automation_consent_at: null });
+      const res = await markPendingExtension(post("/api/apply/mark-pending-extension", body));
+
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toBe("linkedin_consent_required");
+      expect(charge).not.toHaveBeenCalled();
+      expect(mdb.$executeRaw).not.toHaveBeenCalled();
+      expect(mdb.$queryRaw).not.toHaveBeenCalled();
+    },
+  );
+
   // SELECT existing → `existing`; INSERT → new id; CV skills → [].
   const route = (existing: unknown[]) =>
     mdb.$queryRaw.mockImplementation((strings: TemplateStringsArray) => {

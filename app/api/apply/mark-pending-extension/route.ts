@@ -3,6 +3,8 @@ import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
 import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usage";
+import { LINKEDIN_CONSENT_REQUIRED_RESPONSE } from "@/lib/linkedin-consent";
+import { linkedInAutomationConsentAt } from "@/lib/linkedin-consent.server";
 
 // Marks an application as pending_extension so the Chrome Extension picks it up.
 // Accepts either:
@@ -25,6 +27,12 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Nothing goes to the extension until the user has accepted the LinkedIn
+    // automation notice (/dashboard/linkedin-extension).
+    if (!(await linkedInAutomationConsentAt(user.id))) {
+      return NextResponse.json(LINKEDIN_CONSENT_REQUIRED_RESPONSE, { status: 403 });
     }
 
     const body = await req.json();

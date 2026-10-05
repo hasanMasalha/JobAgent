@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import LogoutButton from "./LogoutButton";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
+import { LINKEDIN_SETUP_PATH } from "@/lib/linkedin-consent";
 
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID ?? ""
 
@@ -35,14 +36,14 @@ function ExtensionBadge() {
     )
   }
   return (
-    <a
-      href="https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda"
-      target="_blank"
-      rel="noopener noreferrer"
+    // The LinkedIn automation notice comes first; the Store link is on that
+    // page once it has been accepted.
+    <Link
+      href={LINKEDIN_SETUP_PATH}
       className="hidden lg:inline text-caption font-medium text-brand-text hover:underline underline-offset-2"
     >
       Get the extension
-    </a>
+    </Link>
   )
 }
 
