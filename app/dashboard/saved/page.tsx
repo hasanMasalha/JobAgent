@@ -25,6 +25,27 @@ export default function SavedJobsPage() {
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Unsave: the row leaves the list only once the server has deleted it.
+  async function unsave(jobId: string) {
+    setRemoving(jobId);
+    setRemoveError(null);
+    try {
+      const res = await fetch("/api/jobs/interact", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!res.ok) throw new Error();
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    } catch {
+      setRemoveError("Couldn't remove that job. Try again.");
+    } finally {
+      setRemoving(null);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/jobs/saved")
@@ -65,6 +86,8 @@ export default function SavedJobsPage() {
             Save any job from your matches and it waits here until you&apos;re ready to apply.
           </StatePanel>
         )}
+
+        {removeError && <StatePanel role="alert" title="Not removed">{removeError}</StatePanel>}
 
         {!loading && !error && jobs.length > 0 && (
           <ul className="space-y-3">
@@ -110,6 +133,15 @@ export default function SavedJobsPage() {
                     <a href={job.url} target="_blank" rel="noopener noreferrer" className={buttonStyles({ variant: "secondary", size: "sm" })}>
                       View job <span aria-hidden="true">↗</span>
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => unsave(job.id)}
+                      disabled={removing === job.id}
+                      aria-label={`Remove ${job.title} at ${job.company} from saved jobs`}
+                      className={buttonStyles({ variant: "ghost", size: "sm" })}
+                    >
+                      {removing === job.id ? "Removing…" : "Remove"}
+                    </button>
                   </div>
                 </li>
               );
