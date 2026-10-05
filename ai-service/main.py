@@ -47,3 +47,9 @@ async def fetch_active_jobs_route():
     from active_jobs_fetcher import fetch_and_save_jobs
     result = await fetch_and_save_jobs()
     return result
+
+
+@app.post("/fetch-arbeitnow")
+async def fetch_arbeitnow_route():
+    from arbeitnow_fetcher import fetch_and_save_jobs
+    return await fetch_and_save_jobs()
