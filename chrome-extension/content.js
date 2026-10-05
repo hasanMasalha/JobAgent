@@ -9,6 +9,12 @@ signal.id = 'jobagent-extension-installed'
 signal.style.display = 'none'
 document.documentElement.appendChild(signal)
 
+// For testing an unpacked build on a real job: fill every step, then stop at
+// Submit application without clicking it (reported manual, credit refunded).
+// Must be false in a release — __tests__/api/linkedin-apply-safety.test.ts
+// checks.
+const JA_DRY_RUN = false
+
 function randomDelay(min = 300, max = 1500) {
   const ms = Math.floor(Math.random() * (max - min) + min)
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -75,28 +81,55 @@ async function checkPendingApplication() {
 async function startEasyApply(application) {
   console.log('JobAgent: starting Easy Apply')
 
-  const el = await waitForEasyApplyButton(20000)
-  if (!el) {
-    // Most LinkedIn listings aren't Easy Apply, and nothing tells us which
-    // before we get here. Stop, hand the credit back ("manual"), and leave
-    // the tab open so the user can apply on this page themselves.
-    console.log('JobAgent: no Easy Apply button on this job, stopping')
+  const found = await waitForEasyApplyButton(20000)
+  if (!found) {
+    // Stop, hand the credit back ("manual"), and leave the tab open so the
+    // user can apply on this page themselves.
+    logStep('find', 'no Easy Apply button after 20s, stopping. Visible apply-like controls:',
+      describeApplyLikeControls())
     await reportResult(application.id, 'manual', { keepTab: true, reason: 'no_easy_apply' })
     return
   }
 
-  console.log('JobAgent: clicking Easy Apply:', el.tagName)
+  const { el, rule } = found
+  logStep('click', `matched by ${rule}:`, describeElement(el))
+  // If the click loads another page, this page's console is gone. The marker
+  // (kept by background.js for this tab) lets the next page say so.
+  await chrome.runtime.sendMessage({ type: 'SET_APPLY_STEP', step: 'clicked', rule })
+    .catch(() => {})
+  const onPageHide = () => logStep('navigated', 'page is unloading after the Easy Apply click:', location.href)
+  window.addEventListener('pagehide', onPageHide)
+  const urlAtClick = location.href
   el.click()
 
-  console.log('JobAgent: waiting for Easy Apply panel in shadow DOM...')
+  logStep('panel', 'waiting for the Easy Apply form (open <dialog>, or #interop-outlet shadow DOM)...')
   const panel = await waitForEasyApplyPanel(15000)
-  console.log('JobAgent: panel found:', !!panel)
+  window.removeEventListener('pagehide', onPageHide)
 
   if (!panel) {
-    console.log('JobAgent: panel not found')
-    await reportResult(application.id, 'manual')
+    const outlet = document.getElementById('interop-outlet')
+    logStep('panel', 'clicked, but no panel after 15s, stopping.', {
+      url: location.href,
+      // LinkedIn is a single-page app: a click can change the URL without
+      // unloading this page, so pagehide never fires.
+      urlChangedSinceClick: location.href !== urlAtClick,
+      interopOutlet: !!outlet,
+      shadowRoot: !!outlet?.shadowRoot,
+      openDialogs: Array.from(document.querySelectorAll('dialog[open], [role="dialog"]')).map(d => ({
+        tag: d.tagName,
+        testModalId: d.getAttribute('data-test-modal-id'),
+        testId: d.getAttribute('data-testid'),
+        text: (d.innerText || '').replace(/\s+/g, ' ').slice(0, 80),
+      })),
+      modalInMainDocument: !!document.querySelector(
+        '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"]'
+      ),
+    })
+    await reportResult(application.id, 'manual', { reason: 'panel_not_found' })
     return
   }
+  logStep('panel', 'found')
+  await chrome.runtime.sendMessage({ type: 'CLEAR_APPLY_STEP' }).catch(() => {})
 
   await randomDelay(800, 1500)
   console.log('JobAgent: filling form')
@@ -106,26 +139,45 @@ async function startEasyApply(application) {
 async function waitForEasyApplyButton(timeout) {
   const start = Date.now()
   while (Date.now() - start < timeout) {
-    const el = findEasyApplyElement()
-    if (el) return el
+    const found = findEasyApplyElement()
+    if (found) return found
     await randomDelay(300, 700)
   }
   return null
 }
 
-// The Easy Apply modal lives inside the shadow DOM of #interop-outlet.
-// Regular document.querySelector() cannot pierce shadow boundaries.
+// Where LinkedIn renders the Easy Apply form. It has moved before, so each
+// place it has been seen is tried, newest first:
+//   - 2026-10: an open native <dialog> in the main document, marked
+//     data-test-modal-id / data-testid "dialog" (seen on /jobs/view/4456907190;
+//     the snippet that found it can't tell which of the two attributes it
+//     was). Its classes are obfuscated, so they're not matched. The marker is
+//     generic, so a dialog with form controls is preferred over one without.
+//   - 2026-05-30 (bfaa232): .jobs-easy-apply-modal inside #interop-outlet's
+//     shadow root. Kept in case LinkedIn still serves it to some users, and
+//     the same selectors are tried in the main document first: LinkedIn
+//     serves the old Ember form (artdeco classes) on some jobs.
 function getEasyApplyPanel() {
-  const interopOutlet = document.getElementById('interop-outlet')
-  if (!interopOutlet?.shadowRoot) {
-    console.log('JobAgent: no shadow root found')
-    return null
-  }
-  const panel = interopOutlet.shadowRoot.querySelector(
-    '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
-  )
-  console.log('JobAgent: shadow panel found:', !!panel)
-  return panel
+  const dialogs = Array.from(document.querySelectorAll(
+    'dialog[open][data-test-modal-id="dialog"], dialog[open][data-testid="dialog"], ' +
+    'dialog[open][data-test-modal-id="easy-apply-modal"], dialog[open].jobs-easy-apply-modal'
+  ))
+  const withControls = dialogs.find(d => d.querySelector('input, select, textarea'))
+  if (withControls || dialogs[0]) return withControls || dialogs[0]
+
+  const oldModalSelector = '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
+  const oldModal = document.querySelector(oldModalSelector)
+  if (oldModal) return oldModal
+
+  return document.getElementById('interop-outlet')?.shadowRoot?.querySelector(oldModalSelector) || null
+}
+
+// Where our own popups go. Everything outside a modal <dialog> is inert —
+// it can't be clicked or typed into — so while the form is open they go
+// inside it.
+function overlayHost() {
+  const panel = getEasyApplyPanel()
+  return panel?.tagName === 'DIALOG' ? panel : document.body
 }
 
 async function waitForEasyApplyPanel(timeout = 15000) {
@@ -149,12 +201,9 @@ async function waitForEasyApplyPanel(timeout = 15000) {
 }
 
 // LinkedIn renders Easy Apply as a <button>, or as <a href="...apply/...">.
-//
-// Only the Easy Apply control itself counts. This runs on every LinkedIn job
-// we open, and most of them have a plain "Apply" button that leaves for the
-// company's site — so the match is strict (jaIsEasyApplyLabel, answers.js),
-// and links to another job or to a search are skipped. No match means no
-// Easy Apply: startEasyApply stops and reports manual.
+// The first visible element jaEasyApplyMatch (answers.js) accepts, with the
+// rule that matched. No match means no Easy Apply: startEasyApply stops and
+// reports manual.
 function findEasyApplyElement() {
   const candidates = document.querySelectorAll(
     'button, a, [role="link"], [role="button"]'
@@ -162,30 +211,57 @@ function findEasyApplyElement() {
 
   for (const el of candidates) {
     if (el.offsetParent === null) continue  // not visible
-
-    const href = el.getAttribute('href') || ''
-
-    if (href.includes('/apply/') && href.includes('openSDUIApplyFlow')) {
-      console.log('JobAgent: found Easy Apply element by href:', href.substring(0, 80))
-      return el
-    }
-
-    // A link that goes to another job or a search is never the apply control.
-    if (href.includes('/jobs/view/') || href.includes('/jobs/search')) continue
-
-    if (jaIsEasyApplyLabel(el.textContent, el.getAttribute('aria-label'))) {
-      console.log('JobAgent: found Easy Apply element by label:', el.tagName)
-      return el
-    }
+    const rule = jaEasyApplyMatch(el.textContent, el.getAttribute('aria-label'), el.getAttribute('href'))
+    if (rule) return { el, rule }
   }
 
   return null
 }
 
+// Step logs share one prefix so a failure report can be filtered to them:
+// [find] → [click] → [panel] / [navigated] → form steps.
+function logStep(step, ...args) {
+  console.log(`JobAgent [${step}]`, ...args)
+}
+
+function describeElement(el) {
+  return {
+    tag: el.tagName,
+    text: (el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 80),
+    ariaLabel: el.getAttribute('aria-label'),
+    href: (el.getAttribute('href') || '').substring(0, 120),
+  }
+}
+
+// What the page offered instead, when nothing matched: every visible control
+// that mentions applying (English or Hebrew), at most 15.
+function describeApplyLikeControls() {
+  const out = []
+  for (const el of document.querySelectorAll('button, a, [role="link"], [role="button"]')) {
+    if (el.offsetParent === null) continue
+    const label = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''}`
+    if (/apply|מועמדות/i.test(label)) out.push(describeElement(el))
+    if (out.length >= 15) break
+  }
+  return out
+}
+
+// A marker left by the previous page in this tab: it clicked Easy Apply and
+// then the page went away. Logged once and cleared.
+async function logArrivalAfterClick() {
+  const marker = await chrome.runtime.sendMessage({ type: 'TAKE_APPLY_STEP' }).catch(() => null)
+  if (!marker?.step) return null
+  logStep('navigated',
+    `the previous page clicked Easy Apply (matched by ${marker.rule}) ` +
+    `${Math.round((Date.now() - marker.at) / 1000)}s ago and this page loaded instead:`,
+    location.href)
+  return marker
+}
+
 async function fillApplicationForm(application, panel) {
   console.log('JobAgent: fillApplicationForm called')
 
-  // Use passed panel; re-fetch from shadow DOM each step in case LinkedIn re-renders it
+  // Use the passed panel; re-fetch it each step in case LinkedIn re-renders it
   const scope = panel || getEasyApplyPanel() || document
 
   let step = 0
@@ -195,6 +271,7 @@ async function fillApplicationForm(application, panel) {
     await randomDelay(800, 2000)
 
     const currentPanel = getEasyApplyPanel() || scope
+    logStep(`step ${step + 1}`, describeFormStep(currentPanel))
 
     // Check if submitted
     const successMsg = currentPanel.querySelector(
@@ -215,34 +292,35 @@ async function fillApplicationForm(application, panel) {
       return
     }
 
-    // Named next/submit buttons (English + Hebrew)
-    const nextBtn = currentPanel.querySelector(
-      'button[aria-label="Continue to next step"], ' +
-      'button[aria-label="Review your application"], ' +
-      'button[aria-label="Submit application"], ' +
-      'button[aria-label="המשך לשלב הבא"], ' +
-      'button[aria-label="שלח מועמדות"], ' +
-      'button[aria-label="בדוק את מועמדותך"]'
-    )
-
-    console.log('JobAgent: next button:', nextBtn?.getAttribute('aria-label'))
-
-    if (nextBtn) {
-      nextBtn.click()
-      step++
-    } else {
-      // Fallback: primary-styled button in the panel
-      const allBtns = Array.from(currentPanel.querySelectorAll('button'))
-      const primary = allBtns.find(b => b.classList.contains('artdeco-button--primary'))
-      if (primary) {
-        console.log('JobAgent: clicking primary btn:', primary.textContent.trim())
-        primary.click()
-        step++
-      } else {
-        console.log('JobAgent: no button found, stopping')
-        break
-      }
+    // Next / Review / Submit application, by their own label (jaStepButton,
+    // answers.js). Nothing else is clicked: there used to be a fallback to
+    // any .artdeco-button--primary, a class the new form doesn't have.
+    let stepButton = null
+    let kind = null
+    for (const b of currentPanel.querySelectorAll('button')) {
+      kind = b.disabled ? null : jaStepButton(b.textContent, b.getAttribute('aria-label'))
+      if (kind) { stepButton = b; break }
     }
+
+    if (!stepButton) {
+      logStep(`step ${step + 1}`, 'no Next / Review / Submit application button, stopping')
+      break
+    }
+
+    if (kind === 'submit' && JA_DRY_RUN) {
+      logStep('dry-run', 'reached Submit application — not clicking it. Nothing was submitted.')
+      await reportResult(application.id, 'manual', { keepTab: true, reason: 'dry_run' })
+      return
+    }
+
+    if (kind === 'submit') {
+      await submitAndConfirm(application, stepButton)
+      return
+    }
+
+    logStep(`step ${step + 1}`, `clicking ${kind}:`, stepButton.textContent.trim())
+    stepButton.click()
+    step++
 
     // LinkedIn refused the step (a question it requires is still empty and
     // wasn't marked as required in a way we recognise): stop here too.
@@ -257,7 +335,171 @@ async function fillApplicationForm(application, panel) {
   // Loop ended without detecting a success message — report manual so the
   // dashboard polling can stop waiting.
   console.log('[JobAgent] form loop ended without success, reporting manual')
+  logStep('end', 'no submitted confirmation recognised. The form now shows:',
+    describeFormStep(getEasyApplyPanel() || scope))
   await reportResult(application.id, 'manual', { keepTab: true })
+}
+
+// "Applied … ago" in the job's top card (jaIsAppliedConfirmation, answers.js).
+// It's on the job page, not in the form: LinkedIn closes the form on submit.
+function findAppliedConfirmation() {
+  for (const el of document.querySelectorAll('.jobs-s-apply, .artdeco-inline-feedback__message')) {
+    if (jaIsAppliedConfirmation(el.innerText || el.textContent)) return el
+  }
+  return null
+}
+
+// Click Submit application and report what happened. Applied only when the
+// "Applied … ago" status appears after the click — it vanishes when the user
+// leaves the page, so it is checked now, for up to 20s. One that was already
+// there before the click doesn't count.
+async function submitAndConfirm(application, submitButton) {
+  const before = findAppliedConfirmation()
+  if (before) {
+    logStep('submit', '⚠ the page already shows', JSON.stringify(before.innerText.trim()),
+      'before submitting; only a new one will count')
+  }
+
+  const recorder = recordPageChanges()
+  logStep('submit', 'clicking Submit application')
+  const clickedAt = Date.now()
+  submitButton.click()
+
+  let formClosedAfterMs = null
+  const deadline = Date.now() + 20000
+  while (Date.now() < deadline) {
+    await sleep(500)
+    if (formClosedAfterMs === null && !getEasyApplyPanel()) formClosedAfterMs = Date.now() - clickedAt
+    const confirmation = findAppliedConfirmation()
+    if (confirmation && confirmation !== before) {
+      logStep('submit', 'confirmed:', describeElement(confirmation))
+      logStep('submit', 'what changed on the page after the click:', recorder.stop())
+      await reportResult(application.id, 'applied')
+      showSuccessNotification()
+      return
+    }
+    // A required question LinkedIn only checks on submit.
+    const panel = getEasyApplyPanel()
+    if (panel && hasValidationError(panel)) {
+      await stopForUser(application, findUnanswered(panel, false))
+      return
+    }
+  }
+
+  // No confirmation: it may or may not have gone in. Leave the tab on the job
+  // so the user can see which, and say so.
+  console.warn('JobAgent [submit] ⚠ clicked Submit application but no "Applied" status ' +
+    'appeared within 20s. It may have been submitted. Page now:', {
+    form: getEasyApplyPanel() ? describeFormStep(getEasyApplyPanel()) : 'closed',
+    formClosedAfterMs,
+    topCardStatus: Array.from(document.querySelectorAll('.jobs-s-apply, .artdeco-inline-feedback__message'))
+      .map(el => (el.innerText || '').trim().slice(0, 80)),
+  })
+  // Diagnostics for finding the confirmation in this context (a job page the
+  // extension opened directly, where the status above never appeared).
+  logStep('submit', 'what changed on the page after the click:', JSON.stringify(recorder.stop(), null, 2))
+  logStep('submit', 'the same job page loaded fresh:', await appliedStateInFreshPage())
+  await reportResult(application.id, 'manual', { keepTab: true, reason: 'submit_unconfirmed' })
+}
+
+// Diagnostics only: records what appears or changes on the page from just
+// before Submit until stop() — the in-extension version of the watcher used
+// to find the confirmation by hand. Text that mentions applying / sending /
+// success (English or Hebrew), live regions, alerts, and dialogs opening or
+// closing. Nothing is sent anywhere; stop() returns it for the console.
+function recordPageChanges() {
+  const re = /appl(ied|ication)|submitted|\bsent\b|success|error|wrong|הוגש|נשלח|מועמדות|שגיאה/i
+  const started = Date.now()
+  const seen = []
+  const keys = new Set()
+  const clip = (v, n = 200) => (v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+  const note = (el, why) => {
+    const text = clip(el.innerText || el.textContent)
+    const key = `${el.tagName}|${why}|${text}`
+    if (keys.has(key) || seen.length >= 60) return
+    keys.add(key)
+    seen.push({
+      afterMs: Date.now() - started,
+      why,
+      tag: el.tagName,
+      id: el.id || null,
+      classes: clip(el.className && el.className.toString(), 120) || null,
+      role: el.getAttribute?.('role') || null,
+      ariaLive: el.getAttribute?.('aria-live') || null,
+      testId: el.getAttribute?.('data-testid') || null,
+      text,
+    })
+  }
+  const check = (node, why) => {
+    const el = node.nodeType === 1 ? node : node.parentElement
+    if (!el) return
+    if (el.tagName === 'DIALOG' && why.startsWith('attr')) note(el, `dialog ${el.open ? 'opened' : 'closed'}`)
+    const live = el.closest?.('[aria-live], [role="alert"], [role="status"]')
+    if (live) note(live, `live region (${why})`)
+    const text = clip(el.innerText || el.textContent, 400)
+    if (text && text.length < 400 && re.test(text)) note(el, why)
+  }
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.type === 'childList') {
+        m.addedNodes.forEach(n => check(n, 'added'))
+        if (m.removedNodes.length && m.target.nodeType === 1) {
+          m.removedNodes.forEach(n => { if (n.tagName === 'DIALOG') note(n, 'dialog removed') })
+        }
+      }
+      if (m.type === 'characterData') check(m.target, 'text changed')
+      if (m.type === 'attributes') check(m.target, `attr ${m.attributeName}`)
+    }
+  })
+  observer.observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+    attributes: true, attributeFilter: ['open', 'aria-hidden', 'hidden'],
+  })
+  return { stop: () => { observer.disconnect(); return seen } }
+}
+
+// Diagnostics only: loads this job's page again (same origin, the user's own
+// LinkedIn session, nothing sent elsewhere) and reports whether it now shows
+// an "Applied" state, with the text around each match.
+async function appliedStateInFreshPage() {
+  try {
+    const res = await fetch(location.href, { credentials: 'include' })
+    const html = await res.text()
+    const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const matches = []
+    const re = /.{0,60}\bApplied\b.{0,60}/g
+    let m
+    while ((m = re.exec(text)) && matches.length < 8) matches.push(m[0].trim())
+    return { status: res.status, appliedMentions: matches, rawHtmlMentionsApplied: /applied/i.test(html) }
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+// What a form step shows, for the step logs: its progress text, every field
+// (label, type, required, whether it has a value — never the value itself)
+// and every button. This is what to look at when LinkedIn changes the form.
+function describeFormStep(panel) {
+  const clip = (v, n = 80) => (v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+  return {
+    progress: clip(panel.innerText, 60),
+    fields: Array.from(panel.querySelectorAll('input, select, textarea'))
+      .filter(el => el.type !== 'hidden')
+      .map(el => ({
+        tag: el.tagName,
+        type: el.type,
+        label: clip(getInputLabel(el)) || null,
+        required: isRequired(el),
+        hasValue: el.type === 'radio' || el.type === 'checkbox' ? el.checked : !!el.value?.trim(),
+        inFieldset: !!el.closest('fieldset'),
+      })),
+    buttons: Array.from(panel.querySelectorAll('button')).map(b => ({
+      text: clip(b.textContent, 40),
+      ariaLabel: b.getAttribute('aria-label'),
+      type: b.getAttribute('type'),
+      disabled: b.disabled,
+    })),
+  }
 }
 
 function optionText(radio, fieldset) {
@@ -353,7 +595,7 @@ async function stopForUser(application, missing) {
   close.style.cssText = 'margin-top:10px;padding:6px 12px;border:1px solid #c9d1db;border-radius:8px;background:#f5f6f8;cursor:pointer'
   close.onclick = () => box.remove()
   box.append(title, body, list, foot, close)
-  document.body.appendChild(box)
+  overlayHost().appendChild(box)
 
   await reportResult(application.id, 'manual', { keepTab: true })
 }
@@ -479,7 +721,7 @@ async function showQuestionOverlay(question, onAnswer) {
     </div>
   `
 
-  document.body.appendChild(overlay)
+  overlayHost().appendChild(overlay)
   const input = document.getElementById('jobagent-answer-input')
   input.focus()
 
@@ -637,7 +879,7 @@ function showSuccessNotification() {
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `
   notification.textContent = 'JobAgent: Application submitted successfully!'
-  document.body.appendChild(notification)
+  overlayHost().appendChild(notification)
   setTimeout(() => notification.remove(), 5000)
 }
 
@@ -670,6 +912,18 @@ async function handleApplyFlowPage() {
   console.log('JobAgent: handleApplyFlowPage called')
   const url = window.location.href
   console.log('JobAgent: apply page URL:', url)
+
+  // Nothing has written pendingApplyData since fac64e6 (2026-05-30, Easy Apply
+  // became a side panel), so this handler stops below without reporting —
+  // the application stays pending. Not fixed yet; this log says whether a
+  // real apply ever lands here.
+  const marker = await logArrivalAfterClick()
+  console.warn(
+    'JobAgent [navigated] ⚠ reached the SDUI apply-flow page (handleApplyFlowPage). ' +
+    'This path reads pendingApplyData, which nothing writes: it will stop without ' +
+    'filling or reporting.',
+    { cameFromOurClick: !!marker, url }
+  )
 
   await randomDelay(2000, 4000) // wait for SDUI page to render
 
@@ -707,5 +961,5 @@ if (url.includes('/apply/') || url.includes('openSDUIApplyFlow')) {
   handleApplyFlowPage()
 } else {
   console.log('JobAgent: detected job listing page')
-  checkPendingApplication()
+  logArrivalAfterClick().finally(checkPendingApplication)
 }

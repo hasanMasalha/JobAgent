@@ -143,6 +143,33 @@ every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
   after the scrape; with no button it stops, reports `manual` (credit
   refunded) and leaves the tab open. The review screen says which case the job
   is in (`easy_apply_confirmed` from `/api/apply/prepare`).
+- **Finding the button** (`jaEasyApplyMatch`, `chrome-extension/answers.js`):
+  text or aria-label *contains* "Easy Apply" / "הגש מועמדות בקלות", then the
+  `openSDUIApplyFlow` link. Never the bare Hebrew "הגש מועמדות" (the external
+  Apply button) or a filter control. #99 (2026-10-02) made it exact-text and
+  skipped `/jobs/view/` links, and it stopped finding the button; restored
+  2026-10-05. Don't tighten it again without a real LinkedIn page to test on.
+  Failures log `JobAgent [find]` / `[click]` / `[panel]` / `[navigated]`.
+- **Finding the form** (`getEasyApplyPanel`, `content.js`): since about
+  October it's an open native `<dialog>` in the main document marked
+  `data-test-modal-id`/`data-testid="dialog"` (obfuscated classes); the
+  30 May version (`#interop-outlet` shadow root) is still tried after it. A
+  modal `<dialog>` makes the rest of the page inert, so the extension's own
+  popups go inside it (`overlayHost`). Each step logs its fields and buttons
+  (`JobAgent [step N]`).
+- **Step buttons** (`jaStepButton`, `answers.js`): the new form's buttons have
+  no aria-label — "Next", "Review", "Submit application" by exact text. Nothing
+  else is clicked (Dismiss, Back, Edit, Upload…). `JA_DRY_RUN` in `content.js`
+  stops at Submit application for testing an unpacked build on a real job; a
+  test fails if it ships `true`. LinkedIn serves both the new obfuscated
+  `<dialog>` and the old Ember/artdeco form, depending on the job.
+- **Submitted = "Applied … ago" in the job's top card** (`submitAndConfirm`,
+  `jaIsAppliedConfirmation`). LinkedIn closes the form on submit and shows it
+  about a second later (`.jobs-s-apply`, `.artdeco-inline-feedback__message`);
+  it's gone once the user leaves the page, so it's checked right after the
+  click, for 20s, and must be new. None → `manual` with reason
+  `submit_unconfirmed` (credit refunded, tab left open) — it may have gone in.
+  The Hebrew wording hasn't been seen.
 - **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
   with a user's saved login, one browser per job.
 

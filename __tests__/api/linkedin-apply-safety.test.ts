@@ -37,7 +37,9 @@ const answers = require("../../chrome-extension/answers.js") as {
   jaSavedAnswer: (label: string, application: Record<string, unknown>) => string | null;
   jaMatchOption: (options: string[], answer: string | null) => number;
   jaYesNoOption: (options: string[], wantYes: boolean) => number;
-  jaIsEasyApplyLabel: (text: string | null, ariaLabel: string | null) => boolean;
+  jaEasyApplyMatch: (text: string | null, ariaLabel: string | null, href: string | null) => string | null;
+  jaStepButton: (text: string | null, ariaLabel: string | null) => string | null;
+  jaIsAppliedConfirmation: (text: string | null) => boolean;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const manifests = ["manifest.json", "manifest.prod.json"].map((f) => require(`../../chrome-extension/${f}`)) as {
@@ -217,29 +219,96 @@ describe("extension answers (chrome-extension/answers.js)", () => {
 });
 
 // The extension is opened on every LinkedIn listing, and most have an
-// ordinary Apply button that leaves for the company's site. Only LinkedIn's
-// own Easy Apply control may be clicked; anything else means stop and report
-// manual.
+// ordinary Apply button that leaves for the company's site. The matching is
+// the pre-#99 rule (contains, not exact — #99's strict version stopped finding
+// the button on real pages), minus the bare Hebrew "Apply" and filter controls.
 describe("Easy Apply button detection (chrome-extension/answers.js)", () => {
-  const { jaIsEasyApplyLabel } = answers;
+  const { jaEasyApplyMatch } = answers;
 
   it.each([
-    ["the button's own text", "Easy Apply", null],
-    ["text split across nodes", "  Easy\n   Apply ", ""],
-    ["an aria-label naming the job", "", "Easy Apply to Senior Engineer at Acme"],
-    ["the Hebrew label", "הגש מועמדות בקלות", null],
-  ])("accepts %s", (_what, text, aria) => {
-    expect(jaIsEasyApplyLabel(text, aria)).toBe(true);
+    ["the button's own text", "Easy Apply", null, null, "text"],
+    ["text with more around it", "  Easy Apply\n  to this job ", null, null, "text"],
+    ["an aria-label naming the job", "", "Easy Apply to Senior Engineer at Acme", null, "aria-label"],
+    ["the Hebrew label", "הגש מועמדות בקלות", null, null, "text"],
+    ["a /jobs/view/ link with the label (not skipped)", "Easy Apply", null, "/jobs/view/123/", "text"],
+    ["the SDUI apply link", "", null, "/jobs/view/123/apply/?openSDUIApplyFlow=true", "href"],
+  ])("accepts %s", (_what, text, aria, href, rule) => {
+    expect(jaEasyApplyMatch(text, aria, href)).toBe(rule);
   });
 
   it.each([
-    ["the ordinary Apply button", "Apply", "Apply to Senior Engineer on company website"],
-    ["the bare Hebrew Apply", "הגש מועמדות", null],
-    ["a job card that mentions Easy Apply", "Senior Engineer Acme Tel Aviv Easy Apply", null],
-    ["the Easy Apply search filter", "Easy Apply", "Easy Apply filter."],
-    ["Save", "Save", "Save Senior Engineer at Acme"],
-    ["nothing", null, null],
-  ])("rejects %s", (_what, text, aria) => {
-    expect(jaIsEasyApplyLabel(text, aria)).toBe(false);
+    ["the ordinary Apply button", "Apply", "Apply to Senior Engineer on company website", null],
+    ["the bare Hebrew Apply", "הגש מועמדות", null, null],
+    ["the bare Hebrew Apply with an aria-label", "הגש מועמדות", "הגש מועמדות לתפקיד", null],
+    ["the Easy Apply search filter", "Easy Apply", "Easy Apply filter.", null],
+    ["a /jobs/view/ link without the label", "Senior Engineer", null, "/jobs/view/456/"],
+    ["Save", "Save", "Save Senior Engineer at Acme", null],
+    ["nothing", null, null, null],
+  ])("rejects %s", (_what, text, aria, href) => {
+    expect(jaEasyApplyMatch(text, aria, href)).toBeNull();
+  });
+});
+
+// The Easy Apply form's step buttons. Seen on a live form (2026-10): no
+// aria-labels, visible text only. Anything that isn't Next / Review / Submit
+// application must never be clicked.
+describe("Easy Apply step buttons (chrome-extension/answers.js)", () => {
+  const { jaStepButton } = answers;
+
+  it.each([
+    ["Next", null, "next"],
+    ["  Review ", null, "review"],
+    ["Submit application", null, "submit"],
+    ["", "Continue to next step", "next"],
+    ["", "Submit application", "submit"],
+  ])("recognises %p / %p as %s", (text, aria, kind) => {
+    expect(jaStepButton(text, aria)).toBe(kind);
+  });
+
+  it.each([
+    ["", "Dismiss"],
+    ["Back", null],
+    ["Edit", "Edit Contact info"],
+    ["Upload resume", null],
+    ["Upload cover letter", null],
+    ["Submit", null],
+    [null, null],
+  ])("never clicks %p / %p", (text, aria) => {
+    expect(jaStepButton(text, aria)).toBeNull();
+  });
+});
+
+// What counts as "submitted": the job's top card reading "Applied … ago"
+// (seen on a real submission, 2026-10). Other inline messages on the same
+// page must not count.
+describe("Easy Apply submit confirmation (chrome-extension/answers.js)", () => {
+  const { jaIsAppliedConfirmation } = answers;
+
+  it.each([["Applied 1 second ago"], ["  Applied 3 minutes ago\n"], ["Applied now"]])(
+    "accepts %p", (text) => {
+      expect(jaIsAppliedConfirmation(text)).toBe(true);
+    }
+  );
+
+  it.each([
+    ["Resume uploaded successfully"],
+    ["Easy Apply"],
+    ["Apply"],
+    ["Navigating to Jobs"],
+    ["Not applied yet"],
+    [""],
+    [null],
+  ])("rejects %p", (text) => {
+    expect(jaIsAppliedConfirmation(text)).toBe(false);
+  });
+});
+
+describe("extension release safety", () => {
+  it("does not ship with the dry run switched on", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "../../chrome-extension/content.js"), "utf8"
+    ) as string;
+    expect(src).toMatch(/^const JA_DRY_RUN = false$/m);
   });
 });

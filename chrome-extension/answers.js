@@ -143,24 +143,68 @@ function jaYesNoOption(options, wantYes) {
   return wantYes ? yesIdx : noIdx
 }
 
-// Whether an element's own label says it is LinkedIn's Easy Apply control.
-// The same rule as for answers: no match means stop, not "close enough".
-//   - the text has to BE the label, or the aria-label has to start with it
-//     ("Easy Apply to Senior Engineer at Acme"). Text that merely contains
-//     the words is a job card elsewhere on the page ("… · Easy Apply").
-//   - the bare Hebrew "הגש מועמדות" ("Apply") is not accepted: it is also the
-//     label of the ordinary Apply button that leaves for the company's site.
+// Whether an element is LinkedIn's Easy Apply control. Returns which rule
+// matched ('text', 'aria-label' or 'href'), or null.
+//
+// This is the matching from before 1.5.0's #99 (2026-10-02), which found the
+// button on real pages: the text or aria-label CONTAINS the label, then the
+// SDUI apply link. #99 made it exact-text and skipped /jobs/view/ links before
+// reading them, and stopped finding the button. Kept from #99, and nothing
+// else:
+//   - the bare Hebrew "הגש מועמדות" ("Apply") is not a label: it is also the
+//     ordinary Apply button that leaves for the company's site. Hebrew Easy
+//     Apply still matches through the longer phrase.
 //   - a filter control ("Easy Apply filter.") is not the apply button.
-const JA_EASY_APPLY_LABELS = ['easy apply', 'הגש מועמדות בקלות']
+const JA_EASY_APPLY_LABELS = ['Easy Apply', 'הגש מועמדות בקלות']
 
-function jaIsEasyApplyLabel(text, ariaLabel) {
+function jaEasyApplyMatch(text, ariaLabel, href) {
+  const t = (text || '').trim()
+  const a = ariaLabel || ''
+  const h = href || ''
+  if (a.toLowerCase().includes('filter')) return null
+  if (JA_EASY_APPLY_LABELS.some(l => t.includes(l))) return 'text'
+  if (JA_EASY_APPLY_LABELS.some(l => a.includes(l))) return 'aria-label'
+  if (h.includes('/apply/') && h.includes('openSDUIApplyFlow')) return 'href'
+  return null
+}
+
+// Which step button of the Easy Apply form this is: 'next', 'review',
+// 'submit', or null for anything else (Dismiss, Back, Edit, Upload resume…),
+// which is never clicked.
+//
+// As of 2026-10 the buttons have no aria-label, only visible text: "Next",
+// "Review", "Submit application" (seen on a live form). The aria-labels are
+// the ones the form had in May; the Hebrew ones haven't been seen on the new
+// form. The whole label has to match — "Submit" alone is not accepted.
+const JA_STEP_BUTTONS = {
+  'next': 'next',
+  'continue to next step': 'next',
+  'המשך לשלב הבא': 'next',
+  'review': 'review',
+  'review your application': 'review',
+  'בדוק את מועמדותך': 'review',
+  'submit application': 'submit',
+  'שלח מועמדות': 'submit',
+}
+
+function jaStepButton(text, ariaLabel) {
   const clean = v => (v || '').replace(/\s+/g, ' ').trim().toLowerCase()
-  const t = clean(text)
-  const a = clean(ariaLabel)
-  if (a.includes('filter')) return false
-  return JA_EASY_APPLY_LABELS.some(l => t === l || a.startsWith(l))
+  return JA_STEP_BUTTONS[clean(ariaLabel)] || JA_STEP_BUTTONS[clean(text)] || null
+}
+
+// Whether a top-card status says the application went in. Seen on a real
+// submission (2026-10): LinkedIn closes the form and, about a second later,
+// the job's top card reads "Applied 1 second ago" (.jobs-s-apply, and an
+// .artdeco-inline-feedback__message with the same text). The same page also
+// has other inline messages ("Resume uploaded successfully"), so the text has
+// to start with "Applied". The Hebrew wording hasn't been seen.
+function jaIsAppliedConfirmation(text) {
+  return /^applied\b/i.test((text || '').replace(/\s+/g, ' ').trim())
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaIsEasyApplyLabel }
+  module.exports = {
+    jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaEasyApplyMatch, jaStepButton,
+    jaIsAppliedConfirmation,
+  }
 }
