@@ -75,24 +75,40 @@ def get_linkedin_session_path() -> str | None:
     return None
 
 
+# The "Show more" click used to be a Playwright mouse click with the default
+# 30s timeout. Logged out, LinkedIn covers the page with a sign-in prompt, so
+# every click waited the full 30s and failed — for each of the ~4 selectors
+# that matched: about 125s per job page in the 2026-10-04 timing run, so the
+# 25-min LinkedIn budget ran out inside the first search and only Israel got
+# LinkedIn jobs. A DOM click can't be blocked and returns at once.
+
+
+async def _expand_description(page) -> None:
+    """Click the description's "Show more" if there is a visible one, with a
+    DOM click. The CSS reset after this covers a missed click."""
+    for selector in _EXPAND_SELECTORS:
+        try:
+            btn = await page.query_selector(selector)
+            if not btn or not await btn.is_visible():
+                continue
+            # A DOM click, not a mouse click: logged out, LinkedIn lays a
+            # sign-in prompt over the page, and Playwright's mouse click waits
+            # for it to go away until the timeout, for every matching button.
+            await btn.evaluate("b => b.click()")
+            await page.wait_for_timeout(800)
+            print(f"[linkedin] expanded description with: {selector}")
+            return
+        except Exception:
+            continue
+
+
 async def _fetch_full_description(page, job_url: str) -> str | None:
     """Navigate to a LinkedIn job detail page and extract the full expanded description."""
     try:
         await page.goto(job_url, wait_until="domcontentloaded", timeout=15000)
         await page.wait_for_timeout(2000)
 
-        # Try to expand full description
-        for selector in _EXPAND_SELECTORS:
-            try:
-                btn = await page.query_selector(selector)
-                if btn:
-                    await btn.scroll_into_view_if_needed()
-                    await btn.click()
-                    await page.wait_for_timeout(800)
-                    print(f"[linkedin] expanded description with: {selector}")
-                    break
-            except Exception:
-                continue
+        await _expand_description(page)
 
         await page.wait_for_timeout(500)
 
