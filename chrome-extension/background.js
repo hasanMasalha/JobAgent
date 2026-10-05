@@ -389,6 +389,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               ? 'Your application was submitted successfully!'
               : message.reason === 'no_easy_apply'
                 ? "This job doesn't offer Easy Apply, so nothing was submitted. Apply in the LinkedIn tab yourself."
+              : message.reason === 'submit_unconfirmed'
+                ? "JobAgent clicked Submit but LinkedIn didn't confirm it. Check the LinkedIn tab: it may have gone in."
               : message.reason === 'dry_run'
                 ? 'Dry run: every step was filled and it stopped before Submit application. Nothing was submitted.'
               : message.reason === 'panel_not_found'
