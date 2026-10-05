@@ -48,6 +48,11 @@ model User {
   github_url           String?
   willing_to_relocate  Boolean?
   application_details_confirmed_at DateTime?
+  /// When the user ticked "I understand that using automation on LinkedIn may
+  /// result in account restrictions" (/dashboard/linkedin-extension). The
+  /// first consent is kept. Without it nothing is handed to the extension
+  /// (mark-pending-extension, batch-mark-pending refuse). See lib/linkedin-consent.ts.
+  linkedin_automation_consent_at DateTime?
   cover_letter_default String?
   currentCompany       String?  @default("")
 

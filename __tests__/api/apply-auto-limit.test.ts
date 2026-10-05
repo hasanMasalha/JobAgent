@@ -61,7 +61,7 @@ const ATS_JOB = { url: "https://boards.greenhouse.io/acme/jobs/1", apply_url: nu
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mdb.user.findUnique.mockResolvedValue({ plan: "free" });
+  mdb.user.findUnique.mockResolvedValue({ plan: "free", linkedin_automation_consent_at: new Date("2026-10-05T10:00:00Z") });
   mdb.user.findFirst.mockResolvedValue({ first_name: "A", last_name: "B", email: "u1@example.com", phone: null, linkedin_url: null });
   charge.mockResolvedValue({ allowed: true, remaining: 4 });
   global.fetch = jest.fn();
@@ -163,6 +163,16 @@ describe("POST /api/apply/batch-mark-pending", () => {
     ]);
     mdb.application.findFirst.mockResolvedValue(null);
     mdb.application.create.mockImplementation(({ data }) => Promise.resolve({ id: `app-${data.job_id}` }));
+  });
+
+  it("refuses without the LinkedIn automation consent, queueing and charging nothing", async () => {
+    mdb.user.findUnique.mockResolvedValue({ plan: "free", linkedin_automation_consent_at: null });
+    const res = await batchMarkPending(post("/api/apply/batch-mark-pending", { jobIds: ["j1", "j2"] }));
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("linkedin_consent_required");
+    expect(charge).not.toHaveBeenCalled();
+    expect(mdb.application.create).not.toHaveBeenCalled();
   });
 
   it("charges each queued job and marks it as holding a credit", async () => {

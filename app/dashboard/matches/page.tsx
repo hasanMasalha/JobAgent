@@ -7,6 +7,7 @@ import JobFilters, { DEFAULT_FILTERS, Filters } from "@/app/components/JobFilter
 import { showToast } from "@/app/components/Toast";
 import { cn } from "@/lib/cn";
 import { EXTENSION_ID, extensionReadiness } from "@/lib/extension-client";
+import { linkedInSetupHref } from "@/lib/linkedin-consent";
 import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
 import {
   Button,
@@ -355,6 +356,14 @@ export default function MatchesPage() {
         else if (data.error === "limit_reached") showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
       }
       if (extensionJobs.length > 0) {
+        // The LinkedIn automation notice first: nothing is queued or charged
+        // for someone who hasn't accepted it.
+        const consent = await fetch("/api/linkedin/automation-consent").then((r) => r.json()).catch(() => null);
+        if (!consent?.consented) {
+          router.push(linkedInSetupHref("/dashboard/matches"));
+          return;
+        }
+
         // Is the extension there, and new enough? Asked before anything is
         // marked pending or charged: this used to mark and charge first, then
         // find no extension and leave the credits spent.
@@ -375,6 +384,10 @@ export default function MatchesPage() {
           body: JSON.stringify({ jobIds: extensionJobs.map((j) => j.id) }),
         });
         const data = await res.json();
+        if (res.status === 403 && data.error === "linkedin_consent_required") {
+          router.push(linkedInSetupHref("/dashboard/matches"));
+          return;
+        }
         if (res.status === 403 && data.error === "limit_reached") {
           showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
           return;

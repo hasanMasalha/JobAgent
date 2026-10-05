@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
+import { linkedInAutomationConsentAt } from "@/lib/linkedin-consent.server";
 import { checkAndIncrementCvTailoring } from "@/lib/usage";
 
 // The apply page calls this on every load. A draft for this user and job is
@@ -116,6 +117,9 @@ export async function POST(req: NextRequest) {
         // Whether the scraper saw LinkedIn's Easy Apply marker; the review
         // screen words its expectation accordingly.
         easy_apply_confirmed: job.apply_type === "extension",
+        // Without it the review screen shows the LinkedIn automation notice
+        // instead of Confirm.
+        linkedin_automation_consented: !!(await linkedInAutomationConsentAt(user.id)),
         cover_letter: "",
         tailored_cv: "",
         cv_changes: [],

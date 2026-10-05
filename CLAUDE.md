@@ -282,6 +282,24 @@ CV and no cover letter).
 Any change to what `chrome-extension/` stores or sends must update it in
 the same PR — the Store reviews the listing against it.
 
+## LinkedIn automation consent
+- Before the extension is installed or used, the user sees a risk notice at
+  `/dashboard/linkedin-extension` (LinkedIn's User Agreement restricts
+  automation; the account may be restricted; the feature is optional) and
+  ticks a box; Continue stays disabled until then. Not only in Terms.
+- Accepting sets `User.linkedin_automation_consent_at` (first time kept,
+  `POST /api/linkedin/automation-consent` with `understood: true`).
+- Without it: the nav's "Get the extension" opens the notice (the Store link
+  is on it, after consent), the LinkedIn review screen shows "Continue to
+  LinkedIn setup" instead of Confirm, batch Easy Apply on Matches goes to the
+  notice, and `mark-pending-extension` / `batch-mark-pending` return 403
+  `linkedin_consent_required` before charging. Any new path that hands
+  applications to the extension must check it too (`lib/linkedin-consent*.ts`).
+- The Store summary (`manifest.prod.json` `description`, ≤132 chars) says only
+  what the extension does: fills in and submits Easy Apply for jobs the user
+  picked, with answers they saved, and stops when one is missing. The long
+  listing text lives in the Store dashboard, not in the repo.
+
 ## Chrome extension auth
 - The extension's service worker can't send the site's session cookie, so
   the routes it calls (`/api/apply/check-pending`, `/api/applications/update-status`,

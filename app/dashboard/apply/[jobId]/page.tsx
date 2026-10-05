@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/cn";
 import { isVersionAtLeast } from "@/lib/extension-version";
 import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
+import { linkedInSetupHref } from "@/lib/linkedin-consent";
 
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "extension_required" | "extension_launched" | "applying_background";
@@ -54,6 +55,7 @@ interface PrepareResult {
   linkedin?: boolean;
   /** The scraper saw LinkedIn's Easy Apply marker on this job's public page. */
   easy_apply_confirmed?: boolean;
+  linkedin_automation_consented?: boolean;
 }
 
 const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
@@ -302,6 +304,10 @@ export default function ApplyPage() {
       }).catch(() => null);
       if (markRes?.status === 403) {
         const json = await markRes.json().catch(() => ({}));
+        if (json.error === "linkedin_consent_required") {
+          router.push(linkedInSetupHref(`/dashboard/apply/${jobId}`));
+          return;
+        }
         if (json.error === "limit_reached") {
           setUpgradeUrl(typeof json.upgrade_url === "string" && json.upgrade_url.startsWith("/") ? json.upgrade_url : "/pricing");
           setLimitKind("autoApply");
@@ -759,6 +765,12 @@ export default function ApplyPage() {
                   View job <span aria-hidden="true">↗</span>
                 </a>
               </>
+            ) : d.linkedin && !d.linkedin_automation_consented ? (
+              // The LinkedIn automation notice has to be accepted before the
+              // extension is offered; it comes back here afterwards.
+              <Link href={linkedInSetupHref(`/dashboard/apply/${jobId}`)} className={buttonStyles({ variant: "accent", size: "lg", block: true })}>
+                Continue to LinkedIn setup
+              </Link>
             ) : (
               <Button variant="accent" size="lg" block onClick={handleConfirm} disabled={confirming} loading={confirming}>
                 {confirming ? "Saving…" : "Confirm & apply"}
