@@ -7,6 +7,16 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# Master runs (push / manual) queue: one deploy at a time, never cancelled
+# halfway. Merging PRs back to back used to start parallel deploys that pulled
+# images on the server at once and failed ("failed to Lchown", 2026-10-05) —
+# and whichever finished last was live, not necessarily the newest commit. A
+# waiting master run is replaced by a newer one, which contains it.
+# PR runs get a group per PR, and a new push cancels the stale run.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'deploy-master' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_NEXTJS: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/jobagent-nextjs
