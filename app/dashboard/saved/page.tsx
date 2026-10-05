@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHero, SkeletonCard, StatePanel, buttonStyles } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import { isEasyApplyJob } from "@/lib/detect-apply-type";
+import { ApplyTypeBadge } from "../JobCard";
 
 interface SavedJob {
   id: string;
@@ -14,6 +16,7 @@ interface SavedJob {
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
+  apply_type: string | null;
 }
 
 const cardCls = "rounded-[1.375rem] bg-surface-raised shadow-dossier ring-1 ring-line/60";
@@ -22,6 +25,27 @@ export default function SavedJobsPage() {
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Unsave: the row leaves the list only once the server has deleted it.
+  async function unsave(jobId: string) {
+    setRemoving(jobId);
+    setRemoveError(null);
+    try {
+      const res = await fetch("/api/jobs/interact", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!res.ok) throw new Error();
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    } catch {
+      setRemoveError("Couldn't remove that job. Try again.");
+    } finally {
+      setRemoving(null);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/jobs/saved")
@@ -63,6 +87,8 @@ export default function SavedJobsPage() {
           </StatePanel>
         )}
 
+        {removeError && <StatePanel role="alert" title="Not removed">{removeError}</StatePanel>}
+
         {!loading && !error && jobs.length > 0 && (
           <ul className="space-y-3">
             {jobs.map((job) => {
@@ -72,6 +98,11 @@ export default function SavedJobsPage() {
                   : job.salary_min
                   ? `From ₪${job.salary_min.toLocaleString()}`
                   : null;
+
+              // Same rule as Matches (JobCard): a confirmed Easy Apply job's
+              // Apply opens the review screen, whose Confirm hands it to the
+              // extension.
+              const easyApply = isEasyApplyJob(job);
 
               return (
                 <li key={job.id} className={cn(cardCls, "p-5 sm:p-6")}>
@@ -83,6 +114,9 @@ export default function SavedJobsPage() {
                         {job.location ? ` · ${job.location}` : ""}
                       </p>
                       {salary && <p className="mt-1 text-body-sm text-ink-subtle tabular-nums">{salary}</p>}
+                      {job.apply_type && (
+                        <div className="mt-2"><ApplyTypeBadge type={job.apply_type} url={job.url} /></div>
+                      )}
                     </div>
                     <span className="shrink-0 whitespace-nowrap text-caption text-ink-subtle">
                       Listed {new Date(job.scraped_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
@@ -90,11 +124,24 @@ export default function SavedJobsPage() {
                   </div>
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link href={`/dashboard/apply/${job.id}`} className={buttonStyles({ size: "sm" })}>
-                      {job.url.toLowerCase().includes("linkedin.com") ? "Apply on LinkedIn" : <>Tailor CV &amp; apply</>}
+                      {easyApply
+                        ? "Apply"
+                        : job.url.toLowerCase().includes("linkedin.com")
+                        ? "Apply on LinkedIn"
+                        : <>Tailor CV &amp; apply</>}
                     </Link>
                     <a href={job.url} target="_blank" rel="noopener noreferrer" className={buttonStyles({ variant: "secondary", size: "sm" })}>
                       View job <span aria-hidden="true">↗</span>
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => unsave(job.id)}
+                      disabled={removing === job.id}
+                      aria-label={`Remove ${job.title} at ${job.company} from saved jobs`}
+                      className={buttonStyles({ variant: "ghost", size: "sm" })}
+                    >
+                      {removing === job.id ? "Removing…" : "Remove"}
+                    </button>
                   </div>
                 </li>
               );

@@ -61,6 +61,16 @@ export function isLinkedInListing(url: string | null | undefined): boolean {
   return u.includes("linkedin.com") && !DIRECT_APPLY_ATS_DOMAINS.some((d) => u.includes(d));
 }
 
+/**
+ * A confirmed LinkedIn Easy Apply job: Apply opens the review screen
+ * (`/dashboard/apply/[jobId]`) and Confirm there hands it to the extension.
+ * Every job list (Matches' JobCard, Saved) decides with this, so they show
+ * the same badge and Apply for the same job.
+ */
+export function isEasyApplyJob(job: { url: string | null | undefined; apply_type?: string | null }): boolean {
+  return job.apply_type === "extension" && isLinkedInListing(job.url);
+}
+
 export function extractRecruiterEmail(description: string): string | null {
   const match = description?.match(EMAIL_RE);
   return match ? match[0] : null;
