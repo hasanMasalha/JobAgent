@@ -75,28 +75,49 @@ async function checkPendingApplication() {
 async function startEasyApply(application) {
   console.log('JobAgent: starting Easy Apply')
 
-  const el = await waitForEasyApplyButton(20000)
-  if (!el) {
-    // Most LinkedIn listings aren't Easy Apply, and nothing tells us which
-    // before we get here. Stop, hand the credit back ("manual"), and leave
-    // the tab open so the user can apply on this page themselves.
-    console.log('JobAgent: no Easy Apply button on this job, stopping')
+  const found = await waitForEasyApplyButton(20000)
+  if (!found) {
+    // Stop, hand the credit back ("manual"), and leave the tab open so the
+    // user can apply on this page themselves.
+    logStep('find', 'no Easy Apply button after 20s, stopping. Visible apply-like controls:',
+      describeApplyLikeControls())
     await reportResult(application.id, 'manual', { keepTab: true, reason: 'no_easy_apply' })
     return
   }
 
-  console.log('JobAgent: clicking Easy Apply:', el.tagName)
+  const { el, rule } = found
+  logStep('click', `matched by ${rule}:`, describeElement(el))
+  // If the click loads another page, this page's console is gone. The marker
+  // (kept by background.js for this tab) lets the next page say so.
+  await chrome.runtime.sendMessage({ type: 'SET_APPLY_STEP', step: 'clicked', rule })
+    .catch(() => {})
+  const onPageHide = () => logStep('navigated', 'page is unloading after the Easy Apply click:', location.href)
+  window.addEventListener('pagehide', onPageHide)
+  const urlAtClick = location.href
   el.click()
 
-  console.log('JobAgent: waiting for Easy Apply panel in shadow DOM...')
+  logStep('panel', 'waiting for the Easy Apply panel in #interop-outlet shadow DOM...')
   const panel = await waitForEasyApplyPanel(15000)
-  console.log('JobAgent: panel found:', !!panel)
+  window.removeEventListener('pagehide', onPageHide)
 
   if (!panel) {
-    console.log('JobAgent: panel not found')
-    await reportResult(application.id, 'manual')
+    const outlet = document.getElementById('interop-outlet')
+    logStep('panel', 'clicked, but no panel after 15s, stopping.', {
+      url: location.href,
+      // LinkedIn is a single-page app: a click can change the URL without
+      // unloading this page, so pagehide never fires.
+      urlChangedSinceClick: location.href !== urlAtClick,
+      interopOutlet: !!outlet,
+      shadowRoot: !!outlet?.shadowRoot,
+      modalInMainDocument: !!document.querySelector(
+        '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"]'
+      ),
+    })
+    await reportResult(application.id, 'manual', { reason: 'panel_not_found' })
     return
   }
+  logStep('panel', 'found')
+  await chrome.runtime.sendMessage({ type: 'CLEAR_APPLY_STEP' }).catch(() => {})
 
   await randomDelay(800, 1500)
   console.log('JobAgent: filling form')
@@ -106,8 +127,8 @@ async function startEasyApply(application) {
 async function waitForEasyApplyButton(timeout) {
   const start = Date.now()
   while (Date.now() - start < timeout) {
-    const el = findEasyApplyElement()
-    if (el) return el
+    const found = findEasyApplyElement()
+    if (found) return found
     await randomDelay(300, 700)
   }
   return null
@@ -149,12 +170,9 @@ async function waitForEasyApplyPanel(timeout = 15000) {
 }
 
 // LinkedIn renders Easy Apply as a <button>, or as <a href="...apply/...">.
-//
-// Only the Easy Apply control itself counts. This runs on every LinkedIn job
-// we open, and most of them have a plain "Apply" button that leaves for the
-// company's site — so the match is strict (jaIsEasyApplyLabel, answers.js),
-// and links to another job or to a search are skipped. No match means no
-// Easy Apply: startEasyApply stops and reports manual.
+// The first visible element jaEasyApplyMatch (answers.js) accepts, with the
+// rule that matched. No match means no Easy Apply: startEasyApply stops and
+// reports manual.
 function findEasyApplyElement() {
   const candidates = document.querySelectorAll(
     'button, a, [role="link"], [role="button"]'
@@ -162,24 +180,51 @@ function findEasyApplyElement() {
 
   for (const el of candidates) {
     if (el.offsetParent === null) continue  // not visible
-
-    const href = el.getAttribute('href') || ''
-
-    if (href.includes('/apply/') && href.includes('openSDUIApplyFlow')) {
-      console.log('JobAgent: found Easy Apply element by href:', href.substring(0, 80))
-      return el
-    }
-
-    // A link that goes to another job or a search is never the apply control.
-    if (href.includes('/jobs/view/') || href.includes('/jobs/search')) continue
-
-    if (jaIsEasyApplyLabel(el.textContent, el.getAttribute('aria-label'))) {
-      console.log('JobAgent: found Easy Apply element by label:', el.tagName)
-      return el
-    }
+    const rule = jaEasyApplyMatch(el.textContent, el.getAttribute('aria-label'), el.getAttribute('href'))
+    if (rule) return { el, rule }
   }
 
   return null
+}
+
+// Step logs share one prefix so a failure report can be filtered to them:
+// [find] → [click] → [panel] / [navigated] → form steps.
+function logStep(step, ...args) {
+  console.log(`JobAgent [${step}]`, ...args)
+}
+
+function describeElement(el) {
+  return {
+    tag: el.tagName,
+    text: (el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 80),
+    ariaLabel: el.getAttribute('aria-label'),
+    href: (el.getAttribute('href') || '').substring(0, 120),
+  }
+}
+
+// What the page offered instead, when nothing matched: every visible control
+// that mentions applying (English or Hebrew), at most 15.
+function describeApplyLikeControls() {
+  const out = []
+  for (const el of document.querySelectorAll('button, a, [role="link"], [role="button"]')) {
+    if (el.offsetParent === null) continue
+    const label = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''}`
+    if (/apply|מועמדות/i.test(label)) out.push(describeElement(el))
+    if (out.length >= 15) break
+  }
+  return out
+}
+
+// A marker left by the previous page in this tab: it clicked Easy Apply and
+// then the page went away. Logged once and cleared.
+async function logArrivalAfterClick() {
+  const marker = await chrome.runtime.sendMessage({ type: 'TAKE_APPLY_STEP' }).catch(() => null)
+  if (!marker?.step) return null
+  logStep('navigated',
+    `the previous page clicked Easy Apply (matched by ${marker.rule}) ` +
+    `${Math.round((Date.now() - marker.at) / 1000)}s ago and this page loaded instead:`,
+    location.href)
+  return marker
 }
 
 async function fillApplicationForm(application, panel) {
@@ -671,6 +716,18 @@ async function handleApplyFlowPage() {
   const url = window.location.href
   console.log('JobAgent: apply page URL:', url)
 
+  // Nothing has written pendingApplyData since fac64e6 (2026-05-30, Easy Apply
+  // became a side panel), so this handler stops below without reporting —
+  // the application stays pending. Not fixed yet; this log says whether a
+  // real apply ever lands here.
+  const marker = await logArrivalAfterClick()
+  console.warn(
+    'JobAgent [navigated] ⚠ reached the SDUI apply-flow page (handleApplyFlowPage). ' +
+    'This path reads pendingApplyData, which nothing writes: it will stop without ' +
+    'filling or reporting.',
+    { cameFromOurClick: !!marker, url }
+  )
+
   await randomDelay(2000, 4000) // wait for SDUI page to render
 
   const blockType = await isLinkedInBlocking()
@@ -707,5 +764,5 @@ if (url.includes('/apply/') || url.includes('openSDUIApplyFlow')) {
   handleApplyFlowPage()
 } else {
   console.log('JobAgent: detected job listing page')
-  checkPendingApplication()
+  logArrivalAfterClick().finally(checkPendingApplication)
 }

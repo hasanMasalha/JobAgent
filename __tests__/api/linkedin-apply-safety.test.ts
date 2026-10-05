@@ -37,7 +37,7 @@ const answers = require("../../chrome-extension/answers.js") as {
   jaSavedAnswer: (label: string, application: Record<string, unknown>) => string | null;
   jaMatchOption: (options: string[], answer: string | null) => number;
   jaYesNoOption: (options: string[], wantYes: boolean) => number;
-  jaIsEasyApplyLabel: (text: string | null, ariaLabel: string | null) => boolean;
+  jaEasyApplyMatch: (text: string | null, ariaLabel: string | null, href: string | null) => string | null;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const manifests = ["manifest.json", "manifest.prod.json"].map((f) => require(`../../chrome-extension/${f}`)) as {
@@ -217,29 +217,32 @@ describe("extension answers (chrome-extension/answers.js)", () => {
 });
 
 // The extension is opened on every LinkedIn listing, and most have an
-// ordinary Apply button that leaves for the company's site. Only LinkedIn's
-// own Easy Apply control may be clicked; anything else means stop and report
-// manual.
+// ordinary Apply button that leaves for the company's site. The matching is
+// the pre-#99 rule (contains, not exact — #99's strict version stopped finding
+// the button on real pages), minus the bare Hebrew "Apply" and filter controls.
 describe("Easy Apply button detection (chrome-extension/answers.js)", () => {
-  const { jaIsEasyApplyLabel } = answers;
+  const { jaEasyApplyMatch } = answers;
 
   it.each([
-    ["the button's own text", "Easy Apply", null],
-    ["text split across nodes", "  Easy\n   Apply ", ""],
-    ["an aria-label naming the job", "", "Easy Apply to Senior Engineer at Acme"],
-    ["the Hebrew label", "הגש מועמדות בקלות", null],
-  ])("accepts %s", (_what, text, aria) => {
-    expect(jaIsEasyApplyLabel(text, aria)).toBe(true);
+    ["the button's own text", "Easy Apply", null, null, "text"],
+    ["text with more around it", "  Easy Apply\n  to this job ", null, null, "text"],
+    ["an aria-label naming the job", "", "Easy Apply to Senior Engineer at Acme", null, "aria-label"],
+    ["the Hebrew label", "הגש מועמדות בקלות", null, null, "text"],
+    ["a /jobs/view/ link with the label (not skipped)", "Easy Apply", null, "/jobs/view/123/", "text"],
+    ["the SDUI apply link", "", null, "/jobs/view/123/apply/?openSDUIApplyFlow=true", "href"],
+  ])("accepts %s", (_what, text, aria, href, rule) => {
+    expect(jaEasyApplyMatch(text, aria, href)).toBe(rule);
   });
 
   it.each([
-    ["the ordinary Apply button", "Apply", "Apply to Senior Engineer on company website"],
-    ["the bare Hebrew Apply", "הגש מועמדות", null],
-    ["a job card that mentions Easy Apply", "Senior Engineer Acme Tel Aviv Easy Apply", null],
-    ["the Easy Apply search filter", "Easy Apply", "Easy Apply filter."],
-    ["Save", "Save", "Save Senior Engineer at Acme"],
-    ["nothing", null, null],
-  ])("rejects %s", (_what, text, aria) => {
-    expect(jaIsEasyApplyLabel(text, aria)).toBe(false);
+    ["the ordinary Apply button", "Apply", "Apply to Senior Engineer on company website", null],
+    ["the bare Hebrew Apply", "הגש מועמדות", null, null],
+    ["the bare Hebrew Apply with an aria-label", "הגש מועמדות", "הגש מועמדות לתפקיד", null],
+    ["the Easy Apply search filter", "Easy Apply", "Easy Apply filter.", null],
+    ["a /jobs/view/ link without the label", "Senior Engineer", null, "/jobs/view/456/"],
+    ["Save", "Save", "Save Senior Engineer at Acme", null],
+    ["nothing", null, null, null],
+  ])("rejects %s", (_what, text, aria, href) => {
+    expect(jaEasyApplyMatch(text, aria, href)).toBeNull();
   });
 });

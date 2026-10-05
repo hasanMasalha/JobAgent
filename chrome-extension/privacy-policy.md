@@ -10,6 +10,7 @@ The JobAgent Chrome Extension collects and stores the following data:
 |---|---|---|
 | JobAgent session token | Authenticate API requests | `chrome.storage.local` (local device only) |
 | JobAgent user ID and email | Display account status in popup | `chrome.storage.local` (local device only) |
+| Easy Apply step marker (that Easy Apply was clicked in a tab, and when — nothing about you or the job) | The extension's own error logs | `chrome.storage.session` (memory only, cleared when the application finishes or the browser closes) |
 | LinkedIn `li_at` session cookie | Detect LinkedIn login status | Read-only; sent to JobAgent server to enable Easy Apply |
 
 ## What We Do Not Collect

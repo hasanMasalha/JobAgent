@@ -143,6 +143,13 @@ every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
   after the scrape; with no button it stops, reports `manual` (credit
   refunded) and leaves the tab open. The review screen says which case the job
   is in (`easy_apply_confirmed` from `/api/apply/prepare`).
+- **Finding the button** (`jaEasyApplyMatch`, `chrome-extension/answers.js`):
+  text or aria-label *contains* "Easy Apply" / "הגש מועמדות בקלות", then the
+  `openSDUIApplyFlow` link. Never the bare Hebrew "הגש מועמדות" (the external
+  Apply button) or a filter control. #99 (2026-10-02) made it exact-text and
+  skipped `/jobs/view/` links, and it stopped finding the button; restored
+  2026-10-05. Don't tighten it again without a real LinkedIn page to test on.
+  Failures log `JobAgent [find]` / `[click]` / `[panel]` / `[navigated]`.
 - **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
   with a user's saved login, one browser per job.
 

@@ -38,6 +38,13 @@ export default function PrivacyPage() {
           ]}
         />
         <p>
+          While it opens Easy Apply on a LinkedIn tab, it also keeps a short marker in{" "}
+          <Code>chrome.storage.session</Code>: that it clicked Easy Apply in that tab and when. It
+          contains nothing about you or the job, is used only for the extension&apos;s own error
+          logs, and is held in memory — it&apos;s deleted when the application finishes or the browser
+          closes.
+        </p>
+        <p>
           The popup also reads LinkedIn&apos;s <Code>li_at</Code> cookie to show whether you&apos;re
           signed in to LinkedIn. It is read on your device only and never sent anywhere.
         </p>
