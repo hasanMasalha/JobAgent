@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 import { JobDescription } from "./components/JobDescription";
 import { cn } from "@/lib/cn";
-import { DIRECT_APPLY_ATS_DOMAINS, isLinkedInListing } from "@/lib/detect-apply-type";
+import { DIRECT_APPLY_ATS_DOMAINS, isEasyApplyJob, isLinkedInListing } from "@/lib/detect-apply-type";
 import {
   Badge,
   Button,
@@ -93,7 +93,7 @@ function isLinkedInOnly(job: Job): boolean {
 function isAutoApplicable(job: Job): boolean {
   if (job.apply_type === "external") return false;
   const url = (job.url || "").toLowerCase();
-  return DIRECT_APPLY_ATS_DOMAINS.some((d) => url.includes(d)) || job.apply_type === "extension";
+  return DIRECT_APPLY_ATS_DOMAINS.some((d) => url.includes(d)) || isEasyApplyJob(job);
 }
 
 export function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
@@ -185,7 +185,7 @@ export default function JobCard({
     if (quickApplying || quickApplied) return;
     // LinkedIn Easy Apply: nothing to submit from here. The review screen shows
     // what LinkedIn will receive; Confirm there hands over to the extension.
-    if (isLinkedInOnly(job) && job.apply_type === "extension") {
+    if (isEasyApplyJob(job)) {
       router.push(`/dashboard/apply/${job.id}`);
       return;
     }

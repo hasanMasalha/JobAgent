@@ -23,10 +23,11 @@ export async function GET(_req: NextRequest) {
         salary_min: number | null;
         salary_max: number | null;
         scraped_at: Date;
+        apply_type: string | null;
       }[]
     >`
       SELECT j.id, j.title, j.company, j.location, j.url,
-             j.salary_min, j.salary_max, j.scraped_at
+             j.salary_min, j.salary_max, j.scraped_at, j.apply_type
       FROM "UserJobInteraction" i
       JOIN "Job" j ON j.id = i.job_id
       WHERE i.user_id = ${user.id} AND i.action = 'saved'

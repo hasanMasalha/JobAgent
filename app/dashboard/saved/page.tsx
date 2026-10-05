@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHero, SkeletonCard, StatePanel, buttonStyles } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import { isEasyApplyJob } from "@/lib/detect-apply-type";
+import { ApplyTypeBadge } from "../JobCard";
 
 interface SavedJob {
   id: string;
@@ -14,6 +16,7 @@ interface SavedJob {
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
+  apply_type: string | null;
 }
 
 const cardCls = "rounded-[1.375rem] bg-surface-raised shadow-dossier ring-1 ring-line/60";
@@ -73,6 +76,11 @@ export default function SavedJobsPage() {
                   ? `From ₪${job.salary_min.toLocaleString()}`
                   : null;
 
+              // Same rule as Matches (JobCard): a confirmed Easy Apply job's
+              // Apply opens the review screen, whose Confirm hands it to the
+              // extension.
+              const easyApply = isEasyApplyJob(job);
+
               return (
                 <li key={job.id} className={cn(cardCls, "p-5 sm:p-6")}>
                   <div className="flex items-start justify-between gap-4">
@@ -83,6 +91,9 @@ export default function SavedJobsPage() {
                         {job.location ? ` · ${job.location}` : ""}
                       </p>
                       {salary && <p className="mt-1 text-body-sm text-ink-subtle tabular-nums">{salary}</p>}
+                      {job.apply_type && (
+                        <div className="mt-2"><ApplyTypeBadge type={job.apply_type} url={job.url} /></div>
+                      )}
                     </div>
                     <span className="shrink-0 whitespace-nowrap text-caption text-ink-subtle">
                       Listed {new Date(job.scraped_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
@@ -90,7 +101,11 @@ export default function SavedJobsPage() {
                   </div>
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link href={`/dashboard/apply/${job.id}`} className={buttonStyles({ size: "sm" })}>
-                      {job.url.toLowerCase().includes("linkedin.com") ? "Apply on LinkedIn" : <>Tailor CV &amp; apply</>}
+                      {easyApply
+                        ? "Apply"
+                        : job.url.toLowerCase().includes("linkedin.com")
+                        ? "Apply on LinkedIn"
+                        : <>Tailor CV &amp; apply</>}
                     </Link>
                     <a href={job.url} target="_blank" rel="noopener noreferrer" className={buttonStyles({ variant: "secondary", size: "sm" })}>
                       View job <span aria-hidden="true">↗</span>
