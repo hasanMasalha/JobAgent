@@ -10,6 +10,7 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from application_answers import ApplicantData
 from utils.cv_pdf import resolve_cv_file
 
 # Python fully-buffers stdout by default when it isn't attached to a TTY
@@ -25,6 +26,38 @@ router = APIRouter()
 
 NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+
+async def _mark_needs_manual(conn, application_id: str, message: str | None) -> None:
+    """Nothing was submitted: needs_manual, and the auto-apply credit back.
+
+    Quick apply's ATS path returns to Next.js before the form is filled, so
+    Next.js's inline refunds don't see this outcome; until 2026-10-04 an
+    application that ended here kept its credit. The refund follows
+    lib/usage.ts refundAutoApplyForApplication: auto_apply_charged is cleared
+    in the same UPDATE, so it happens at most once, and an application that
+    was never charged (Tailor & Apply) is never refunded.
+    """
+    async with conn.transaction():
+        await conn.execute(
+            'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
+            "needs_manual",
+            message,
+            application_id,
+        )
+        charged = await conn.fetchrow(
+            'UPDATE "Application" SET auto_apply_charged = false '
+            "WHERE id = $1 AND auto_apply_charged = true RETURNING user_id",
+            application_id,
+        )
+        if charged:
+            await conn.execute(
+                'UPDATE "UserUsage" SET "autoAppliesThisMonth" = "autoAppliesThisMonth" - 1, '
+                '"totalAutoApplies" = "totalAutoApplies" - 1 '
+                'WHERE "userId" = $1 AND "autoAppliesThisMonth" > 0',
+                charged["user_id"],
+            )
+            print(f"[ats-apply] refunded the auto-apply for {application_id}")
 
 
 async def _send_application_confirmation_email(application_id: str) -> None:
@@ -120,13 +153,16 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             print(f"[ats-apply-bg] Step 5: updating DB -> {status}")
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
-                error_msg = (result.get("message") or result.get("error")) if status == "needs_manual" else None
-                await conn.execute(
-                    'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
-                    status,
-                    error_msg,
-                    request_dict["application_id"],
-                )
+                if status == "needs_manual":
+                    await _mark_needs_manual(
+                        conn, request_dict["application_id"], result.get("message") or result.get("error")
+                    )
+                else:
+                    await conn.execute(
+                        'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = NULL WHERE id = $2',
+                        status,
+                        request_dict["application_id"],
+                    )
                 print(f"[ats-apply-bg] Step 6: DB updated: {request_dict['application_id']} -> {status}")
             finally:
                 await conn.close()
@@ -153,15 +189,10 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
         # may be in an inconsistent state after the exception. An exception
         # is just another "could not complete" case, so it gets the same
         # needs_manual status and outcome email as any other one.
-        async def _mark_needs_manual() -> None:
+        async def _after_exception() -> None:
             conn = await asyncpg.connect(os.environ["DATABASE_URL"])
             try:
-                await conn.execute(
-                    'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
-                    "needs_manual",
-                    error_text,
-                    request_dict["application_id"],
-                )
+                await _mark_needs_manual(conn, request_dict["application_id"], error_text)
                 print(f"[ats-apply-bg] DB updated after exception: {request_dict['application_id']} -> needs_manual")
             finally:
                 await conn.close()
@@ -170,7 +201,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
         try:
             fail_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(fail_loop)
-            fail_loop.run_until_complete(_mark_needs_manual())
+            fail_loop.run_until_complete(_after_exception())
             fail_loop.close()
         except Exception:
             print("[ats-apply-bg] Failed to update DB after exception (non-fatal)")
@@ -212,17 +243,26 @@ async def ats_apply(req: ATSApplyRequest):
                 return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
             print(f"[ats-apply] Quick-apply: using CV on file (source={cv_row['source']})")
 
-        # Structured "Easy Apply defaults" — used to answer common custom
-        # questions (sponsorship, work authorization, salary, etc.) without
-        # guessing or calling Claude for things we already know.
+        # The user's own answers — the only thing a factual question on the
+        # form may be answered with (application_answers). The six Application
+        # details count only once confirmed (application_details_confirmed_at);
+        # they were read here regardless until 2026-10-04.
         profile_row = await conn.fetchrow(
-            'SELECT years_of_experience, expected_salary, work_authorized, requires_sponsorship, '
-            'willing_to_relocate, notice_period, portfolio_url, github_url, highest_education, '
-            'city, "currentCompany" '
+            'SELECT first_name, last_name, email, phone, city, linkedin_url, github_url, '
+            'portfolio_url, "currentCompany", expected_salary, notice_period, years_of_experience, '
+            'highest_education, work_authorized, requires_sponsorship, willing_to_relocate, '
+            'application_details_confirmed_at '
             'FROM "User" WHERE id = $1',
             req.user_id,
         )
-        profile = dict(profile_row) if profile_row else {}
+        saved_rows = await conn.fetch(
+            'SELECT question, answer FROM "EasyApplyAnswer" WHERE user_id = $1',
+            req.user_id,
+        )
+        applicant = ApplicantData.from_row(
+            dict(profile_row) if profile_row else {},
+            [(r["question"], r["answer"]) for r in saved_rows],
+        )
     finally:
         await conn.close()
 
@@ -238,11 +278,10 @@ async def ats_apply(req: ATSApplyRequest):
         print(f"[ats-apply] CV can't be safely resolved for user {req.user_id} — landing as needs_manual")
         reup_conn = await asyncpg.connect(os.environ["DATABASE_URL"])
         try:
-            await reup_conn.execute(
-                'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
-                "needs_manual",
-                "We've upgraded how CV files are handled — please re-upload your CV or use Improve/Generate once, then apply again.",
+            await _mark_needs_manual(
+                reup_conn,
                 req.application_id,
+                "We've upgraded how CV files are handled — please re-upload your CV or use Improve/Generate once, then apply again.",
             )
         finally:
             await reup_conn.close()
@@ -280,7 +319,7 @@ async def ats_apply(req: ATSApplyRequest):
             "cv_base64": cv_base64,
             "cv_filename": cv_filename,
             "cover_letter": cover_letter,
-            "profile": profile,
+            "applicant": applicant,
             "cv_text": cv_text_for_fields,
         },
     }

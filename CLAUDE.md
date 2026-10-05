@@ -172,7 +172,10 @@ of `mark-pending-extension` (`jobId`, and `application_id` — the apply page's
 LinkedIn confirm). A submission that doesn't go through
 refunds via `refundAutoApplyForApplication`, keyed on
 `Application.auto_apply_charged` so it refunds at most once: quick apply
-refunds inline on ATS error / CAPTCHA / rejection; extension applies refund
+refunds inline on an immediate ATS error, and — since its form is filled in a
+background thread after the route has returned — the AI service refunds when
+that thread ends `needs_manual` (`routes/ats_apply.py` `_mark_needs_manual`,
+same conditional UPDATE; until 2026-10-04 those kept the credit); extension applies refund
 when `/api/applications/update-status` receives `manual` or `failed`, or when
 `check-pending` refuses an outdated extension. External jobs and Tailor &
 Apply's ATS / other-site submits are not charged an auto-apply — those are
@@ -330,6 +333,39 @@ the same PR — the Store reviews the listing against it.
   set to `manual` and refunded. The apply page asks the extension for its
   version (PING) before marking or charging. Raise `MIN_EXTENSION_VERSION`
   whenever a released version turns out to answer wrongly.
+
+## ATS answers — facts only from the user
+Quick apply / batch submit ATS forms (Greenhouse, Lever, Ashby…) with no
+review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
+- **Factual and eligibility questions** (years, work authorisation,
+  sponsorship, salary, notice, current company, how you heard, location…) are
+  answered only from the user's Profile or an `EasyApplyAnswer` they saved for
+  that question — the same matching and limits as the extension's
+  `answers.js` (work authorisation is for Israel, salary monthly NIS, total
+  years only for total experience), and the six Application details only once
+  `application_details_confirmed_at` is set.
+- **Claude** may write the answer to an open-ended free-text question ("why
+  this company"), grounded in the CV — `claude_may_answer` decides. Never for
+  a select, yes/no or factual question.
+- **A required question with no answer → not submitted**: `missing_answers`,
+  `needs_manual`, credit refunded. Never a default, a "first option" or
+  Claude picking an option. EEO questions get "decline to self-identify" or
+  nothing; data-processing consent is the one thing ticked for the user (not
+  marketing or background-check consent).
+- Success only on the ATS's own confirmation; "no error and no confirmation"
+  is `unconfirmed` (needs_manual), not applied.
+- Until 2026-10-04 the filler answered "2" years, work authorisation "Yes",
+  "Negotiable", "Immediate", "Self-employed", "LinkedIn", the first option of
+  unrecognised dropdowns and of EEO questions without a decline option,
+  country/location "Israel" for everyone, and had Claude answer the rest.
+- **Ashby** has its own filler (`ai-service/ashby_form.py`), driven by the
+  form JSON the job page loads (`ApiJobPosting`) and `data-field-path`
+  containers; it used to get the Greenhouse filler, which matched nothing.
+  Ashby runs invisible reCAPTCHA v3, which we can't solve: "We couldn't
+  submit your application" is reported as `ashby_rejected`.
+- **Known gap:** Greenhouse's phone dial-code picker can only choose Israel,
+  so it's set only for an Israeli number; another country's number leaves it
+  unset, and a board that requires it fails.
 
 ## Service-to-service auth (INTERNAL_API_KEY)
 - The AI service requires `X-Internal-Key` on every route except `/health`

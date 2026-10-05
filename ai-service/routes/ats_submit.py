@@ -46,7 +46,7 @@ async def submit_via_ats(apply_url: str, ats_platform: str, user_data: dict) -> 
             cv_filename=user_data.get("cv_filename", "resume.pdf"),
             cover_letter=user_data.get("cover_letter", ""),
             linkedin_url=user_data.get("linkedin_url", ""),
-            profile=user_data.get("profile") or {},
+            applicant=user_data.get("applicant"),
             cv_text=user_data.get("cv_text", ""),
         )
         print(f"[ats-submit] fill_ats_form returned: {result}")
