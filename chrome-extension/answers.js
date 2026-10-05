@@ -168,6 +168,32 @@ function jaEasyApplyMatch(text, ariaLabel, href) {
   return null
 }
 
+// Which step button of the Easy Apply form this is: 'next', 'review',
+// 'submit', or null for anything else (Dismiss, Back, Edit, Upload resume…),
+// which is never clicked.
+//
+// As of 2026-10 the buttons have no aria-label, only visible text: "Next",
+// "Review", "Submit application" (seen on a live form). The aria-labels are
+// the ones the form had in May; the Hebrew ones haven't been seen on the new
+// form. The whole label has to match — "Submit" alone is not accepted.
+const JA_STEP_BUTTONS = {
+  'next': 'next',
+  'continue to next step': 'next',
+  'המשך לשלב הבא': 'next',
+  'review': 'review',
+  'review your application': 'review',
+  'בדוק את מועמדותך': 'review',
+  'submit application': 'submit',
+  'שלח מועמדות': 'submit',
+}
+
+function jaStepButton(text, ariaLabel) {
+  const clean = v => (v || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  return JA_STEP_BUTTONS[clean(ariaLabel)] || JA_STEP_BUTTONS[clean(text)] || null
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaEasyApplyMatch }
+  module.exports = {
+    jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaEasyApplyMatch, jaStepButton,
+  }
 }

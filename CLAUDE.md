@@ -157,6 +157,12 @@ every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
   modal `<dialog>` makes the rest of the page inert, so the extension's own
   popups go inside it (`overlayHost`). Each step logs its fields and buttons
   (`JobAgent [step N]`).
+- **Step buttons** (`jaStepButton`, `answers.js`): the new form's buttons have
+  no aria-label — "Next", "Review", "Submit application" by exact text. Nothing
+  else is clicked (Dismiss, Back, Edit, Upload…). `JA_DRY_RUN` in `content.js`
+  stops at Submit application for testing an unpacked build on a real job; a
+  test fails if it ships `true`. **Known gap:** how the new form confirms a
+  submission hasn't been seen; the success check is from May.
 - **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
   with a user's saved login, one browser per job.
 

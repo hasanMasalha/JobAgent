@@ -38,6 +38,7 @@ const answers = require("../../chrome-extension/answers.js") as {
   jaMatchOption: (options: string[], answer: string | null) => number;
   jaYesNoOption: (options: string[], wantYes: boolean) => number;
   jaEasyApplyMatch: (text: string | null, ariaLabel: string | null, href: string | null) => string | null;
+  jaStepButton: (text: string | null, ariaLabel: string | null) => string | null;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const manifests = ["manifest.json", "manifest.prod.json"].map((f) => require(`../../chrome-extension/${f}`)) as {
@@ -244,5 +245,44 @@ describe("Easy Apply button detection (chrome-extension/answers.js)", () => {
     ["nothing", null, null, null],
   ])("rejects %s", (_what, text, aria, href) => {
     expect(jaEasyApplyMatch(text, aria, href)).toBeNull();
+  });
+});
+
+// The Easy Apply form's step buttons. Seen on a live form (2026-10): no
+// aria-labels, visible text only. Anything that isn't Next / Review / Submit
+// application must never be clicked.
+describe("Easy Apply step buttons (chrome-extension/answers.js)", () => {
+  const { jaStepButton } = answers;
+
+  it.each([
+    ["Next", null, "next"],
+    ["  Review ", null, "review"],
+    ["Submit application", null, "submit"],
+    ["", "Continue to next step", "next"],
+    ["", "Submit application", "submit"],
+  ])("recognises %p / %p as %s", (text, aria, kind) => {
+    expect(jaStepButton(text, aria)).toBe(kind);
+  });
+
+  it.each([
+    ["", "Dismiss"],
+    ["Back", null],
+    ["Edit", "Edit Contact info"],
+    ["Upload resume", null],
+    ["Upload cover letter", null],
+    ["Submit", null],
+    [null, null],
+  ])("never clicks %p / %p", (text, aria) => {
+    expect(jaStepButton(text, aria)).toBeNull();
+  });
+});
+
+describe("extension release safety", () => {
+  it("does not ship with the dry run switched on", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "../../chrome-extension/content.js"), "utf8"
+    ) as string;
+    expect(src).toMatch(/^const JA_DRY_RUN = false$/m);
   });
 });
