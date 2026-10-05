@@ -43,7 +43,7 @@ def parse_phone(raw: str | None) -> PhoneInfo | None:
     if not compact:
         return None
     try:
-        if compact.startswith("+") or compact.startswith("00"):
+        if compact.startswith(("+", "00")):
             international = "+" + compact[2:] if compact.startswith("00") else compact
             number = phonenumbers.parse(international, None)
             region = _region(number)

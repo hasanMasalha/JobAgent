@@ -83,7 +83,7 @@ def test_picks_the_option_by_name_and_dial_code(raw, expected):
 
 def test_intl_tel_input_style_options():
     # intl-tel-input lists the native name in brackets, with RTL marks.
-    options = ["Israel (‫ישראל‬‎)+972", "Italy (Italia)+39", "United Kingdom+44"]
+    options = ["Israel (\u202bישראל\u202c\u200e)+972", "Italy (Italia)+39", "United Kingdom+44"]
     assert match_country_option(options, parse_phone("+972 50-234-5678")) == 0
     assert match_country_option(options, parse_phone("+44 7400 123456")) == 2
 
