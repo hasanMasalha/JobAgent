@@ -96,7 +96,7 @@ async function startEasyApply(application) {
   const urlAtClick = location.href
   el.click()
 
-  logStep('panel', 'waiting for the Easy Apply panel in #interop-outlet shadow DOM...')
+  logStep('panel', 'waiting for the Easy Apply form (open <dialog>, or #interop-outlet shadow DOM)...')
   const panel = await waitForEasyApplyPanel(15000)
   window.removeEventListener('pagehide', onPageHide)
 
@@ -109,6 +109,12 @@ async function startEasyApply(application) {
       urlChangedSinceClick: location.href !== urlAtClick,
       interopOutlet: !!outlet,
       shadowRoot: !!outlet?.shadowRoot,
+      openDialogs: Array.from(document.querySelectorAll('dialog[open], [role="dialog"]')).map(d => ({
+        tag: d.tagName,
+        testModalId: d.getAttribute('data-test-modal-id'),
+        testId: d.getAttribute('data-testid'),
+        text: (d.innerText || '').replace(/\s+/g, ' ').slice(0, 80),
+      })),
       modalInMainDocument: !!document.querySelector(
         '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"]'
       ),
@@ -134,19 +140,34 @@ async function waitForEasyApplyButton(timeout) {
   return null
 }
 
-// The Easy Apply modal lives inside the shadow DOM of #interop-outlet.
-// Regular document.querySelector() cannot pierce shadow boundaries.
+// Where LinkedIn renders the Easy Apply form. It has moved before, so each
+// place it has been seen is tried, newest first:
+//   - 2026-10: an open native <dialog> in the main document, marked
+//     data-test-modal-id / data-testid "dialog" (seen on /jobs/view/4456907190;
+//     the snippet that found it can't tell which of the two attributes it
+//     was). Its classes are obfuscated, so they're not matched. The marker is
+//     generic, so a dialog with form controls is preferred over one without.
+//   - 2026-05-30 (bfaa232): .jobs-easy-apply-modal inside #interop-outlet's
+//     shadow root. Kept in case LinkedIn still serves it to some users.
 function getEasyApplyPanel() {
-  const interopOutlet = document.getElementById('interop-outlet')
-  if (!interopOutlet?.shadowRoot) {
-    console.log('JobAgent: no shadow root found')
-    return null
-  }
-  const panel = interopOutlet.shadowRoot.querySelector(
+  const dialogs = Array.from(document.querySelectorAll(
+    'dialog[open][data-test-modal-id="dialog"], dialog[open][data-testid="dialog"], ' +
+    'dialog[open][data-test-modal-id="easy-apply-modal"], dialog[open].jobs-easy-apply-modal'
+  ))
+  const withControls = dialogs.find(d => d.querySelector('input, select, textarea'))
+  if (withControls || dialogs[0]) return withControls || dialogs[0]
+
+  return document.getElementById('interop-outlet')?.shadowRoot?.querySelector(
     '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
-  )
-  console.log('JobAgent: shadow panel found:', !!panel)
-  return panel
+  ) || null
+}
+
+// Where our own popups go. Everything outside a modal <dialog> is inert —
+// it can't be clicked or typed into — so while the form is open they go
+// inside it.
+function overlayHost() {
+  const panel = getEasyApplyPanel()
+  return panel?.tagName === 'DIALOG' ? panel : document.body
 }
 
 async function waitForEasyApplyPanel(timeout = 15000) {
@@ -230,7 +251,7 @@ async function logArrivalAfterClick() {
 async function fillApplicationForm(application, panel) {
   console.log('JobAgent: fillApplicationForm called')
 
-  // Use passed panel; re-fetch from shadow DOM each step in case LinkedIn re-renders it
+  // Use the passed panel; re-fetch it each step in case LinkedIn re-renders it
   const scope = panel || getEasyApplyPanel() || document
 
   let step = 0
@@ -240,6 +261,7 @@ async function fillApplicationForm(application, panel) {
     await randomDelay(800, 2000)
 
     const currentPanel = getEasyApplyPanel() || scope
+    logStep(`step ${step + 1}`, describeFormStep(currentPanel))
 
     // Check if submitted
     const successMsg = currentPanel.querySelector(
@@ -302,7 +324,35 @@ async function fillApplicationForm(application, panel) {
   // Loop ended without detecting a success message — report manual so the
   // dashboard polling can stop waiting.
   console.log('[JobAgent] form loop ended without success, reporting manual')
+  logStep('end', 'no submitted confirmation recognised. The form now shows:',
+    describeFormStep(getEasyApplyPanel() || scope))
   await reportResult(application.id, 'manual', { keepTab: true })
+}
+
+// What a form step shows, for the step logs: its progress text, every field
+// (label, type, required, whether it has a value — never the value itself)
+// and every button. This is what to look at when LinkedIn changes the form.
+function describeFormStep(panel) {
+  const clip = (v, n = 80) => (v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+  return {
+    progress: clip(panel.innerText, 60),
+    fields: Array.from(panel.querySelectorAll('input, select, textarea'))
+      .filter(el => el.type !== 'hidden')
+      .map(el => ({
+        tag: el.tagName,
+        type: el.type,
+        label: clip(getInputLabel(el)) || null,
+        required: isRequired(el),
+        hasValue: el.type === 'radio' || el.type === 'checkbox' ? el.checked : !!el.value?.trim(),
+        inFieldset: !!el.closest('fieldset'),
+      })),
+    buttons: Array.from(panel.querySelectorAll('button')).map(b => ({
+      text: clip(b.textContent, 40),
+      ariaLabel: b.getAttribute('aria-label'),
+      type: b.getAttribute('type'),
+      disabled: b.disabled,
+    })),
+  }
 }
 
 function optionText(radio, fieldset) {
@@ -398,7 +448,7 @@ async function stopForUser(application, missing) {
   close.style.cssText = 'margin-top:10px;padding:6px 12px;border:1px solid #c9d1db;border-radius:8px;background:#f5f6f8;cursor:pointer'
   close.onclick = () => box.remove()
   box.append(title, body, list, foot, close)
-  document.body.appendChild(box)
+  overlayHost().appendChild(box)
 
   await reportResult(application.id, 'manual', { keepTab: true })
 }
@@ -524,7 +574,7 @@ async function showQuestionOverlay(question, onAnswer) {
     </div>
   `
 
-  document.body.appendChild(overlay)
+  overlayHost().appendChild(overlay)
   const input = document.getElementById('jobagent-answer-input')
   input.focus()
 
@@ -682,7 +732,7 @@ function showSuccessNotification() {
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `
   notification.textContent = 'JobAgent: Application submitted successfully!'
-  document.body.appendChild(notification)
+  overlayHost().appendChild(notification)
   setTimeout(() => notification.remove(), 5000)
 }
 
