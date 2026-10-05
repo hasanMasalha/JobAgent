@@ -150,6 +150,13 @@ every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
   skipped `/jobs/view/` links, and it stopped finding the button; restored
   2026-10-05. Don't tighten it again without a real LinkedIn page to test on.
   Failures log `JobAgent [find]` / `[click]` / `[panel]` / `[navigated]`.
+- **Finding the form** (`getEasyApplyPanel`, `content.js`): since about
+  October it's an open native `<dialog>` in the main document marked
+  `data-test-modal-id`/`data-testid="dialog"` (obfuscated classes); the
+  30 May version (`#interop-outlet` shadow root) is still tried after it. A
+  modal `<dialog>` makes the rest of the page inert, so the extension's own
+  popups go inside it (`overlayHost`). Each step logs its fields and buttons
+  (`JobAgent [step N]`).
 - **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
   with a user's saved login, one browser per job.
 
