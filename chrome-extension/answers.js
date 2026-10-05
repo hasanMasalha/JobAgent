@@ -192,8 +192,19 @@ function jaStepButton(text, ariaLabel) {
   return JA_STEP_BUTTONS[clean(ariaLabel)] || JA_STEP_BUTTONS[clean(text)] || null
 }
 
+// Whether a top-card status says the application went in. Seen on a real
+// submission (2026-10): LinkedIn closes the form and, about a second later,
+// the job's top card reads "Applied 1 second ago" (.jobs-s-apply, and an
+// .artdeco-inline-feedback__message with the same text). The same page also
+// has other inline messages ("Resume uploaded successfully"), so the text has
+// to start with "Applied". The Hebrew wording hasn't been seen.
+function jaIsAppliedConfirmation(text) {
+  return /^applied\b/i.test((text || '').replace(/\s+/g, ' ').trim())
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     jaAnswerForLabel, jaBooleanAnswer, jaSavedAnswer, jaMatchOption, jaYesNoOption, jaEasyApplyMatch, jaStepButton,
+    jaIsAppliedConfirmation,
   }
 }

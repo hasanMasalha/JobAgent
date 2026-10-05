@@ -161,8 +161,15 @@ every LinkedIn job on 30 May – 3 June and 2 October 2026 and for none between.
   no aria-label — "Next", "Review", "Submit application" by exact text. Nothing
   else is clicked (Dismiss, Back, Edit, Upload…). `JA_DRY_RUN` in `content.js`
   stops at Submit application for testing an unpacked build on a real job; a
-  test fails if it ships `true`. **Known gap:** how the new form confirms a
-  submission hasn't been seen; the success check is from May.
+  test fails if it ships `true`. LinkedIn serves both the new obfuscated
+  `<dialog>` and the old Ember/artdeco form, depending on the job.
+- **Submitted = "Applied … ago" in the job's top card** (`submitAndConfirm`,
+  `jaIsAppliedConfirmation`). LinkedIn closes the form on submit and shows it
+  about a second later (`.jobs-s-apply`, `.artdeco-inline-feedback__message`);
+  it's gone once the user leaves the page, so it's checked right after the
+  click, for 20s, and must be new. None → `manual` with reason
+  `submit_unconfirmed` (credit refunded, tab left open) — it may have gone in.
+  The Hebrew wording hasn't been seen.
 - **Don't use `extract_apply_url_with_session` for this.** It browses LinkedIn
   with a user's saved login, one browser per job.
 

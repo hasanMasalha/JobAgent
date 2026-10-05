@@ -39,6 +39,7 @@ const answers = require("../../chrome-extension/answers.js") as {
   jaYesNoOption: (options: string[], wantYes: boolean) => number;
   jaEasyApplyMatch: (text: string | null, ariaLabel: string | null, href: string | null) => string | null;
   jaStepButton: (text: string | null, ariaLabel: string | null) => string | null;
+  jaIsAppliedConfirmation: (text: string | null) => boolean;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const manifests = ["manifest.json", "manifest.prod.json"].map((f) => require(`../../chrome-extension/${f}`)) as {
@@ -274,6 +275,31 @@ describe("Easy Apply step buttons (chrome-extension/answers.js)", () => {
     [null, null],
   ])("never clicks %p / %p", (text, aria) => {
     expect(jaStepButton(text, aria)).toBeNull();
+  });
+});
+
+// What counts as "submitted": the job's top card reading "Applied … ago"
+// (seen on a real submission, 2026-10). Other inline messages on the same
+// page must not count.
+describe("Easy Apply submit confirmation (chrome-extension/answers.js)", () => {
+  const { jaIsAppliedConfirmation } = answers;
+
+  it.each([["Applied 1 second ago"], ["  Applied 3 minutes ago\n"], ["Applied now"]])(
+    "accepts %p", (text) => {
+      expect(jaIsAppliedConfirmation(text)).toBe(true);
+    }
+  );
+
+  it.each([
+    ["Resume uploaded successfully"],
+    ["Easy Apply"],
+    ["Apply"],
+    ["Navigating to Jobs"],
+    ["Not applied yet"],
+    [""],
+    [null],
+  ])("rejects %p", (text) => {
+    expect(jaIsAppliedConfirmation(text)).toBe(false);
   });
 });
 

@@ -154,7 +154,9 @@ async function waitForEasyApplyButton(timeout) {
 //     was). Its classes are obfuscated, so they're not matched. The marker is
 //     generic, so a dialog with form controls is preferred over one without.
 //   - 2026-05-30 (bfaa232): .jobs-easy-apply-modal inside #interop-outlet's
-//     shadow root. Kept in case LinkedIn still serves it to some users.
+//     shadow root. Kept in case LinkedIn still serves it to some users, and
+//     the same selectors are tried in the main document first: LinkedIn
+//     serves the old Ember form (artdeco classes) on some jobs.
 function getEasyApplyPanel() {
   const dialogs = Array.from(document.querySelectorAll(
     'dialog[open][data-test-modal-id="dialog"], dialog[open][data-testid="dialog"], ' +
@@ -163,9 +165,11 @@ function getEasyApplyPanel() {
   const withControls = dialogs.find(d => d.querySelector('input, select, textarea'))
   if (withControls || dialogs[0]) return withControls || dialogs[0]
 
-  return document.getElementById('interop-outlet')?.shadowRoot?.querySelector(
-    '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
-  ) || null
+  const oldModalSelector = '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"] [role="dialog"]'
+  const oldModal = document.querySelector(oldModalSelector)
+  if (oldModal) return oldModal
+
+  return document.getElementById('interop-outlet')?.shadowRoot?.querySelector(oldModalSelector) || null
 }
 
 // Where our own popups go. Everything outside a modal <dialog> is inert —
@@ -262,7 +266,6 @@ async function fillApplicationForm(application, panel) {
 
   let step = 0
   const maxSteps = 10
-  let submitClicked = false
 
   while (step < maxSteps) {
     await randomDelay(800, 2000)
@@ -310,15 +313,14 @@ async function fillApplicationForm(application, panel) {
       return
     }
 
+    if (kind === 'submit') {
+      await submitAndConfirm(application, stepButton)
+      return
+    }
+
     logStep(`step ${step + 1}`, `clicking ${kind}:`, stepButton.textContent.trim())
     stepButton.click()
     step++
-    if (kind === 'submit') {
-      submitClicked = true
-      // How LinkedIn's new form confirms a submission hasn't been seen yet;
-      // the success check at the top of the loop is from May.
-      logStep('submit', 'clicked Submit application. Waiting for a confirmation...')
-    }
 
     // LinkedIn refused the step (a question it requires is still empty and
     // wasn't marked as required in a way we recognise): stop here too.
@@ -333,13 +335,61 @@ async function fillApplicationForm(application, panel) {
   // Loop ended without detecting a success message — report manual so the
   // dashboard polling can stop waiting.
   console.log('[JobAgent] form loop ended without success, reporting manual')
-  if (submitClicked) {
-    console.warn('JobAgent [submit] ⚠ Submit application WAS clicked but no confirmation was ' +
-      'recognised. Reporting manual (credit refunded), though LinkedIn may have received it.')
-  }
   logStep('end', 'no submitted confirmation recognised. The form now shows:',
     describeFormStep(getEasyApplyPanel() || scope))
   await reportResult(application.id, 'manual', { keepTab: true })
+}
+
+// "Applied … ago" in the job's top card (jaIsAppliedConfirmation, answers.js).
+// It's on the job page, not in the form: LinkedIn closes the form on submit.
+function findAppliedConfirmation() {
+  for (const el of document.querySelectorAll('.jobs-s-apply, .artdeco-inline-feedback__message')) {
+    if (jaIsAppliedConfirmation(el.innerText || el.textContent)) return el
+  }
+  return null
+}
+
+// Click Submit application and report what happened. Applied only when the
+// "Applied … ago" status appears after the click — it vanishes when the user
+// leaves the page, so it is checked now, for up to 20s. One that was already
+// there before the click doesn't count.
+async function submitAndConfirm(application, submitButton) {
+  const before = findAppliedConfirmation()
+  if (before) {
+    logStep('submit', '⚠ the page already shows', JSON.stringify(before.innerText.trim()),
+      'before submitting; only a new one will count')
+  }
+
+  logStep('submit', 'clicking Submit application')
+  submitButton.click()
+
+  const deadline = Date.now() + 20000
+  while (Date.now() < deadline) {
+    await sleep(500)
+    const confirmation = findAppliedConfirmation()
+    if (confirmation && confirmation !== before) {
+      logStep('submit', 'confirmed:', describeElement(confirmation))
+      await reportResult(application.id, 'applied')
+      showSuccessNotification()
+      return
+    }
+    // A required question LinkedIn only checks on submit.
+    const panel = getEasyApplyPanel()
+    if (panel && hasValidationError(panel)) {
+      await stopForUser(application, findUnanswered(panel, false))
+      return
+    }
+  }
+
+  // No confirmation: it may or may not have gone in. Leave the tab on the job
+  // so the user can see which, and say so.
+  console.warn('JobAgent [submit] ⚠ clicked Submit application but no "Applied" status ' +
+    'appeared within 20s. It may have been submitted. Page now:', {
+    form: getEasyApplyPanel() ? describeFormStep(getEasyApplyPanel()) : 'closed',
+    topCardStatus: Array.from(document.querySelectorAll('.jobs-s-apply, .artdeco-inline-feedback__message'))
+      .map(el => (el.innerText || '').trim().slice(0, 80)),
+  })
+  await reportResult(application.id, 'manual', { keepTab: true, reason: 'submit_unconfirmed' })
 }
 
 // What a form step shows, for the step logs: its progress text, every field
