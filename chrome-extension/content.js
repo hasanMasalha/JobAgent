@@ -360,15 +360,20 @@ async function submitAndConfirm(application, submitButton) {
       'before submitting; only a new one will count')
   }
 
+  const recorder = recordPageChanges()
   logStep('submit', 'clicking Submit application')
+  const clickedAt = Date.now()
   submitButton.click()
 
+  let formClosedAfterMs = null
   const deadline = Date.now() + 20000
   while (Date.now() < deadline) {
     await sleep(500)
+    if (formClosedAfterMs === null && !getEasyApplyPanel()) formClosedAfterMs = Date.now() - clickedAt
     const confirmation = findAppliedConfirmation()
     if (confirmation && confirmation !== before) {
       logStep('submit', 'confirmed:', describeElement(confirmation))
+      logStep('submit', 'what changed on the page after the click:', recorder.stop())
       await reportResult(application.id, 'applied')
       showSuccessNotification()
       return
@@ -386,10 +391,89 @@ async function submitAndConfirm(application, submitButton) {
   console.warn('JobAgent [submit] ⚠ clicked Submit application but no "Applied" status ' +
     'appeared within 20s. It may have been submitted. Page now:', {
     form: getEasyApplyPanel() ? describeFormStep(getEasyApplyPanel()) : 'closed',
+    formClosedAfterMs,
     topCardStatus: Array.from(document.querySelectorAll('.jobs-s-apply, .artdeco-inline-feedback__message'))
       .map(el => (el.innerText || '').trim().slice(0, 80)),
   })
+  // Diagnostics for finding the confirmation in this context (a job page the
+  // extension opened directly, where the status above never appeared).
+  logStep('submit', 'what changed on the page after the click:', JSON.stringify(recorder.stop(), null, 2))
+  logStep('submit', 'the same job page loaded fresh:', await appliedStateInFreshPage())
   await reportResult(application.id, 'manual', { keepTab: true, reason: 'submit_unconfirmed' })
+}
+
+// Diagnostics only: records what appears or changes on the page from just
+// before Submit until stop() — the in-extension version of the watcher used
+// to find the confirmation by hand. Text that mentions applying / sending /
+// success (English or Hebrew), live regions, alerts, and dialogs opening or
+// closing. Nothing is sent anywhere; stop() returns it for the console.
+function recordPageChanges() {
+  const re = /appl(ied|ication)|submitted|\bsent\b|success|error|wrong|הוגש|נשלח|מועמדות|שגיאה/i
+  const started = Date.now()
+  const seen = []
+  const keys = new Set()
+  const clip = (v, n = 200) => (v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+  const note = (el, why) => {
+    const text = clip(el.innerText || el.textContent)
+    const key = `${el.tagName}|${why}|${text}`
+    if (keys.has(key) || seen.length >= 60) return
+    keys.add(key)
+    seen.push({
+      afterMs: Date.now() - started,
+      why,
+      tag: el.tagName,
+      id: el.id || null,
+      classes: clip(el.className && el.className.toString(), 120) || null,
+      role: el.getAttribute?.('role') || null,
+      ariaLive: el.getAttribute?.('aria-live') || null,
+      testId: el.getAttribute?.('data-testid') || null,
+      text,
+    })
+  }
+  const check = (node, why) => {
+    const el = node.nodeType === 1 ? node : node.parentElement
+    if (!el) return
+    if (el.tagName === 'DIALOG' && why.startsWith('attr')) note(el, `dialog ${el.open ? 'opened' : 'closed'}`)
+    const live = el.closest?.('[aria-live], [role="alert"], [role="status"]')
+    if (live) note(live, `live region (${why})`)
+    const text = clip(el.innerText || el.textContent, 400)
+    if (text && text.length < 400 && re.test(text)) note(el, why)
+  }
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.type === 'childList') {
+        m.addedNodes.forEach(n => check(n, 'added'))
+        if (m.removedNodes.length && m.target.nodeType === 1) {
+          m.removedNodes.forEach(n => { if (n.tagName === 'DIALOG') note(n, 'dialog removed') })
+        }
+      }
+      if (m.type === 'characterData') check(m.target, 'text changed')
+      if (m.type === 'attributes') check(m.target, `attr ${m.attributeName}`)
+    }
+  })
+  observer.observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+    attributes: true, attributeFilter: ['open', 'aria-hidden', 'hidden'],
+  })
+  return { stop: () => { observer.disconnect(); return seen } }
+}
+
+// Diagnostics only: loads this job's page again (same origin, the user's own
+// LinkedIn session, nothing sent elsewhere) and reports whether it now shows
+// an "Applied" state, with the text around each match.
+async function appliedStateInFreshPage() {
+  try {
+    const res = await fetch(location.href, { credentials: 'include' })
+    const html = await res.text()
+    const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const matches = []
+    const re = /.{0,60}\bApplied\b.{0,60}/g
+    let m
+    while ((m = re.exec(text)) && matches.length < 8) matches.push(m[0].trim())
+    return { status: res.status, appliedMentions: matches, rawHtmlMentionsApplied: /applied/i.test(html) }
+  } catch (e) {
+    return { error: String(e) }
+  }
 }
 
 // What a form step shows, for the step logs: its progress text, every field
