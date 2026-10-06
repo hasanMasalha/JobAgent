@@ -170,6 +170,11 @@ model Application {
   cv_changes       Json?
   tailored_cv_hash String?
 
+  // Answers the extension's form-filling got from /api/apply/resolve-answers
+  // that cost a Claude call: {"claude": {normalised question: answer}}. Kept
+  // so reloading the form doesn't call Claude again (ai-service/routes/ats_extension.py).
+  resolved_answers Json?
+
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
 }

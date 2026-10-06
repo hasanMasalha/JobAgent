@@ -1,4 +1,3 @@
-import asyncio
 import os
 import random
 import re
@@ -6,7 +5,6 @@ import tempfile
 import time
 from urllib.parse import parse_qs, urlsplit
 
-import anthropic
 import phonenumbers
 import httpx
 from playwright.async_api import async_playwright
@@ -19,9 +17,9 @@ from application_answers import (
     match_option,
     user_answer,
 )
+from answer_resolver import claude_answer
 from phone_country import PhoneInfo, match_country_option, parse_phone
 
-_claude_client = anthropic.Anthropic()
 
 _GH_JID_RE = re.compile(r"[?&]gh_jid=(\d+)")
 _GH_SLUG_STRIP_LABELS = {"www", "careers", "career", "jobs", "job", "apply"}
@@ -97,34 +95,13 @@ def _answer_question(label_text: str, applicant: ApplicantData) -> str | None:
 
 
 async def _ask_claude_for_answer(question: str, cv_text: str) -> str | None:
-    """Claude's answer to an OPEN-ENDED free-text question ("why this role"),
-    grounded in the CV. Only called when application_answers.claude_may_answer
-    says so — never for facts, eligibility or legal questions. None on failure."""
-    prompt = (
-        "You are writing one answer on a job application for a candidate. The "
-        "question is open-ended; write a brief, professional answer (2-4 "
-        "sentences) grounded only in what the CV below shows. Do not invent "
-        "employers, titles, achievements, numbers or experience that aren't in "
-        "the CV, and make no claims about eligibility, availability, salary or "
-        "location. This is submitted without review under the candidate's "
-        "name.\n\n"
-        f"Question: {question}\n\n"
-        f"CV:\n{(cv_text or '')[:3000]}\n\n"
-        "Return ONLY the answer text — no explanation, no quotes, no markdown."
-    )
-    try:
-        message = await asyncio.to_thread(
-            _claude_client.messages.create,
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        answer = message.content[0].text.strip()
+    """Claude's answer to an OPEN-ENDED free-text question, grounded in the CV
+    (one prompt, in answer_resolver). Only called when claude_may_answer says
+    so — never for facts, eligibility or legal questions."""
+    answer = await claude_answer(question, cv_text)
+    if answer:
         print(f"[ats-form] Claude answered open-ended {question!r}")
-        return answer[:1500] or None
-    except Exception as e:
-        print(f"[ats-form] Claude answer failed for {question!r}: {e}")
-        return None
+    return answer
 
 
 # ── Phone country pickers ────────────────────────────────────────────────────

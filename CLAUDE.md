@@ -462,6 +462,34 @@ is positioned as global and priced in USD, so both are real gaps.
   a job whose lookup is refused is not stored that run — stored without its
   link it would stay `external` for good.
 
+## ATS applying moves into the extension (decided 2026-10-06)
+Every ATS we support runs a bot check and our server's datacenter IP scores
+badly against all of them, so ATS forms will be filled and submitted by the
+extension in the user's own browser. The server keeps every decision; the
+extension only reads the form and fills in what it's told. Staged: 1 answer
+service (done) · 2 fill-and-review page · 3 Greenhouse in the extension
+(1.6.0, consent wording extended to job sites, /privacy + Store listing: the
+extension receives the CV) · 4 Lever + Ashby · 5 batch · 6 Workable, Comeet,
+BambooHR · 7 server-side submit switched off, then deleted.
+- **Answers:** `POST /api/apply/resolve-answers` — the extension sends the
+  form's questions (`{id, label, kind, required, options, role, eeo}`), the AI
+  service answers each with the existing rules (`ai-service/answer_resolver.py`
+  `plan_answers`, generalised from `ashby_form.plan()`; the same
+  `application_answers` facts-only rules, phone country, EEO decline,
+  data-processing consent, Claude only for open-ended free text) or returns it
+  in `missing`. A required missing answer means don't submit. Claude answers
+  are cached on `Application.resolved_answers` (`{"claude": {question:
+  answer}}`) so a reloaded form doesn't call Claude again; at most
+  `MAX_CLAUDE_ANSWERS` (5) per application.
+- **Package:** `GET /api/apply/ats-package/[applicationId]` (the ATS, the form
+  to open — Greenhouse embedded on a company site resolved to Greenhouse's own
+  form, Lever + `/apply` — job, cover letter) and `…/cv` (the CV file, the
+  same one `/ats-apply` sends: `applicant_store.application_cv_file`).
+- All three authenticate with the session or the extension token and pass on
+  only that user id; the application must be the user's own and `draft` or
+  `pending_extension` (404 / 409 otherwise). Loading the user's answers and
+  CV is shared with `/ats-apply` (`ai-service/applicant_store.py`).
+
 ## No CAPTCHA solving, no disguise
 - Every ATS we apply to runs a bot check (2026-10-06 probe of live forms):
   Greenhouse reCAPTCHA Enterprise (low score → emailed 8-character code),
