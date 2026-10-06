@@ -159,3 +159,19 @@ def test_consent_and_decline():
     assert is_decline_option("Decline to self-identify")
     assert is_decline_option("I don't wish to answer")
     assert not is_decline_option("Male")
+
+
+# Airbnb's Greenhouse sponsorship question (2026-10-06): a substring match
+# found "no" inside "now" too, so "No" matched two options and went unanswered.
+_AIRBNB_SPONSORSHIP = [
+    "Yes, I will require immigration sponsorship now to legally work in the country where the job is located.",
+    "Yes, I will require immigration sponsorship in the future to legally work in the country where the job is located.",
+    "No, I will not require immigration sponsorship now or in the future to legally work in the country where the job is located.",
+]
+
+
+def test_match_option_partial_matches_are_whole_words():
+    assert match_option(_AIRBNB_SPONSORSHIP, "No") == 2
+    assert match_option(_AIRBNB_SPONSORSHIP, "Yes") == -1  # now or in the future: the user's choice
+    assert match_option(["Noted", "Yes"], "No") == -1
+    assert match_option(["LinkedIn (social)", "Indeed"], "LinkedIn") == 0

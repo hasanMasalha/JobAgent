@@ -365,6 +365,14 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
 - **Claude** may write the answer to an open-ended free-text question ("why
   this company"), grounded in the CV — `claude_may_answer` decides. Never for
   a select, yes/no or factual question.
+  Never for a question that asks the applicant to show a person is applying
+  ("prove you're not a bot auto-applying", a secret to decode — Ramp's Ashby
+  form has one): `_HUMAN_CHECK` in `application_answers.py`.
+- **Option matching** (`match_option`): exact, else the one option containing
+  the answer as whole words. It was by substring until 2026-10-06, so "No"
+  also matched "…sponsorship now…" and Airbnb's sponsorship question went
+  unanswered. **Known gap:** the extension's `jaMatchOption` (`answers.js`,
+  LinkedIn) still matches by substring.
 - **A required question with no answer → not submitted**: `missing_answers`,
   `needs_manual`, credit refunded. Never a default, a "first option" or
   Claude picking an option. EEO questions get "decline to self-identify" or
@@ -467,7 +475,7 @@ Every ATS we support runs a bot check and our server's datacenter IP scores
 badly against all of them, so ATS forms will be filled and submitted by the
 extension in the user's own browser. The server keeps every decision; the
 extension only reads the form and fills in what it's told. Staged: 1 answer
-service (done) · 2 fill-and-review page · 3 Greenhouse in the extension
+service (done) · 2 fill-and-review page (done) · 3 Greenhouse in the extension
 (1.6.0, consent wording extended to job sites, /privacy + Store listing: the
 extension receives the CV) · 4 Lever + Ashby · 5 batch · 6 Workable, Comeet,
 BambooHR · 7 server-side submit switched off, then deleted.
@@ -485,7 +493,17 @@ BambooHR · 7 server-side submit switched off, then deleted.
   to open — Greenhouse embedded on a company site resolved to Greenhouse's own
   form, Lever + `/apply` — job, cover letter) and `…/cv` (the CV file, the
   same one `/ats-apply` sends: `applicant_store.application_cv_file`).
-- All three authenticate with the session or the extension token and pass on
+- **Fill-and-review** (Tailor & Download, `?mode=download`, non-LinkedIn
+  jobs): "Answers for this form" lists the real form's questions with the
+  answer to each (copy buttons, where it came from, Claude's flagged "read it
+  first") or "You answer this one", and links to the form.
+  `GET /api/apply/form-answers/[applicationId]` → `/form-answers`: questions
+  read without a browser (`ai-service/form_questions.py` — Greenhouse's public
+  job board API with `questions=true`; Ashby's own `ApiJobPosting` form
+  request, a read: its bot check is on submit), answered by the same
+  `_resolve` as `/resolve-answers` (same Claude cache). Other ATSs: the
+  section isn't shown.
+- All four authenticate with the session or the extension token and pass on
   only that user id; the application must be the user's own and `draft` or
   `pending_extension` (404 / 409 otherwise). Loading the user's answers and
   CV is shared with `/ats-apply` (`ai-service/applicant_store.py`).

@@ -11,6 +11,7 @@ jest.mock("@/lib/python-service", () => ({ pythonFetch: (...a: unknown[]) => pyt
 import { POST as resolveAnswers } from "@/app/api/apply/resolve-answers/route";
 import { GET as atsPackage } from "@/app/api/apply/ats-package/[applicationId]/route";
 import { GET as atsCv } from "@/app/api/apply/ats-package/[applicationId]/cv/route";
+import { GET as formAnswers } from "@/app/api/apply/form-answers/[applicationId]/route";
 
 const json = (data: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } }));
@@ -94,5 +95,27 @@ describe("GET /api/apply/ats-package/[applicationId]/cv", () => {
   it("says when the CV can't be used", async () => {
     pythonFetch.mockReturnValue(json({ error: "cv_unavailable" }));
     expect((await atsCv(getReq("/api/apply/ats-package/app-1/cv"), params)).status).toBe(409);
+  });
+});
+
+describe("GET /api/apply/form-answers/[applicationId]", () => {
+  it("returns the form's questions and answers for the authenticated user", async () => {
+    pythonFetch.mockReturnValue(json({ supported: true, questions: [], answers: [], missing: [] }));
+    const res = await formAnswers(getReq("/api/apply/form-answers/app-1"), params);
+
+    expect(res.status).toBe(200);
+    expect(pythonFetch.mock.calls[0][0]).toBe("/form-answers");
+    expect(sent()).toEqual({ application_id: "app-1", user_id: "user-1" });
+  });
+
+  it("needs auth", async () => {
+    getUserId.mockResolvedValue(null);
+    expect((await formAnswers(getReq("/api/apply/form-answers/app-1"), params)).status).toBe(401);
+    expect(pythonFetch).not.toHaveBeenCalled();
+  });
+
+  it("passes on a closed application as 409", async () => {
+    pythonFetch.mockReturnValue(json({ error: "not_open", status: "applied" }));
+    expect((await formAnswers(getReq("/api/apply/form-answers/app-1"), params)).status).toBe(409);
   });
 });

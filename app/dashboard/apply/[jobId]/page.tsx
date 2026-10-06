@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 import { isVersionAtLeast } from "@/lib/extension-version";
 import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
+import FormAnswers from "./FormAnswers";
 
 
 type Stage = "loading" | "ready" | "submitting" | "error" | "extension_required" | "extension_launched" | "applying_background";
@@ -688,6 +689,8 @@ export default function ApplyPage() {
     <div className="grid items-start gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
         {d.linkedin ? linkedInReview : (<>
+        {/* Applying by hand: the form's questions with JobAgent's answers. */}
+        {isDownloadMode && <FormAnswers applicationId={d.application_id} />}
         <section aria-labelledby="letter-heading" className={cn(cardCls, "p-5 sm:p-8")}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="letter-heading" className="font-serif text-feature-sm text-ink">Cover letter</h2>

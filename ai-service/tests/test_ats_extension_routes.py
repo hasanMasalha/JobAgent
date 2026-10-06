@@ -148,3 +148,33 @@ def test_cv_is_the_file_the_application_sends(setup):
     assert r["filename"] == "Dana_Levi_cv.pdf"
     assert r["mime_type"] == "application/pdf"
     assert r["base64"]
+
+
+def test_form_answers_reads_the_form_and_answers_it(setup, monkeypatch):
+    from answer_resolver import Question
+
+    async def fake_questions(ats, url):
+        assert ats == "lever"
+        return [
+            Question(id="name", label="Full name", kind="text", role="full_name", required=True),
+            Question(id="why", label="Why Acme?", kind="long_text", required=True),
+            Question(id="auth", label="Authorized to work in the UK?", kind="boolean", required=True),
+        ]
+
+    monkeypatch.setattr(ext, "form_questions", fake_questions)
+    r = post(setup, "/form-answers")
+
+    assert r["supported"] is True and r["ats"] == "lever"
+    assert [q["id"] for q in r["questions"]] == ["name", "why", "auth"]
+    assert {a["id"]: a["source"] for a in r["answers"]} == {"name": "profile", "why": "claude"}
+    assert r["missing"] == [{"id": "auth", "label": "Authorized to work in the UK?"}]
+
+
+def test_form_answers_unsupported_ats(setup, monkeypatch):
+    async def none(ats, url):
+        return None
+
+    monkeypatch.setattr(ext, "form_questions", none)
+    r = post(setup, "/form-answers")
+    assert r == {"supported": False, "ats": "lever", "form_url": "https://jobs.lever.co/acme/123/apply"}
+    assert setup["claude_calls"] == []
