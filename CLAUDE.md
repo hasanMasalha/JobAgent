@@ -462,6 +462,23 @@ is positioned as global and priced in USD, so both are real gaps.
   a job whose lookup is refused is not stored that run — stored without its
   link it would stay `external` for good.
 
+## No CAPTCHA solving, no disguise
+- Every ATS we apply to runs a bot check (2026-10-06 probe of live forms):
+  Greenhouse reCAPTCHA Enterprise (low score → emailed 8-character code),
+  Lever hCaptcha, Ashby / Comeet / BambooHR reCAPTCHA, Workable Cloudflare
+  Turnstile. We don't defeat them: no CAPTCHA-solving service (2captcha was
+  removed 2026-10-06 — it was solving Lever's and BambooHR's challenges), no
+  faked user agent or timezone, no hiding `navigator.webdriver` or the
+  automation flags, no jittered "human" mouse movement, no proxies to borrow
+  a better IP reputation. A form whose check wants a person stops before
+  submit (`captcha_detected`, needs_manual, credit refunded); a refusal after
+  submit lands the same way. Don't reintroduce any of it.
+- Still to decide: the scrapers send a Windows Chrome user agent to public
+  listing pages (`linkedin_fetcher.py` also hides the automation flag), and
+  `linkedin_auth.py` `_LINKEDIN_HEADERS` checks the user's LinkedIn session
+  with one. The extension's `background.js` rotates fake user agents on calls
+  to our own server.
+
 ## Playwright / browser automation caveats
 - Playwright runs headless=True. For LinkedIn the user must have a saved
   session in browser_profile/{user_id}/ — see the LinkedIn login flow in preferences.

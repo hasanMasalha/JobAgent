@@ -797,16 +797,12 @@ async def _playwright_apply(
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
                 "--disable-features=IsolateOrigins,site-per-process",
                 "--window-size=1280,800",
             ],
-            ignore_default_args=["--enable-automation"],
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            # No disguise: until 2026-10-06 this hid the automation flags,
+            # faked a Windows Chrome user agent and patched navigator.webdriver,
+            # plugins, languages and window.chrome to pass as a person.
             viewport={"width": 1280, "height": 800},
         )
 
@@ -820,19 +816,6 @@ async def _playwright_apply(
                 await ctx.add_cookies(_saved)
             except Exception as _exc:
                 print(f"[apply] Failed to load cookies.json: {_exc}")
-        # Remove automation fingerprint signals that LinkedIn uses to detect bots
-        await ctx.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [1, 2, 3, 4, 5]
-            });
-            Object.defineProperty(navigator, 'languages', {
-                get: () => ['en-US', 'en', 'he']
-            });
-            window.chrome = { runtime: {} };
-        """)
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         try:
             await page.goto(job_url, timeout=30_000)

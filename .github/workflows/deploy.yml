@@ -207,7 +207,6 @@ jobs:
               "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" \
-              "TWOCAPTCHA_API_KEY=${{ secrets.TWOCAPTCHA_API_KEY }}" \
               "RAPIDAPI_KEY=${{ secrets.RAPIDAPI_KEY }}" \
               "DODO_PAYMENTS_API_KEY=${{ secrets.DODO_PAYMENTS_API_KEY }}" \
               "DODO_PAYMENTS_WEBHOOK_KEY=${{ secrets.DODO_PAYMENTS_WEBHOOK_KEY }}" \
@@ -226,6 +225,11 @@ jobs:
                 echo "${entry}" >> /home/ubuntu/jobagent/.env
               fi
             done
+
+            # No CAPTCHA-solving service in this product (removed 2026-10-06).
+            # The loop above only adds and updates keys, so the old one is
+            # deleted explicitly.
+            sed -i '/^TWOCAPTCHA_API_KEY=/d' /home/ubuntu/jobagent/.env
 
             # Start containers
             cd /home/ubuntu/jobagent
