@@ -26,7 +26,6 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
       - RAPIDAPI_KEY=${RAPIDAPI_KEY}
       # Must be the compose service name, not localhost — the fastapi
       # container's own localhost has nothing listening on :3000, which was

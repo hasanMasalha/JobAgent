@@ -70,14 +70,9 @@ async def start_linkedin_login(user_id: str) -> dict:
             args=[
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',
             ],
-            ignore_default_args=['--enable-automation'],
-            user_agent=(
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/120.0.0.0 Safari/537.36'
-            ),
+            # No disguise (automation flags hidden and a faked Windows Chrome
+            # user agent until 2026-10-06).
             viewport={'width': 1280, 'height': 800},
         )
 

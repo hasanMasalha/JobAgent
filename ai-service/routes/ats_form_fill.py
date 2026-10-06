@@ -19,7 +19,6 @@ from application_answers import (
     match_option,
     user_answer,
 )
-from captcha_solver import detect_and_solve_captcha
 from phone_country import PhoneInfo, match_country_option, parse_phone
 
 _claude_client = anthropic.Anthropic()
@@ -310,17 +309,8 @@ async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
 
 
 async def _human_click(page, element) -> None:
-    """Move mouse to element with slight randomness, then click."""
-    try:
-        box = await element.bounding_box()
-        if box:
-            await page.mouse.move(
-                box["x"] + box["width"] / 2 + random.randint(-5, 5),
-                box["y"] + box["height"] / 2 + random.randint(-5, 5),
-            )
-            await _human_delay(page, 100, 300)
-    except Exception:
-        pass
+    """Click the element. (It used to move the mouse there along a slightly
+    random path first, to look like a person — removed 2026-10-06.)"""
     await element.click()
 
 
@@ -473,43 +463,18 @@ async def fill_ats_form(
                 ],
             )
 
+            # The browser says what it is: no faked user agent or timezone, and
+            # navigator.webdriver is left alone (all three were set to pass
+            # as a person's Windows Chrome until 2026-10-06).
             context = await browser.new_context(
                 viewport={"width": 1920, "height": 1080},
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
                 locale="en-US",
-                timezone_id="America/New_York",
                 device_scale_factor=1,
                 has_touch=False,
                 color_scheme="light",
             )
             page = await context.new_page()
 
-            # playwright_stealth==1.0.6's stealth_async() was removed: it injects
-            # ~16 patches via separate page.add_init_script() calls, but 12 of
-            # them reference a shared `opts`/`utils` binding declared in a
-            # DIFFERENT add_init_script() call. Its own docstring assumes
-            # Playwright combines all init scripts into one shared-scope
-            # script — that's not true for the installed Playwright version,
-            # so those scripts throw uncaught "opts/utils is not defined"
-            # ReferenceErrors the first time anything on the page reads a
-            # patched property (e.g. navigator.userAgent). On Greenhouse
-            # boards that broke the Country react-select entirely (menu never
-            # opened, aria-expanded stuck at "false") since something in its
-            # init path reads navigator.userAgent. Confirmed via bisection:
-            # disabling just that one property still left the same
-            # ReferenceError firing from the other 11 opts/utils-dependent
-            # scripts (proven via a stress-check reading every patched
-            # property directly) — so this isn't a single bad flag to
-            # disable, the library's multi-script injection is broken
-            # wholesale under this Playwright version. Only this one-line
-            # deletion doesn't depend on opts/utils and is independently
-            # confirmed to reliably hide navigator.webdriver on its own.
-            await page.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
-            print("[ats-form] navigator.webdriver hidden")
 
             # Lever job listing URLs need /apply appended to reach the form
             if "lever.co" in apply_url and not apply_url.rstrip("/").endswith("/apply"):
@@ -707,23 +672,10 @@ async def _fill_lever_form(
         print(f"[ats-form] Lever: not submitting, no answer from the user for: {missing}")
         return _missing_answers_result(missing, filled)
 
-    # Check for hCaptcha before attempting submit
-    hcaptcha = await page.query_selector(
-        'input[name="h-captcha-response"], .h-captcha, iframe[src*="hcaptcha"]'
-    )
-    if hcaptcha:
-        print("[ats-form] hCaptcha detected — attempting 2captcha solve")
-        solved = await detect_and_solve_captcha(page)
-        if not solved:
-            print("[ats-form] Could not solve hCaptcha")
-            return {
-                "success": False,
-                "error": "captcha_unsolvable",
-                "captcha": True,
-                "captcha_type": "hcaptcha",
-                "message": "Could not solve hCaptcha automatically",
-            }
-        print("[ats-form] hCaptcha solved — proceeding to submit")
+    # Lever loads hCaptcha on every form. It isn't solved for the user (no
+    # CAPTCHA-solving service — removed 2026-10-06): the form is submitted and
+    # Lever's own check decides. If it wants a human challenge, the error
+    # check below sees it and the application ends needs_manual.
 
     async def _check_success() -> dict | None:
         page_text = await page.inner_text("body")
@@ -1521,9 +1473,10 @@ async def _fill_greenhouse_form(
     except Exception as e:
         print(f"[ats-form] Could not save pre-submit screenshot: {e}")
 
-    # ── CAPTCHA check — attempt to solve with 2captcha, bail only if unsolvable ──
-    # Only targets visible user challenges. reCAPTCHA v3 (invisible) runs silently
-    # in the background — matching `iframe[src*="recaptcha"]` is a false positive.
+    # ── Visible CAPTCHA: a person has to answer it, so stop here ─────────────
+    # Not solved for the user: there's no CAPTCHA-solving service in this
+    # product (2captcha removed 2026-10-06). Only visible challenges count —
+    # invisible reCAPTCHA runs in the background and the ATS decides on submit.
 
     captcha_el = await page.query_selector(
         '.g-recaptcha[data-sitekey]:not([data-size="invisible"]), '
@@ -1534,21 +1487,17 @@ async def _fill_greenhouse_form(
         src_attr = await captcha_el.get_attribute("src") or ""
         class_attr = await captcha_el.get_attribute("class") or ""
         captcha_type = "hcaptcha" if "hcaptcha" in (name_attr + src_attr + class_attr) else "recaptcha"
-        print(f"[ats-form] CAPTCHA detected: {captcha_type} — attempting 2captcha solve")
-        solved = await detect_and_solve_captcha(page)
-        if not solved:
-            print("[ats-form] CAPTCHA could not be solved automatically")
-            return {
-                "early_result": {
-                    "success": False,
-                    "error": "captcha_detected",
-                    "captcha": True,
-                    "captcha_type": captcha_type,
-                    "filled": filled,
-                    "message": f"Form has {captcha_type} — could not solve automatically",
-                }
+        print(f"[ats-form] Visible {captcha_type} on the form — stopping before submit")
+        return {
+            "early_result": {
+                "success": False,
+                "error": "captcha_detected",
+                "captcha": True,
+                "captcha_type": captcha_type,
+                "filled": filled,
+                "message": f"This form asks applicants to complete a {captcha_type} check, so it has to be submitted by you.",
             }
-        print("[ats-form] CAPTCHA solved, continuing to submit")
+        }
 
     # ── GDPR / consent checkbox ───────────────────────────────────────────────
 
@@ -1818,9 +1767,6 @@ async def _fill_form_fields(
         # Scroll to bottom so the whole form is "seen" before submitting
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await _human_delay(page, 500, 1000)
-        # Solve any captcha that appeared dynamically after field fill
-        print("[ats-form] Checking for captcha before submit...")
-        await detect_and_solve_captcha(page)
         url_before = page.url
         print(f"[ats-form] URL before submit: {url_before}")
         print("[ats-form] Clicking submit button...")
