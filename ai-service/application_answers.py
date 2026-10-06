@@ -188,16 +188,28 @@ def user_answer(label: str, data: ApplicantData) -> str | None:
     return None
 
 
+def _contains_words(text: str, words: str) -> bool:
+    """`words` appears in `text` as whole words: "no" is in "No, I will not
+    require…" but not in "now" or "noted"."""
+    return re.search(r"(?<!\w)" + re.escape(words) + r"(?!\w)", text) is not None
+
+
 def match_option(options: list[str], answer: str | None) -> int:
-    """Index of the option that is this answer, or -1. Ambiguous partial
-    matches ("no" also in "not sure") are no match. Mirrors jaMatchOption."""
+    """Index of the option that is this answer, or -1.
+
+    An exact match first; otherwise the one option that contains the answer
+    (or is contained in it) as whole words. Two such options is no match:
+    "Yes" against "Yes … now" and "Yes … in the future" is for the user.
+    Until 2026-10-06 the partial match was by substring, so "No" also matched
+    "…sponsorship now…" and Airbnb's sponsorship question went unanswered.
+    """
     want = normalize(answer)
     if not want:
         return -1
     texts = [normalize(o) for o in options]
     if want in texts:
         return texts.index(want)
-    partial = [i for i, t in enumerate(texts) if t and (want in t or t in want)]
+    partial = [i for i, t in enumerate(texts) if t and (_contains_words(t, want) or _contains_words(want, t))]
     return partial[0] if len(partial) == 1 else -1
 
 
@@ -230,6 +242,18 @@ _OPEN_ENDED = (
 )
 
 
+# Questions that ask the applicant to show a person is applying ("prove you're
+# not a bot auto-applying", a puzzle to solve, "type the secret"). The
+# employer is asking the human; answering for them is exactly what the
+# question exists to catch. Seen on Ramp's Ashby form (2026-10-06).
+_HUMAN_CHECK = (
+    "bot", "bots", "robot", "robots", "auto-apply", "auto apply", "auto-applying",
+    "auto applying", "prove you", "prove that you", "secret", "puzzle", "decode",
+    "figure out",
+)
+# Whole words and phrases only: "robotics" or "automated testing" are ordinary questions.
+_HUMAN_CHECK_RE = re.compile(r"\b(?:" + "|".join(re.escape(w) for w in _HUMAN_CHECK) + r")\b")
+
 _FACTUAL_RE = re.compile(r"\b(?:" + "|".join(re.escape(w) for w in _FACTUAL) + ")")
 _OPEN_ENDED_RE = re.compile(r"\b(?:" + "|".join(re.escape(w) for w in _OPEN_ENDED) + ")")
 
@@ -240,7 +264,7 @@ def claude_may_answer(label: str, is_long_text: bool) -> bool:
     lab = normalize(label)
     if not is_long_text or not lab:
         return False
-    if _FACTUAL_RE.search(lab):
+    if _FACTUAL_RE.search(lab) or _HUMAN_CHECK_RE.search(lab):
         return False
     return bool(_OPEN_ENDED_RE.search(lab))
 

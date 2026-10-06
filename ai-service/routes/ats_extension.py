@@ -7,6 +7,7 @@ of them. The server keeps every decision; the extension fills the page.
 - POST /resolve-answers   the form's questions → each answer, or missing
 - POST /ats-package       which form to open, and what to apply with
 - POST /ats-package/cv    the CV file to upload
+- POST /form-answers      the real form's questions and answers (fill-and-review page)
 
 Called only through Next.js (X-Internal-Key), with the user id Next.js has
 authenticated — never one from the caller. An application must be the user's
@@ -25,6 +26,7 @@ from pydantic import BaseModel
 
 from answer_resolver import MAX_CLAUDE_ANSWERS, Answer, Question, claude_answer, plan_answers
 from applicant_store import application_cv_file, load_applicant, load_cv_row
+from form_questions import form_questions
 from application_answers import normalize
 from routes.ats_submit import _detect_ats
 
@@ -69,54 +71,59 @@ def _cache(app) -> dict[str, str]:
     return {k: v for k, v in (data.get("claude") or {}).items() if isinstance(v, str)}
 
 
+async def _resolve(conn, user_id: str, app, questions: list[Question]) -> tuple[list[Answer], list[Question]]:
+    """(answers, missing) for these questions on this application: facts from
+    the user's own data, Claude for open-ended free text (cached on the
+    Application, at most MAX_CLAUDE_ANSWERS), nothing otherwise."""
+    applicant = await load_applicant(conn, user_id)
+    cv_row = await load_cv_row(conn, user_id)
+    answers, for_claude, missing = plan_answers(questions, applicant, app["cover_letter"] or "")
+
+    cache = _cache(app)
+    new: dict[str, str] = {}
+    cv_text = app["tailored_cv"] or (cv_row or {}).get("raw_text") or ""
+    for q in for_claude:
+        key = normalize(q.label)
+        text = cache.get(key) or new.get(key)
+        if text is None and len(cache) + len(new) < MAX_CLAUDE_ANSWERS and cv_text:
+            text = await claude_answer(q.label, cv_text)
+            if text:
+                new[key] = text
+        if text:
+            answers.append(Answer(q.id, "claude", value=text))
+        elif q.required:
+            missing.append(q)
+
+    if new:
+        await conn.execute(
+            'UPDATE "Application" SET resolved_answers = $1::jsonb WHERE id = $2',
+            json.dumps({"claude": {**cache, **new}}),
+            app["id"],
+        )
+    return answers, missing
+
+
+def _result(answers: list[Answer], missing: list[Question]) -> dict:
+    return {
+        "answers": [a.to_dict() for a in answers],
+        "missing": [{"id": q.id, "label": q.label or q.id} for q in missing],
+    }
+
+
 @router.post("/resolve-answers")
 async def resolve_answers(req: ResolveRequest):
     """Each question's answer, from the user's own data (facts), Claude
-    (open-ended free text, cached per application), or nothing (missing).
-
-    Claude answers are stored on the Application (resolved_answers.claude,
-    keyed by the normalised question), so reloading the form doesn't call
-    Claude again. At most MAX_CLAUDE_ANSWERS per application.
-    """
+    (open-ended free text, cached per application), or nothing (missing)."""
     questions = [Question.from_dict(q) for q in req.questions[:200]]
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
         app = await _application(conn, req.user_id, req.application_id)
         if closed := _closed(app):
             return closed
-        applicant = await load_applicant(conn, req.user_id)
-        cv_row = await load_cv_row(conn, req.user_id)
-        cover_letter = app["cover_letter"] or ""
-        answers, for_claude, missing = plan_answers(questions, applicant, cover_letter)
-
-        cache = _cache(app)
-        new: dict[str, str] = {}
-        cv_text = app["tailored_cv"] or (cv_row or {}).get("raw_text") or ""
-        for q in for_claude:
-            key = normalize(q.label)
-            text = cache.get(key) or new.get(key)
-            if text is None and len(cache) + len(new) < MAX_CLAUDE_ANSWERS and cv_text:
-                text = await claude_answer(q.label, cv_text)
-                if text:
-                    new[key] = text
-            if text:
-                answers.append(Answer(q.id, "claude", value=text))
-            elif q.required:
-                missing.append(q)
-
-        if new:
-            await conn.execute(
-                'UPDATE "Application" SET resolved_answers = $1::jsonb WHERE id = $2',
-                json.dumps({"claude": {**cache, **new}}),
-                req.application_id,
-            )
+        answers, missing = await _resolve(conn, req.user_id, app, questions)
     finally:
         await conn.close()
-
-    return {
-        "answers": [a.to_dict() for a in answers],
-        "missing": [{"id": q.id, "label": q.label or q.id} for q in missing],
-    }
+    return _result(answers, missing)
 
 
 def form_url(url: str | None, apply_url: str | None) -> tuple[str | None, str]:
@@ -128,6 +135,18 @@ def form_url(url: str | None, apply_url: str | None) -> tuple[str | None, str]:
     if ats == "lever" and not target.rstrip("/").endswith("/apply"):
         target = target.rstrip("/") + "/apply"
     return (target or None), (ats or "unknown")
+
+
+async def _form_target(app) -> tuple[str | None, str]:
+    """(form URL, ATS) for this application's job, with Greenhouse embedded
+    on a company site resolved to Greenhouse's own form."""
+    target, ats = form_url(app["url"], app["apply_url"])
+    if ats == "greenhouse" and target and "greenhouse.io" not in target:
+        # The company page doesn't contain the form; open Greenhouse's own.
+        from routes.ats_form_fill import _resolve_greenhouse_embed_url
+
+        target = await _resolve_greenhouse_embed_url(target) or target
+    return target, ats
 
 
 @router.post("/ats-package")
@@ -142,12 +161,7 @@ async def ats_package(req: ApplicationRef):
     finally:
         await conn.close()
 
-    target, ats = form_url(app["url"], app["apply_url"])
-    if ats == "greenhouse" and target and "greenhouse.io" not in target:
-        # The company page doesn't contain the form; open Greenhouse's own.
-        from routes.ats_form_fill import _resolve_greenhouse_embed_url
-
-        target = await _resolve_greenhouse_embed_url(target) or target
+    target, ats = await _form_target(app)
     return {
         "application_id": req.application_id,
         "status": app["status"],
@@ -181,3 +195,33 @@ async def ats_package_cv(req: ApplicationRef):
         (cv_row or {}).get("original_mime_type") or "application/octet-stream"
     )
     return {"filename": filename, "mime_type": mime, "base64": base64.b64encode(cv_bytes).decode("ascii")}
+
+
+@router.post("/form-answers")
+async def form_answers(req: ApplicationRef):
+    """For the fill-and-review page: the real form's questions (read without
+    a browser, form_questions.py) and the answer to each — the same answers
+    and Claude cache the extension gets. supported=False for an ATS whose
+    form we can't read yet (only Greenhouse and Ashby so far)."""
+    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+    try:
+        app = await _application(conn, req.user_id, req.application_id)
+        if closed := _closed(app):
+            return closed
+        target, ats = await _form_target(app)
+        questions = await form_questions(ats, target) if target else None
+        if not questions:
+            return {"supported": False, "ats": ats, "form_url": target}
+        answers, missing = await _resolve(conn, req.user_id, app, questions)
+    finally:
+        await conn.close()
+    return {
+        "supported": True,
+        "ats": ats,
+        "form_url": target,
+        "questions": [
+            {"id": q.id, "label": q.label, "kind": q.kind, "required": q.required, "role": q.role, "eeo": q.eeo}
+            for q in questions
+        ],
+        **_result(answers, missing),
+    }

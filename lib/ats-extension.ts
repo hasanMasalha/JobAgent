@@ -17,7 +17,7 @@ const ERROR_STATUS: Record<string, number> = {
  * the caller. Returns the AI service's JSON, or the response to send back.
  */
 export async function callAtsExtension(
-  path: "/resolve-answers" | "/ats-package" | "/ats-package/cv",
+  path: "/resolve-answers" | "/ats-package" | "/ats-package/cv" | "/form-answers",
   userId: string,
   body: Record<string, unknown>,
 ): Promise<{ data: Record<string, unknown> } | { response: NextResponse }> {
