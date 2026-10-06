@@ -10,8 +10,7 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from application_answers import ApplicantData
-from utils.cv_pdf import resolve_cv_file
+from applicant_store import application_cv_file, load_applicant, load_cv_row
 
 # Python fully-buffers stdout by default when it isn't attached to a TTY
 # (true under uvicorn/Docker) — a slow background thread's print()s can sit
@@ -233,11 +232,7 @@ async def ats_apply(req: ATSApplyRequest):
         # Fetched unconditionally (not just when tailored_cv is missing) because
         # resolve_cv_file() below needs source/original_file to decide whether
         # an uploaded CV must be passed through byte-for-byte.
-        cv_row = await conn.fetchrow(
-            'SELECT raw_text, source, original_file, original_filename, original_mime_type '
-            'FROM "CV" WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
-            req.user_id,
-        )
+        cv_row = await load_cv_row(conn, req.user_id)
         if not tailored_cv:
             if not cv_row or not cv_row["raw_text"]:
                 return {"success": False, "error": "No CV uploaded — please upload your CV in Settings first"}
@@ -247,27 +242,12 @@ async def ats_apply(req: ATSApplyRequest):
         # form may be answered with (application_answers). The six Application
         # details count only once confirmed (application_details_confirmed_at);
         # they were read here regardless until 2026-10-04.
-        profile_row = await conn.fetchrow(
-            'SELECT first_name, last_name, email, phone, city, linkedin_url, github_url, '
-            'portfolio_url, "currentCompany", expected_salary, notice_period, years_of_experience, '
-            'highest_education, work_authorized, requires_sponsorship, willing_to_relocate, '
-            'application_details_confirmed_at '
-            'FROM "User" WHERE id = $1',
-            req.user_id,
-        )
-        saved_rows = await conn.fetch(
-            'SELECT question, answer FROM "EasyApplyAnswer" WHERE user_id = $1',
-            req.user_id,
-        )
-        applicant = ApplicantData.from_row(
-            dict(profile_row) if profile_row else {},
-            [(r["question"], r["answer"]) for r in saved_rows],
-        )
+        applicant = await load_applicant(conn, req.user_id)
     finally:
         await conn.close()
 
-    cv_row_dict = dict(cv_row) if cv_row else None
-    resolved_cv = resolve_cv_file(tailored_cv or None, cv_row_dict)
+    cv_row_dict = cv_row
+    resolved_cv = application_cv_file(tailored_cv, cv_row_dict, req.first_name, req.last_name)
     if resolved_cv is None:
         # A pre-migration CV row with no confirmed source — we can't prove
         # raw_text isn't the user's own uploaded words, so we refuse to guess
@@ -291,16 +271,6 @@ async def ats_apply(req: ATSApplyRequest):
     cv_bytes, cv_filename = resolved_cv
     cv_base64 = base64.b64encode(cv_bytes).decode("ascii")
     print(f"[ats-apply] CV file size={len(cv_bytes)} bytes, base64 length={len(cv_base64)}, filename={cv_filename}")
-
-    # An uploaded CV passed through byte-for-byte keeps its own filename —
-    # anything else (tailored or AI-generated) gets our naming convention.
-    is_passthrough = bool(
-        cv_row_dict and cv_row_dict.get("source") == "uploaded" and cv_row_dict.get("original_file") and not tailored_cv
-    )
-    if not is_passthrough:
-        name_part = f"{req.first_name}_{req.last_name}".strip("_").replace(" ", "_") or "applicant"
-        ext = os.path.splitext(cv_filename)[1] or ".pdf"
-        cv_filename = f"{name_part}_cv{ext}"
 
     # Best-effort text representation for any "paste your resume" style
     # fields — independent of which file is actually attached above.

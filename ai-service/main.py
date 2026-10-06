@@ -10,6 +10,7 @@ from fastapi import FastAPI  # noqa: E402
 from internal_auth import InternalKeyMiddleware  # noqa: E402
 from routes.apply import router as apply_router  # noqa: E402
 from routes.ats_apply import router as ats_apply_router  # noqa: E402
+from routes.ats_extension import router as ats_extension_router  # noqa: E402
 from routes.cv import router as cv_router  # noqa: E402
 from routes.jobs import router as jobs_router  # noqa: E402
 from routes.jobs_cleanup import router as cleanup_router  # noqa: E402
@@ -33,6 +34,7 @@ app.include_router(jobs_router)
 app.include_router(matching_router)
 app.include_router(apply_router)
 app.include_router(ats_apply_router)
+app.include_router(ats_extension_router)
 app.include_router(linkedin_auth_router)
 app.include_router(cleanup_router)
 
