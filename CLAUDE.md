@@ -398,6 +398,27 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   Claude picking an option. EEO questions get "decline to self-identify" or
   nothing; data-processing consent is the one thing ticked for the user (not
   marketing or background-check consent).
+- **The user can answer any question it stopped on** (since 2026-10-11).
+  `_missing_answers_result` returns `missing_questions` (`[{question,
+  options}]`; options from Ashby's form, Lever's and Greenhouse selects), and
+  `_mark_needs_manual` stores it on `Application.missing_questions`. The
+  Applications page lists them under the application, and fill-and-review
+  (`FormAnswers.tsx`) offers the same on every unanswered question; both use
+  `app/components/SaveAnswer.tsx` → `POST /api/apply/answers`, which saves an
+  `EasyApplyAnswer` for that exact question (matched by `normalize()` /
+  `lib/question-key.ts`). The needs_manual email says how many are waiting.
+  Profile → Saved answers can only edit or delete answers, not add one, so
+  messages never point there (until 2026-10-11 they said "save the answers in
+  your Profile"). Nothing retries the application that stopped: the answers
+  count from the next application that asks the same question.
+- **A Profile yes/no only answers a question with options** (`user_answer(…,
+  choice=True)`: selects, radios, Greenhouse's react-select combobox). In a
+  text field it used to type a bare "Yes"/"No". And the sponsorship answer is
+  only for a question about *needing* sponsorship or a visa ("require" /
+  "need") — "What is your visa status?" and "Do you have a valid visa?" (Yes
+  means the opposite) used to get it. Same rule in the extension's
+  `jaBooleanAnswer`; it reaches users with the next extension release, after
+  which `MIN_EXTENSION_VERSION` should be raised to it.
 - Success only on the ATS's own confirmation; "no error and no confirmation"
   is `unconfirmed` (needs_manual), not applied.
 - Until 2026-10-04 the filler answered "2" years, work authorisation "Yes",

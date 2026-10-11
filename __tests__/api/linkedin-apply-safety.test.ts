@@ -199,6 +199,15 @@ describe("extension answers (chrome-extension/answers.js)", () => {
     expect(jaBooleanAnswer("Do you have an active security clearance?", PROFILE)).toBeNull();
   });
 
+  it("gives the sponsorship answer only to a question about needing sponsorship", () => {
+    // "Do you have a valid visa?" — Yes there means the opposite of needing
+    // sponsorship; it used to get the sponsorship answer.
+    expect(jaBooleanAnswer("Do you have a valid visa?", PROFILE)).toBeNull();
+    expect(jaBooleanAnswer("What is your visa status?", PROFILE)).toBeNull();
+    expect(jaBooleanAnswer("Do you need a visa to work in Israel?", PROFILE)).toBe(false);
+    expect(jaBooleanAnswer("Will you now or in the future require sponsorship?", PROFILE)).toBe(false);
+  });
+
   it("uses an answer the user saved for that exact question", () => {
     const app = { savedAnswers: { "do you have an active security clearance?": "No" } };
     expect(jaSavedAnswer("Do you have an active security clearance? ", app)).toBe("No");

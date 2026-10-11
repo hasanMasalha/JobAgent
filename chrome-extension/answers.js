@@ -100,8 +100,11 @@ function jaBooleanAnswer(label, application) {
   const a = application || {}
   const bool = v => (v === true || v === false ? v : null)
 
-  // "Do you require sponsorship?" — Yes means they need it.
-  if (jaHasAny(l, ['sponsor', 'ויזה', 'חסות']) || (l.includes('visa') && !l.includes('authoriz'))) {
+  // "Do you require sponsorship?" — Yes means they need it. A visa question
+  // is that question only when it asks about needing one: "Do you have a
+  // valid visa?" (Yes means the opposite) used to get this answer.
+  const needs = jaHasAny(l, ['require', 'need', 'צריך', 'תזדקק', 'דרוש'])
+  if (jaHasAny(l, ['sponsor', 'חסות']) || (jaHasAny(l, ['visa', 'ויזה']) && needs && !l.includes('authoriz'))) {
     return bool(a.requires_sponsorship)
   }
 

@@ -174,6 +174,11 @@ model Application {
   // so reloading the form doesn't call Claude again (ai-service/routes/ats_extension.py).
   resolved_answers Json?
 
+  // The required questions a needs_manual application stopped on because the
+  // user hadn't answered them: [{question, options}] (ai-service ats_apply.py
+  // _mark_needs_manual). The Applications page asks each one.
+  missing_questions Json?
+
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
 }

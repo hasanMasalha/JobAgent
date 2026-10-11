@@ -105,7 +105,7 @@ def plan(posting: dict, applicant: ApplicantData, cover_letter: str = "") -> tup
                     action = Action(path, "boolean", title, "yes" if flag else "no")
         elif ftype in ("ValueSelect", "MultiValueSelect"):
             options = _options(field)
-            idx = match_option(options, user_answer(title, applicant))
+            idx = match_option(options, user_answer(title, applicant, choice=True))
             if idx != -1:
                 action = Action(path, "choice" if ftype == "ValueSelect" else "multi", title, options[idx])
         elif ftype in ("String", "Email", "Number", "LongText"):
@@ -123,6 +123,19 @@ def plan(posting: dict, applicant: ApplicantData, cover_letter: str = "") -> tup
         elif required:
             missing.append(title or path)
     return actions, missing
+
+
+def question_options(posting: dict) -> dict[str, list[str]]:
+    """Each question's choices, by title — what the user picks from when asked
+    a question JobAgent had no answer for."""
+    out: dict[str, list[str]] = {}
+    for field, _required, _survey in _entries(posting):
+        title = (field.get("title") or "").strip() or field.get("path") or ""
+        if field.get("type") == "Boolean":
+            out[title] = ["Yes", "No"]
+        elif _options(field):
+            out[title] = _options(field)
+    return out
 
 
 def pick_location(options: list[str], city: str) -> int:
@@ -203,6 +216,7 @@ async def fill_ashby_form(
     from routes.ats_form_fill import _missing_answers_result
 
     posting = await _load_posting(page, apply_url)
+    options = question_options(posting)
     if not posting.get("applicationForm"):
         return {"success": False, "error": "ashby_form_not_found", "ats": "ashby",
                 "message": "Couldn't read this Ashby application form."}
@@ -211,7 +225,7 @@ async def fill_ashby_form(
     filled: list[str] = []
     if missing:
         print(f"[ashby] not submitting — no answer from the user for: {missing}")
-        return _missing_answers_result(missing, filled)
+        return _missing_answers_result(missing, filled, options)
 
     required_paths = {f.get("path") for f, req, _ in _entries(posting) if req}
     for action in actions:
@@ -226,7 +240,7 @@ async def fill_ashby_form(
             missing.append(action.title or action.path)
     if missing:
         print(f"[ashby] not submitting — couldn't fill required: {missing}")
-        return _missing_answers_result(missing, filled)
+        return _missing_answers_result(missing, filled, options)
 
     try:
         os.makedirs("/app/screenshots", exist_ok=True)

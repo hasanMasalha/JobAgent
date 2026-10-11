@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import os
 import sys
 import traceback
@@ -27,7 +28,9 @@ NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 
-async def _mark_needs_manual(conn, application_id: str, message: str | None) -> None:
+async def _mark_needs_manual(
+    conn, application_id: str, message: str | None, missing_questions: list[dict] | None = None
+) -> None:
     """Nothing was submitted: needs_manual, and the auto-apply credit back.
 
     Quick apply's ATS path returns to Next.js before the form is filled, so
@@ -38,10 +41,15 @@ async def _mark_needs_manual(conn, application_id: str, message: str | None) -> 
     was never charged (Tailor & Apply) is never refunded.
     """
     async with conn.transaction():
+        # missing_questions: the required questions it stopped on, for the
+        # Applications page to ask the user (null when it stopped for another
+        # reason).
         await conn.execute(
-            'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2 WHERE id = $3',
+            'UPDATE "Application" SET status = $1, applied_at = NOW(), error_message = $2, '
+            "missing_questions = $3::jsonb WHERE id = $4",
             "needs_manual",
             message,
+            json.dumps(missing_questions) if missing_questions else None,
             application_id,
         )
         charged = await conn.fetchrow(
@@ -154,7 +162,10 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             try:
                 if status == "needs_manual":
                     await _mark_needs_manual(
-                        conn, request_dict["application_id"], result.get("message") or result.get("error")
+                        conn,
+                        request_dict["application_id"],
+                        result.get("message") or result.get("error"),
+                        result.get("missing_questions"),
                     )
                 else:
                     await conn.execute(

@@ -37,8 +37,13 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { question, answer } = body;
-    if (!question || answer == null) {
+    if (typeof question !== "string" || !question.trim() || typeof answer !== "string") {
       return NextResponse.json({ error: "question and answer required" }, { status: 400 });
+    }
+    // Saved from the Applications page and fill-and-review as well as the
+    // extension: a form's question label and the user's answer to it.
+    if (question.length > 1000 || answer.length > 2000) {
+      return NextResponse.json({ error: "question or answer too long" }, { status: 400 });
     }
 
     await db.easyApplyAnswer.upsert({

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import SaveAnswer, { type QuestionToAnswer } from "@/app/components/SaveAnswer";
 import { showToast } from "@/app/components/Toast";
 import {
   Button,
@@ -18,6 +19,7 @@ import {
   statusSelectStyles,
 } from "@/app/components/ui";
 import { statusMeta } from "@/lib/application-status";
+import { questionKey } from "@/lib/question-key";
 import { cn } from "@/lib/cn";
 import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
@@ -31,6 +33,8 @@ interface Application {
   company: string;
   job_url: string;
   location: string | null;
+  /** Required questions it stopped on because the user hadn't answered them. */
+  missing_questions: QuestionToAnswer[] | null;
 }
 
 const ALLOWED_STATUSES = ["applied", "interviewing", "offer", "rejected"] as const;
@@ -41,11 +45,47 @@ type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 const MANUAL_STATUSES = new Set(["manual", "failed", "needs_manual", "needs_security_code"]);
 
 // What the user has to do for an application that's waiting on them.
-function actionHint(status: string): string | null {
+function actionHint(status: string, unanswered = 0): string | null {
   if (status === "pending_verification") return "Greenhouse emailed you a verification code. Open the job posting and enter the code there to finish applying.";
   if (status === "manual") return "Apply on the company's site, then set the status here.";
+  if (MANUAL_STATUSES.has(status) && unanswered > 0)
+    return "Not sent: the form asked questions you hadn't answered, and JobAgent doesn't guess facts. Answer them below so JobAgent can use your answers from now on, and apply to this one on the company's site.";
   if (MANUAL_STATUSES.has(status)) return "We couldn't finish this one automatically. Check your email for the link to apply yourself.";
   return null;
+}
+
+
+// An application that stopped on questions the user hadn't answered: each one
+// with a place to answer it. The answer is saved for that exact question, so
+// the next application that asks it is filled in; this one still has to be
+// finished on the company's site.
+function MissingQuestions({ questions, saved }: { questions: QuestionToAnswer[]; saved: Map<string, string> }) {
+  const [open, setOpen] = useState(false);
+  const left = questions.filter((q) => !saved.has(questionKey(q.question))).length;
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="text-body-sm font-semibold text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {open ? "Hide the questions" : left > 0
+          ? `Answer the ${questions.length === 1 ? "question" : `${questions.length} questions`} it asked`
+          : "See your answers"}
+      </button>
+      {open && (
+        <ol className="mt-2 space-y-3">
+          {questions.map((q) => (
+            <li key={q.question}>
+              <p className="text-body-sm font-medium text-ink">{q.question}</p>
+              <SaveAnswer question={q.question} options={q.options} initial={saved.get(questionKey(q.question)) ?? ""} />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
 }
 
 const formatDate = (iso: string) =>
@@ -142,6 +182,18 @@ export default function ApplicationsPage() {
   const [calendarModal, setCalendarModal] = useState<Application | null>(null);
   const [toast, setToast] = useState<{ message: string; url?: string } | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [savedAnswers, setSavedAnswers] = useState<Map<string, string>>(new Map());
+
+  // The user's saved answers, to show against the questions an application
+  // stopped on. Missing them only means those inputs start empty.
+  useEffect(() => {
+    fetch("/api/apply/answers")
+      .then((res) => (res.ok ? res.json() : { answers: [] }))
+      .then((data: { answers?: { question: string; answer: string }[] }) =>
+        setSavedAnswers(new Map((data.answers ?? []).map((a) => [questionKey(a.question), a.answer]))),
+      )
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/applications")
@@ -393,7 +445,7 @@ export default function ApplicationsPage() {
             {/* Phones: one card per application */}
             <ul className="space-y-3 sm:hidden">
               {apps.map((app) => {
-                const hint = actionHint(app.status);
+                const hint = actionHint(app.status, app.missing_questions?.length ?? 0);
                 return (
                   <li key={app.id} className={cn(cardCls, "p-4")}>
                     <div className="flex items-start justify-between gap-3">
@@ -404,6 +456,9 @@ export default function ApplicationsPage() {
                       {statusSelect(app, "shrink-0")}
                     </div>
                     {hint && <p className="mt-3 text-body-sm text-ink-muted">{hint}</p>}
+                    {MANUAL_STATUSES.has(app.status) && !!app.missing_questions?.length && (
+                      <MissingQuestions questions={app.missing_questions} saved={savedAnswers} />
+                    )}
                     <p className="mt-2 text-caption text-ink-subtle">Applied {formatDate(app.applied_at)}</p>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {primaryAction(app)}
@@ -428,13 +483,16 @@ export default function ApplicationsPage() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {apps.map((app) => {
-                      const hint = actionHint(app.status);
+                      const hint = actionHint(app.status, app.missing_questions?.length ?? 0);
                       return (
                         <tr key={app.id} className="align-top transition-colors hover:bg-surface-sunken/50">
                           <td className="max-w-[26rem] px-6 py-4">
                             <p className="truncate font-semibold text-ink">{app.job_title}</p>
                             <p className="truncate text-ink-muted">{app.company}</p>
                             {hint && <p className="mt-1.5 text-caption text-ink-muted">{hint}</p>}
+                            {MANUAL_STATUSES.has(app.status) && !!app.missing_questions?.length && (
+                              <MissingQuestions questions={app.missing_questions} saved={savedAnswers} />
+                            )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-4 text-ink-muted tabular-nums">{formatDate(app.applied_at)}</td>
                           <td className="px-4 py-4">{statusSelect(app)}</td>
