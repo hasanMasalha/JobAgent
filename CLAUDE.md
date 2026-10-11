@@ -123,8 +123,10 @@ There are two supported apply paths — know which one a change affects:
 **Card badge and Apply button = `applyRoute()`** (`lib/detect-apply-type.ts`),
 built from the same helpers quick apply branches on (`needsExtension`,
 `applySubmitUrl` = `apply_url` before `url`, `detectATS` incl. `gh_jid`):
-`ats` → Direct Apply, `extension` → Extension, `email` (stored `auto`, no ATS)
-→ "Email apply", `external`. Apply is enabled for `ats` and `extension` only.
+`ats` → Direct Apply, `extension` → Extension, `review` → "Guided apply",
+`email` (stored `auto`, no ATS) → "Email apply", `external`. Apply is enabled
+for `ats`, `extension` and `review`. Matches' tabs (`applyTab`): Direct =
+`ats`; `review` and `email` are under External.
 Every list that renders a card must return `apply_url`.
 `__tests__/lib/apply-route.test.ts` runs the real route and the card on the
 same rows. Until 2026-10-11 the card read only `url`, so ~3,000 Arbeitnow and
@@ -407,6 +409,17 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   containers; it used to get the Greenhouse filler, which matched nothing.
   Ashby runs invisible reCAPTCHA v3, which we can't solve: "We couldn't
   submit your application" is reported as `ashby_rejected`.
+- **Ashby isn't submitted from the server** (since 2026-10-11;
+  `serverSubmits()` in `lib/detect-apply-type.ts`). No Ashby application had
+  ever gone through server-side. An Ashby job's route is `review`: Apply opens
+  fill-and-review (`/dashboard/apply/[jobId]?mode=download` — tailored CV,
+  letter, the form's questions answered), which spends a CV tailoring credit,
+  not an auto-apply. `/api/apply/prepare` returns `fill_and_review` so the
+  page shows that view however it was opened (an Arbeitnow job's Ashby form
+  is only in `apply_url`). Quick apply returns `fill_and_review` without
+  charging, and `/ats-apply` refuses Ashby (`not_server_submitted`) as the
+  backstop. The filler (`ashby_form.py`) stays for the extension (stage 4).
+  Greenhouse and Lever are still submitted server-side until 1.6.0.
 - **Phone country** (Greenhouse): taken from the user's own number
   (`ai-service/phone_country.py`, `phonenumbers`). An option is chosen only
   when its name *and* dial code match (+1 is the US and Canada, +44 the UK and

@@ -109,9 +109,22 @@ export function needsExtension(job: ApplyJob): boolean {
  *   fraud-report inboxes), so the badge only says to apply by email; Apply
  *   stays disabled.
  * - `external`: apply on the company's site.
- * Apply is enabled for `ats` and `extension` only.
+ * - `review`: an ATS we don't submit to server-side (Ashby, whose invisible
+ *   reCAPTCHA refuses our server's browser). Apply opens fill-and-review
+ *   (`/dashboard/apply/[jobId]?mode=download`): the form's questions with
+ *   the user's answers, the tailored CV and letter; the user submits.
+ * Apply is enabled for `ats`, `extension` and `review`.
  */
-export type ApplyRoute = "ats" | "extension" | "email" | "external";
+export type ApplyRoute = "ats" | "extension" | "review" | "email" | "external";
+
+/**
+ * ATSs JobAgent fills and submits from its own server. Ashby isn't one:
+ * every Ashby form runs invisible reCAPTCHA v3, and no Ashby application from
+ * the server has ever gone through (2026-10-11).
+ */
+export function serverSubmits(platform: AtsPlatform | null): boolean {
+  return platform !== null && platform !== "ashby";
+}
 
 export function applyRoute(job: ApplyJob): ApplyRoute {
   if (needsExtension(job)) {
@@ -121,7 +134,8 @@ export function applyRoute(job: ApplyJob): ApplyRoute {
     return job.apply_type === "auto" ? "email" : "external";
   }
   if (job.apply_type === "external") return "external";
-  if (detectATS(applySubmitUrl(job))) return "ats";
+  const ats = detectATS(applySubmitUrl(job));
+  if (ats) return serverSubmits(ats) ? "ats" : "review";
   return job.apply_type === "auto" ? "email" : "external";
 }
 
@@ -136,12 +150,13 @@ export function applyTab(job: ApplyJob): ApplyTab {
   const route = applyRoute(job);
   if (route === "ats") return "direct";
   if (route === "extension") return "extension";
+  // review: the user submits on the company's form, with JobAgent's answers.
   return "external";
 }
 
 export function canApplyFromCard(job: ApplyJob): boolean {
   const route = applyRoute(job);
-  return route === "ats" || route === "extension";
+  return route === "ats" || route === "extension" || route === "review";
 }
 
 /**

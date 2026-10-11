@@ -57,6 +57,8 @@ interface PrepareResult {
   /** The scraper saw LinkedIn's Easy Apply marker on this job's public page. */
   easy_apply_confirmed?: boolean;
   linkedin_automation_consented?: boolean;
+  /** An ATS JobAgent doesn't submit to (Ashby): always fill-and-review. */
+  fill_and_review?: boolean;
 }
 
 const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
@@ -116,7 +118,7 @@ export default function ApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isDownloadMode = searchParams.get("mode") === "download";
+  const downloadRequested = searchParams.get("mode") === "download";
 
   const [stage, setStage] = useState<Stage>("loading");
   const [data, setData] = useState<PrepareResult | null>(null);
@@ -143,7 +145,7 @@ export default function ApplyPage() {
     fetch("/api/apply/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId, mode: isDownloadMode ? "download" : undefined }),
+      body: JSON.stringify({ job_id: jobId, mode: downloadRequested ? "download" : undefined }),
       signal: AbortSignal.timeout(120_000),
     })
       .then(async (res) => {
@@ -166,7 +168,10 @@ export default function ApplyPage() {
         setError(err.message);
         setStage("error");
       });
-  }, [jobId, isDownloadMode]);
+  }, [jobId, downloadRequested]);
+  // Fill-and-review: asked for, or the job's ATS is one JobAgent doesn't
+  // submit to — Confirm there would have nothing to send it to.
+  const isDownloadMode = downloadRequested || !!data?.fill_and_review;
 
   // LinkedIn review: the answers the extension is allowed to use.
   const isLinkedInReview = !!data?.linkedin;

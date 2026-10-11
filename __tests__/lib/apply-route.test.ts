@@ -51,7 +51,9 @@ const JOBS: [string, Row, ApplyRoute][] = [
   ["Lever listing", { url: "https://jobs.lever.co/acme/1", apply_url: null, apply_type: "auto" }, "ats"],
   ["Comeet listing", { url: "https://www.comeet.com/jobs/acme/1", apply_url: null, apply_type: "auto" }, "ats"],
   ["BambooHR listing", { url: "https://acme.bamboohr.com/careers/1", apply_url: null, apply_type: "auto" }, "ats"],
-  ["Arbeitnow job whose apply_url is Ashby", { url: "https://www.arbeitnow.com/jobs/acme/1", apply_url: "https://jobs.ashbyhq.com/acme/1", apply_type: "auto" }, "ats"],
+  // Ashby: fill-and-review, never a server submit (its reCAPTCHA refuses us).
+  ["Ashby listing", { url: "https://jobs.ashbyhq.com/acme/1", apply_url: null, apply_type: "auto" }, "review"],
+  ["Arbeitnow job whose apply_url is Ashby", { url: "https://www.arbeitnow.com/jobs/acme/1", apply_url: "https://jobs.ashbyhq.com/acme/1", apply_type: "auto" }, "review"],
   ["Arbeitnow job whose apply_url is Lever", { url: "https://www.arbeitnow.fr/jobs/acme/1", apply_url: "https://jobs.lever.co/acme/1", apply_type: "auto" }, "ats"],
   ["Greenhouse embedded on the company site", { url: "https://www.acme.example/careers?gh_jid=123", apply_url: null, apply_type: "auto" }, "ats"],
   ["LinkedIn listing resolved to Greenhouse", { url: LI, apply_url: "https://boards.greenhouse.io/acme/jobs/1", apply_type: "auto" }, "ats"],
@@ -93,11 +95,12 @@ function renderCard(row: Row, onSelect?: (id: string) => void): string {
 }
 
 // The Matches tab a job is listed under, by its card's badge.
-const TAB: Record<ApplyRoute, ApplyTab> = { ats: "direct", extension: "extension", email: "external", external: "external" };
+const TAB: Record<ApplyRoute, ApplyTab> = { ats: "direct", extension: "extension", review: "external", email: "external", external: "external" };
 
 const BADGE: Record<ApplyRoute, string> = {
   ats: "Direct Apply",
   extension: "Extension",
+  review: "Guided apply",
   email: "Email apply",
   external: "External",
 };
@@ -112,6 +115,12 @@ describe.each(JOBS)("%s", (_what, row, expected) => {
     expect(submitted).toBe(applyRoute(row) === "ats");
     expect(Boolean(body.needs_extension)).toBe(needsExtension(row));
     if (applyRoute(row) === "extension") expect(body.needs_extension).toBe(true);
+    // Fill-and-review: handed back to the card, nothing created or charged.
+    expect(Boolean(body.fill_and_review)).toBe(applyRoute(row) === "review");
+    if (applyRoute(row) === "review") {
+      expect(usage.checkAndIncrementAutoApply).not.toHaveBeenCalled();
+      expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    }
   });
 
   it("gets the badge and the Apply button from the same route", () => {

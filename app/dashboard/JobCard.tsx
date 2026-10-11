@@ -90,6 +90,12 @@ function ApplyRouteBadge({ route }: { route: ApplyRoute }) {
     );
   if (route === "extension")
     return <Badge tone="info"><ExtensionIcon className="h-3.5 w-3.5" />Extension</Badge>;
+  if (route === "review")
+    return (
+      <span title="JobAgent prepares your answers, CV and cover letter; you submit them on the company's form">
+        <Badge tone="info"><PenIcon className="h-3.5 w-3.5" />Guided apply</Badge>
+      </span>
+    );
   if (route === "email")
     return (
       <span title="Apply by email — the address is in the job description">
@@ -179,6 +185,13 @@ export default function JobCard({
       router.push(`/dashboard/apply/${job.id}`);
       return;
     }
+    // An ATS JobAgent doesn't submit to (Ashby): fill-and-review, where the
+    // user gets the form's questions answered and submits it themselves.
+    if (route === "review") {
+      onApply?.(job.id);
+      router.push(`/dashboard/apply/${job.id}?mode=download`);
+      return;
+    }
     setQuickApplying(true);
     try {
       const res = await fetch("/api/apply/quick", {
@@ -189,6 +202,10 @@ export default function JobCard({
       const data = await res.json();
       if (res.status === 403 && data.error === "limit_reached") {
         showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
+        return;
+      }
+      if (data.fill_and_review) {
+        router.push(`/dashboard/apply/${job.id}?mode=download`);
         return;
       }
       if (data.needs_extension) {
