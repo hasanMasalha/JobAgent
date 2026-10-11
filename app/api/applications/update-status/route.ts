@@ -6,13 +6,31 @@ import { refundAutoApplyForApplication } from "@/lib/usage";
 // Statuses that mean the application went out. "manual"/"failed" never replace these.
 const SUBMITTED_STATUSES = new Set(["applied", "interviewing", "offer", "rejected"]);
 
+// The required questions the extension stopped on because the user hadn't
+// answered them, stored like the AI service's (Application.missing_questions):
+// [{ question, options }]. Anything else in the body is dropped.
+function missingQuestions(raw: unknown): { question: string; options: string[] }[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out = raw
+    .slice(0, 50)
+    .map((q) => ({
+      question: typeof q?.question === "string" ? q.question.slice(0, 1000) : "",
+      options: Array.isArray(q?.options)
+        ? q.options.filter((o: unknown): o is string => typeof o === "string").slice(0, 100).map((o: string) => o.slice(0, 300))
+        : [],
+    }))
+    .filter((q) => q.question.trim());
+  return out.length ? out : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Session, or the extension's signed token (its service worker can't send
     // the session cookie). A userId in the body is ignored — it used to be
     // trusted, which let anyone change another user's statuses and refunds.
     const userId = await getSessionOrExtensionUserId(req);
-    const { applicationId, status } = await req.json();
+    const body = await req.json();
+    const { applicationId, status } = body;
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -45,9 +63,11 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[update-status] updating:", applicationId, "to:", status, "for user:", userId);
+    const missing = status === "manual" ? missingQuestions(body.missingQuestions) : null;
     await db.$executeRaw`
       UPDATE "Application"
-      SET status = ${status}
+      SET status = ${status},
+          missing_questions = ${missing ? JSON.stringify(missing) : null}::jsonb
       WHERE id = ${applicationId} AND user_id = ${userId}
     `;
     console.log("[update-status] done");

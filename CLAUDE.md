@@ -65,6 +65,9 @@ DODO_PRO_MONTHLY_PRODUCT_ID          Dodo product ID, Pro plan / monthly
 DODO_PRO_ANNUAL_PRODUCT_ID           Dodo product ID, Pro plan / annual
 DODO_UNLIMITED_MONTHLY_PRODUCT_ID    Dodo product ID, Unlimited plan / monthly
 DODO_UNLIMITED_ANNUAL_PRODUCT_ID     Dodo product ID, Unlimited plan / annual
+NEXT_PUBLIC_GREENHOUSE_VIA_EXTENSION  "true" = Greenhouse applies go through the extension
+                           (stage 3). A GitHub repo *variable*, passed as a Docker build
+                           arg — changing it needs a redeploy. Off until 1.6.0 is live.
 EXTENSION_TOKEN_SECRET     ≥32 random chars; signs the Chrome extension's API token
                            (lib/extension-token.ts). Unset = extension API calls fail closed
 
@@ -557,7 +560,22 @@ BambooHR · 7 server-side submit switched off, then deleted.
   section isn't shown.
 - All four authenticate with the session or the extension token and pass on
   only that user id; the application must be the user's own and `draft` or
-  `pending_extension` (404 / 409 otherwise). Loading the user's answers and
+  `pending_extension` (404 / 409 otherwise).
+- **Stage 3, site side** (behind `NEXT_PUBLIC_GREENHOUSE_VIA_EXTENSION`,
+  `greenhouseViaExtension()` in `lib/job-site-consent.ts`). Apply on a
+  Greenhouse job (route `ats`): extension ≥ `MIN_ATS_EXTENSION_VERSION`
+  (1.6.0) → job-site notice accepted (`User.job_site_automation_consent_at`,
+  `/dashboard/job-site-extension`, `POST /api/apply/job-site-consent`) →
+  `POST /api/apply/ats-extension/start` (charges one auto-apply once per
+  application, marks it `pending_extension`; refuses non-Greenhouse, an
+  applied job, no consent, the flag off) → `START_ATS_APPLY {applicationId}`
+  to the extension. If the extension doesn't take it, the card reports
+  `manual` (refund). Missing extension / older / no consent → the setup page:
+  install or update, or "Prepare it for me to submit instead"
+  (fill-and-review). With the flag on, `/api/apply/quick` doesn't submit
+  Greenhouse server-side (`extension_required`, nothing charged); Lever still
+  does. The extension reports with `update-status` (`manual` may carry
+  `missingQuestions`, stored on `Application.missing_questions`). Loading the user's answers and
   CV is shared with `/ats-apply` (`ai-service/applicant_store.py`).
 
 ## No CAPTCHA solving, no disguise

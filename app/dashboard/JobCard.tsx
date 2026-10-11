@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 import { JobDescription } from "./components/JobDescription";
 import { cn } from "@/lib/cn";
-import { applyRoute, canApplyFromCard, type ApplyRoute } from "@/lib/detect-apply-type";
+import { applyRoute, applySubmitUrl, canApplyFromCard, detectATS, type ApplyRoute } from "@/lib/detect-apply-type";
+import { extensionReadiness, sendToExtension } from "@/lib/extension-client";
+import { MIN_ATS_EXTENSION_VERSION } from "@/lib/extension-version";
+import { greenhouseViaExtension, jobSiteSetupHref } from "@/lib/job-site-consent";
 import {
   Badge,
   Button,
@@ -192,6 +195,10 @@ export default function JobCard({
       router.push(`/dashboard/apply/${job.id}?mode=download`);
       return;
     }
+    if (route === "ats" && greenhouseViaExtension() && detectATS(applySubmitUrl(job)) === "greenhouse") {
+      await applyViaExtension();
+      return;
+    }
     setQuickApplying(true);
     try {
       const res = await fetch("/api/apply/quick", {
@@ -202,6 +209,10 @@ export default function JobCard({
       const data = await res.json();
       if (res.status === 403 && data.error === "limit_reached") {
         showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
+        return;
+      }
+      if (data.extension_required) {
+        router.push(jobSiteSetupHref("/dashboard/matches", job.id));
         return;
       }
       if (data.fill_and_review) {
@@ -230,6 +241,63 @@ export default function JobCard({
       showToast(`${errMsg} — use Tailor & Download to apply manually.`, "error");
     } catch {
       showToast("Apply failed", "error");
+    } finally {
+      setQuickApplying(false);
+    }
+  };
+
+  // Greenhouse: the extension fills in and submits the form in the user's own
+  // browser (where Greenhouse's bot check passes). Checked in this order so
+  // nothing is charged for an apply that can't happen: extension 1.6.0+, the
+  // job-site notice accepted, then the start route charges and marks it
+  // pending_extension. Without 1.6.0 or the notice, the setup page offers to
+  // install / accept, or fill-and-review instead.
+  const applyViaExtension = async () => {
+    setQuickApplying(true);
+    try {
+      const setup = jobSiteSetupHref("/dashboard/matches", job.id);
+      if ((await extensionReadiness(MIN_ATS_EXTENSION_VERSION)) !== "ok") {
+        router.push(setup);
+        return;
+      }
+      const consent = await fetch("/api/apply/job-site-consent").then((r) => r.json()).catch(() => null);
+      if (!consent?.consented) {
+        router.push(setup);
+        return;
+      }
+      const res = await fetch("/api/apply/ats-extension/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data.error === "limit_reached") {
+        showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
+        return;
+      }
+      if (res.status === 403 && data.error === "job_site_consent_required") {
+        router.push(setup);
+        return;
+      }
+      if (!res.ok || !data.application_id) {
+        showToast("Couldn't start this application. Please try again.", "error");
+        return;
+      }
+      onApply?.(job.id);
+      const started = await sendToExtension({ type: "START_ATS_APPLY", applicationId: data.application_id });
+      if (!started) {
+        // Charged and marked pending, but the extension didn't take it:
+        // "manual" gives the auto-apply back.
+        await fetch("/api/applications/update-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ applicationId: data.application_id, status: "manual" }),
+        }).catch(() => null);
+        showToast("The extension didn't respond, so nothing was sent and your auto-apply was returned. Reload the page and try again.", "error");
+        return;
+      }
+      setQuickApplied(true);
+      showToast(`Opening ${job.company}'s application form — the extension fills it in and submits it. Check Applications for the result.`, "success");
     } finally {
       setQuickApplying(false);
     }
