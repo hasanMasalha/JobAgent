@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 fastapi
-ruff
+ruff==0.17.0  # also ai-service/ruff.toml required-version; CI installs this line
 python-dotenv
 uvicorn
 sentence-transformers

@@ -14,7 +14,7 @@ jobs:
 
       - name: Python lint
         run: |
-          pip install ruff
+          pip install "$(grep '^ruff==' ai-service/requirements.txt | cut -d' ' -f1)"
           cd ai-service && python -m ruff check .
 
       - uses: actions/setup-node@v4
