@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { applyRoute } from "@/lib/detect-apply-type";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
@@ -63,10 +64,11 @@ export async function POST(req: NextRequest) {
       company: string;
       description: string;
       url: string;
+      apply_url: string | null;
       apply_type: string | null;
       match_score: number | null;
     }[]>`
-      SELECT j.title, j.company, j.description, j.url, j.apply_type,
+      SELECT j.title, j.company, j.description, j.url, j.apply_url, j.apply_type,
              CASE WHEN c.embedding IS NOT NULL AND j.embedding IS NOT NULL
                   THEN CAST(1 - (c.embedding <=> j.embedding) AS FLOAT)
                   ELSE NULL END AS match_score
@@ -80,6 +82,10 @@ export async function POST(req: NextRequest) {
     }
     const job = jobRows[0];
     const matchScore: number | null = job.match_score;
+    // An ATS JobAgent doesn't submit to (Ashby): the page shows fill-and-review
+    // whatever mode it was opened in. Decided from apply_url as well as url —
+    // an Arbeitnow job's Ashby form is only in apply_url.
+    const fillAndReview = applyRoute(job) === "review";
     const cvHash = hashCvText(raw_text);
 
     // Reuse the draft for this user+job when there is one.
@@ -127,6 +133,7 @@ export async function POST(req: NextRequest) {
         company: job.company,
         job_url: job.url,
         match_score: matchScore,
+        fill_and_review: fillAndReview,
       });
     }
     // A draft from before the hash existed (null) is reused as it is.
@@ -140,6 +147,7 @@ export async function POST(req: NextRequest) {
         company: job.company,
         job_url: job.url,
         match_score: matchScore,
+        fill_and_review: fillAndReview,
       });
     }
 
@@ -242,6 +250,7 @@ export async function POST(req: NextRequest) {
         company: job.company,
         job_url: job.url,
         match_score: matchScore,
+        fill_and_review: fillAndReview,
       });
     }
 
@@ -263,6 +272,7 @@ export async function POST(req: NextRequest) {
       company: job.company,
       job_url: job.url,
       match_score: matchScore,
+      fill_and_review: fillAndReview,
     });
   } catch (err) {
     console.error("[apply/prepare]", err);

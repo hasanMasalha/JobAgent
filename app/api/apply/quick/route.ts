@@ -9,7 +9,7 @@ import {
   refundAutoApplyForApplication,
 } from "@/lib/usage";
 import { pythonFetch, pythonServiceUrl } from "@/lib/python-service";
-import { applySubmitUrl, detectATS, needsExtension } from "@/lib/detect-apply-type";
+import { applySubmitUrl, detectATS, needsExtension, serverSubmits } from "@/lib/detect-apply-type";
 
 export const maxDuration = 60;
 
@@ -80,6 +80,17 @@ export async function POST(req: NextRequest) {
     const applyUrl = applySubmitUrl(job);
 
     const atsPlatform = detectATS(applyUrl);
+
+    // Ashby: not submitted from the server (its reCAPTCHA refuses it). The
+    // card sends these to fill-and-review; this is the backstop. Nothing is
+    // created or charged.
+    if (atsPlatform && !serverSubmits(atsPlatform)) {
+      return NextResponse.json({
+        success: false,
+        fill_and_review: true,
+        message: "JobAgent prepares this application for you to submit on the company's form.",
+      });
+    }
 
     if (atsPlatform) {
       // JobAgent is about to submit for the user: this is an auto-apply and

@@ -214,6 +214,14 @@ async def ats_apply(req: ATSApplyRequest):
     """Kick off ATS form fill in background and return immediately."""
     print(f"[ats-apply] {req.ats_platform} — {req.apply_url[:80]}")
 
+    # Ashby isn't submitted from the server: its invisible reCAPTCHA refuses
+    # our browser, and no Ashby application has ever gone through this way.
+    # Next.js sends Ashby jobs to fill-and-review (lib/detect-apply-type.ts
+    # serverSubmits); this is the backstop. Nothing is opened or changed.
+    if req.ats_platform == "ashby" or "ashbyhq.com" in req.apply_url.lower():
+        return {"success": False, "error": "not_server_submitted",
+                "message": "Ashby applications are prepared for the user to submit, not sent from the server."}
+
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
         row = await conn.fetchrow(
