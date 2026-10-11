@@ -123,7 +123,7 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
                     ),
                     timeout=300,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print("[ats-apply-bg] TIMEOUT after 300s — submit_via_ats did not complete")
                 result = {
                     "success": False,

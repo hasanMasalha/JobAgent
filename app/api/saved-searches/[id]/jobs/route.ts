@@ -18,6 +18,7 @@ type JobRow = {
   description: string
   location: string | null
   url: string
+  apply_url: string | null
   source: string
   apply_type: string | null
   salary_min: number | null
@@ -99,7 +100,7 @@ async function queryJobs(
   `
 
   const sql = `
-    SELECT j.id, j.title, j.company, j.description, j.location, j.url,
+    SELECT j.id, j.title, j.company, j.description, j.location, j.url, j.apply_url,
            j.source, j.apply_type, j.salary_min, j.salary_max, j.scraped_at
     FROM "Job" j
     ${whereClause}

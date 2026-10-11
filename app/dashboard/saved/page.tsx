@@ -13,6 +13,7 @@ interface SavedJob {
   company: string;
   location: string | null;
   url: string;
+  apply_url: string | null;
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
@@ -115,7 +116,7 @@ export default function SavedJobsPage() {
                       </p>
                       {salary && <p className="mt-1 text-body-sm text-ink-subtle tabular-nums">{salary}</p>}
                       {job.apply_type && (
-                        <div className="mt-2"><ApplyTypeBadge type={job.apply_type} url={job.url} /></div>
+                        <div className="mt-2"><ApplyTypeBadge job={job} /></div>
                       )}
                     </div>
                     <span className="shrink-0 whitespace-nowrap text-caption text-ink-subtle">

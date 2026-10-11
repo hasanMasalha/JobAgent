@@ -28,6 +28,7 @@ type JobRow = {
   company: string;
   location: string | null;
   url: string;
+  apply_url: string | null;
   source: string;
   apply_type: string | null;
   recruiter_email: string | null;
@@ -128,7 +129,7 @@ export async function GET(req: NextRequest) {
   try {
     const [jobs, countResult] = await Promise.all([
       db.$queryRaw<JobRow[]>`
-        SELECT j.id, j.title, j.company, j.location, j.url, j.source,
+        SELECT j.id, j.title, j.company, j.location, j.url, j.apply_url, j.source,
                j.salary_min, j.salary_max, j.scraped_at, j.description,
                j.apply_type, j.recruiter_email, j.is_active
         FROM "Job" j

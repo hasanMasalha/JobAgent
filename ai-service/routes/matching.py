@@ -274,7 +274,7 @@ async def _vector_search(
     rows = await conn.fetch(
         f"""
         SELECT j.id, j.title, j.company, j.description,
-               j.location, j.url, j.source, j.salary_min, j.salary_max,
+               j.location, j.url, j.apply_url, j.source, j.salary_min, j.salary_max,
                j.scraped_at, j.apply_type,
                1 - (j.embedding <=> cv.embedding::vector) AS similarity
         FROM "Job" j, "CV" cv

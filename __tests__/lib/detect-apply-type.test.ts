@@ -34,10 +34,15 @@ describe("isEasyApplyJob", () => {
   it.each([
     ["a LinkedIn listing not confirmed as Easy Apply", li, "external"],
     ["a LinkedIn listing with no stored type", li, null],
-    ["a LinkedIn listing that resolved to an ATS", "https://boards.greenhouse.io/acme/jobs/1?src=linkedin.com", "extension"],
     ["a non-LinkedIn job", "https://jobs.lever.co/acme/1", "extension"],
     ["no URL", null, "extension"],
   ])("is false for %s", (_what, url, applyType) => {
     expect(isEasyApplyJob({ url, apply_type: applyType })).toBe(false);
+  });
+
+  // Quick apply submits to apply_url when there is one, so the extension
+  // never sees it.
+  it("is false for a LinkedIn listing that resolved to an ATS", () => {
+    expect(isEasyApplyJob({ url: li, apply_url: "https://boards.greenhouse.io/acme/jobs/1", apply_type: "extension" })).toBe(false);
   });
 });
