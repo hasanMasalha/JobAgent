@@ -12,8 +12,8 @@ import { linkedInAutomationConsentAt } from "@/lib/linkedin-consent.server";
 // the extension queue can pick them up. Does not call Claude — the
 // extension fills forms directly using saved profile defaults.
 //
-// Each queued job spends one monthly auto-apply credit, like batch email
-// auto-apply. If the extension later reports manual/failed,
+// Each queued job spends one monthly auto-apply credit, like quick apply's
+// ATS submit. If the extension later reports manual/failed,
 // /api/applications/update-status refunds it. A job that already holds a
 // credit (re-queued) isn't charged again. Jobs past the limit aren't queued.
 export async function POST(req: NextRequest) {
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       results.push({ jobId: job.id, applicationId, jobUrl: job.url });
     }
 
-    // Nothing queued and the only reason is quota — same 403 as batch-auto.
+    // Nothing queued and the only reason is quota — same 403 as quick apply.
     if (results.length === 0 && limitReached.length > 0) {
       return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
     }

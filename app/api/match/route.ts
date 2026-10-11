@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
-import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
+import { detectApplyType } from "@/lib/detect-apply-type";
 import { db } from "@/lib/db";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementMatches } from "@/lib/usage";
@@ -86,7 +86,6 @@ export async function GET(req: NextRequest) {
         source: j.source as string,
         description: j.description as string,
       }),
-      recruiter_email: (j.recruiter_email as string) ?? extractRecruiterEmail(j.description as string ?? ""),
     }));
 
     const start = (page - 1) * limit;

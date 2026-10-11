@@ -111,8 +111,8 @@ export async function checkAndIncrementBrowseJobs(
 }
 
 // Takes one monthly auto-apply credit if one is left. Every path where
-// JobAgent submits for the user charges here: quick apply (ATS), batch email
-// auto-apply, and extension applies queued from the dashboard. Tailor & Apply
+// JobAgent submits for the user charges here: quick apply (ATS) and
+// extension applies queued from the dashboard. Tailor & Apply
 // doesn't — it's already capped by cvTailoringPerMonth at the same numbers.
 //
 // The check and the increment are one conditional UPDATE, so two concurrent

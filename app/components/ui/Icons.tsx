@@ -27,8 +27,6 @@ function Svg({ className, children, fill = "none" }: IconProps & { children: Rea
 export const DirectIcon = (p: IconProps) => <Svg {...p}><path d="M2.5 8h8M8 5l3 3-3 3M13.5 3v10" /></Svg>;
 /** Browser extension: a plug. */
 export const ExtensionIcon = (p: IconProps) => <Svg {...p}><path d="M6 2v3M10 2v3M4 5h8v3a4 4 0 0 1-8 0V5zM8 12v2" /></Svg>;
-/** Sent for you by email: a paper plane. */
-export const AutoIcon = (p: IconProps) => <Svg {...p}><path d="M14 2L7 9M14 2l-4.5 12-2.5-5-5-2.5L14 2z" /></Svg>;
 /** Apply by email: an envelope. */
 export const MailIcon = (p: IconProps) => <Svg {...p}><rect x="2" y="3.5" width="12" height="9" rx="1.5" /><path d="M2.5 4.5L8 9l5.5-4.5" /></Svg>;
 /** Leaves JobAgent for the company's own site. */

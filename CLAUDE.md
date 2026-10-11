@@ -6,8 +6,8 @@ from company career pages, LinkedIn, Indeed and more, matches them to
 user CVs using vector embeddings (no LLM for matching), and auto-applies
 on the user's behalf: a single "Apply" click submits directly to
 supported ATS platforms (Greenhouse, Lever, Workable, Ashby, Comeet,
-BambooHR) with no separate confirmation step, and batch auto-apply can
-submit to many matched jobs at once via email. A separate "Tailor CV &
+BambooHR) with no separate confirmation step, and confirmed LinkedIn Easy
+Apply jobs can be applied to in a batch through the extension. A separate "Tailor CV &
 Apply" path still tailors the CV/cover letter and lets the user review
 before applying, for jobs that need more care. LinkedIn listings with no
 resolved ATS URL fall back to the browser extension or manual apply —
@@ -109,13 +109,12 @@ draft → applied → interviewing → offer / rejected / cancelled
 ## Apply flow rules — critical
 There are two supported apply paths — know which one a change affects:
 
-**Quick / Auto Apply** (`/api/apply/quick`, `/api/apply/batch-auto`)
-1. User clicks Apply (single job) or triggers batch auto-apply (multiple jobs)
+**Quick Apply** (`/api/apply/quick`)
+1. User clicks Apply on one job
 2. For ATS-detected jobs (Greenhouse, Lever, Workable, Ashby, Comeet,
    BambooHR) the application is submitted immediately — no review or
    confirm step in this path
-3. Batch auto-apply sends a tailored application email per job directly
-4. If the job is a LinkedIn listing with no resolved ATS `apply_url` →
+3. If the job is a LinkedIn listing with no resolved ATS `apply_url` →
    no automation here; return `needs_extension` and route to the
    Tailor & Apply flow / browser extension instead. This check runs before
    the `apply_type === "external"` branch, which would otherwise record the
@@ -130,10 +129,15 @@ Every list that renders a card must return `apply_url`.
 `__tests__/lib/apply-route.test.ts` runs the real route and the card on the
 same rows. Until 2026-10-11 the card read only `url`, so ~3,000 Arbeitnow and
 company-site Greenhouse jobs had a disabled Apply.
-- **Known gap:** batch email auto-apply reads only `Job.recruiter_email`,
-  which the scraper never writes (null on every row as of 2026-10-11), so it
-  skips every job as `skipped_no_email`. Email-only jobs can't be applied to
-  from JobAgent; the badge says so, and single Apply isn't wired to email.
+- **No email apply.** Batch email auto-apply (`/api/apply/batch-auto`) and
+  `Job.recruiter_email` were removed 2026-10-11. It never sent anything: the
+  column was filled only by a manual backfill that failed, so every job was
+  skipped, and the page still showed a green "Sent 0 auto applications!". It
+  also couldn't have worked as built: the addresses in descriptions are
+  mostly accommodation, EEO and fraud-report inboxes. Email-only jobs show
+  "Email apply" for information and Apply stays disabled. Batch selection
+  (checkbox, Select all) is for Easy Apply jobs only, since the extension is
+  the one batch path; ATS jobs aren't offered for batch.
 
 **`apply_type = 'extension'` means a confirmed LinkedIn Easy Apply job.**
 The only source is LinkedIn's own marker on the logged-out job page:
@@ -180,8 +184,8 @@ one auto-apply, then the page sends `START_APPLY_QUEUE` to the extension.
 
 **Auto-apply limit** (`autoAppliesPerMonth`, `lib/usage.ts`) — every path
 where JobAgent submits for the user spends one credit via
-`checkAndIncrementAutoApply` (atomic): quick apply's ATS branch, batch email
-auto-apply, extension jobs queued by `batch-mark-pending`, and both branches
+`checkAndIncrementAutoApply` (atomic): quick apply's ATS branch,
+extension jobs queued by `batch-mark-pending`, and both branches
 of `mark-pending-extension` (`jobId`, and `application_id` — the apply page's
 LinkedIn confirm). A submission that doesn't go through
 refunds via `refundAutoApplyForApplication`, keyed on
