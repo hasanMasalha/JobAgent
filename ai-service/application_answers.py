@@ -163,7 +163,12 @@ def text_answer(label: str, data: ApplicantData) -> str | None:
 def boolean_answer(label: str, data: ApplicantData) -> bool | None:
     """Yes / no from the user's Profile, or None. Mirrors jaBooleanAnswer."""
     lab = normalize(label)
-    if _any(lab, ("sponsor", "ויזה", "חסות")) or ("visa" in lab and "authoriz" not in lab):
+    # The Profile asks whether the user needs sponsorship, so a visa question
+    # is that question only when it asks about needing one. "What is your visa
+    # status?" (free text) and "Do you have a valid visa?" (Yes means the
+    # opposite) are not — both used to get this answer.
+    needs = _any(lab, ("require", "need", "צריך", "תזדקק", "דרוש"))
+    if _any(lab, ("sponsor", "חסות")) or (_any(lab, ("visa", "ויזה")) and needs and "authoriz" not in lab):
         return data.requires_sponsorship
     if _any(lab, ("authorized", "authorised", "authorization", "eligible to work", "right to work",
                   "legally", "work permit", "מורשה", "רשאי")) and _any(lab, ("israel", "ישראל")):
@@ -173,15 +178,20 @@ def boolean_answer(label: str, data: ApplicantData) -> bool | None:
     return None
 
 
-def user_answer(label: str, data: ApplicantData) -> str | None:
+def user_answer(label: str, data: ApplicantData, choice: bool = False) -> str | None:
     """The user's answer to a question, as text: a saved answer for this exact
-    question first, then a Profile field. Yes/No for a Profile boolean."""
+    question first, then a Profile field. A Profile yes/no only when `choice`
+    — the question is a select / radio whose options it can be matched to; in
+    a free-text field a bare "Yes" answers nothing (it used to be typed into
+    "What is your right to work or visa status?")."""
     saved = saved_answer(label, data)
     if saved:
         return saved
     text = text_answer(label, data)
     if text:
         return text
+    if not choice:
+        return None
     flag = boolean_answer(label, data)
     if flag is not None:
         return "Yes" if flag else "No"

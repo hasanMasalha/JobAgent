@@ -35,11 +35,12 @@ export async function POST(req: NextRequest) {
         email_notifications: boolean;
         status: string;
         tailored_cv: string | null;
+        missing_questions: unknown;
       }[]
     >`
       SELECT a.user_id, u.email AS user_email, u.name AS user_name, j.title AS job_title,
              j.company, COALESCE(j.apply_url, j.url) AS job_url,
-             a.applied_at, u.email_notifications, a.status, a.tailored_cv
+             a.applied_at, u.email_notifications, a.status, a.tailored_cv, a.missing_questions
       FROM "Application" a
       JOIN "User" u ON u.id = a.user_id
       JOIN "Job" j ON j.id = a.job_id
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
         jobUrl: row.job_url,
         applicationId: application_id,
         cvAttachment,
+        unansweredQuestions: Array.isArray(row.missing_questions) ? row.missing_questions.length : 0,
       });
     } else {
       // "applied" (and any legacy row) — confirmation as before.

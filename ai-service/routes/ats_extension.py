@@ -220,7 +220,8 @@ async def form_answers(req: ApplicationRef):
         "ats": ats,
         "form_url": target,
         "questions": [
-            {"id": q.id, "label": q.label, "kind": q.kind, "required": q.required, "role": q.role, "eeo": q.eeo}
+            {"id": q.id, "label": q.label, "kind": q.kind, "required": q.required, "role": q.role, "eeo": q.eeo,
+             "options": q.options}
             for q in questions
         ],
         **_result(answers, missing),

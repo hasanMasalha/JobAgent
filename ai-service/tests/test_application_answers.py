@@ -49,8 +49,43 @@ def test_profile_and_saved_answers():
     assert user_answer("Current company", FULL) == "Acme"
     assert user_answer("Total years of experience", FULL) == "6"
     assert user_answer("How did you hear about this opportunity?", FULL) == "A friend at the company"
-    assert user_answer("Are you legally authorized to work in Israel?", FULL) == "Yes"
-    assert user_answer("Will you now or in the future require visa sponsorship?", FULL) == "No"
+    assert user_answer("Are you legally authorized to work in Israel?", FULL, choice=True) == "Yes"
+    assert user_answer("Will you now or in the future require visa sponsorship?", FULL, choice=True) == "No"
+
+
+# A Profile yes/no answers only a question with options to match it to. In a
+# text field it used to type a bare "Yes"/"No" — e.g. the sponsorship answer
+# into Checkout.com's "What is your right to work or visa status?".
+@pytest.mark.parametrize("label", [
+    "Are you legally authorized to work in Israel?",
+    "Will you now or in the future require visa sponsorship?",
+    "Are you willing to relocate?",
+])
+def test_profile_yes_no_is_not_typed_into_a_text_field(label):
+    assert user_answer(label, FULL) is None
+    assert user_answer(label, FULL, choice=True) in ("Yes", "No")
+
+
+# The sponsorship answer is for "do you need sponsorship / a visa", not for
+# every question that says "visa".
+@pytest.mark.parametrize("label", [
+    "What is your right to work or visa status?",
+    "Visa status: What is your right to work or visa status?",
+    "Do you have a valid visa?",
+    "Do you currently hold a work visa for this country?",
+])
+def test_visa_questions_that_dont_ask_about_needing_one_get_no_answer(label):
+    assert boolean_answer(label, FULL) is None
+    assert user_answer(label, FULL, choice=True) is None
+
+
+@pytest.mark.parametrize("label", [
+    "Will you require visa sponsorship?",
+    "Do you need a visa to work in Israel?",
+    "Will you now or in the future need sponsorship to work in your location?",
+])
+def test_sponsorship_questions_still_get_the_profile_answer(label):
+    assert boolean_answer(label, FULL) is False
 
 
 @pytest.mark.parametrize(
