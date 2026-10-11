@@ -1,3 +1,9 @@
+# Ruff's default rule set (no `select` here) grows between releases, so an
+# unpinned ruff fails CI on code that passed locally. One version everywhere:
+# ai-service/requirements.txt pins it, CI installs that line, and ruff refuses
+# to run at any other version. Upgrade all three together.
+required-version = "==0.17.0"
+
 [lint]
 ignore = [
     "UP017",

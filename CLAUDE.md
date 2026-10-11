@@ -572,7 +572,8 @@ BambooHR · 7 server-side submit switched off, then deleted.
 Run these before committing:
 
 ```bash
-# Python (ai-service/)
+# Python (ai-service/) — ruff is pinned (ai-service/requirements.txt); a
+# different version refuses to run: pip install ruff==0.17.0
 ruff check ai-service/
 
 # TypeScript/Next.js
