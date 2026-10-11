@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { showToast } from "@/app/components/Toast";
+import SaveAnswer from "@/app/components/SaveAnswer";
 import { Button, Notice, Skeleton, buttonStyles } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
 
@@ -18,7 +19,13 @@ interface FormQuestion {
   required: boolean;
   role: string | null;
   eeo: boolean;
+  options?: string[];
 }
+
+// Questions the user can give JobAgent an answer to here: anything but a file
+// or a date. Yes/no questions are answered Yes or No.
+const ANSWERABLE = new Set(["text", "long_text", "email", "phone", "number", "url", "select", "radio", "multi_select", "boolean", "checkbox"]);
+const choicesFor = (q: FormQuestion) => (q.kind === "boolean" || q.kind === "checkbox" ? ["Yes", "No"] : q.options);
 
 interface FormAnswer {
   id: string;
@@ -91,6 +98,15 @@ export default function FormAnswers({ applicationId }: { applicationId: string }
   }
   if (!data.supported || !data.questions) return null;
 
+  // An answer the user saves here counts at once: it's shown as theirs, and
+  // it's the answer for this exact question on every later application.
+  const savedHere = (q: FormQuestion, answer: string) =>
+    setData((d) => d && {
+      ...d,
+      answers: [...(d.answers ?? []).filter((a) => a.id !== q.id), { id: q.id, source: "saved", value: answer }],
+      missing: (d.missing ?? []).filter((m) => m.id !== q.id),
+    });
+
   const answers = new Map((data.answers ?? []).map((a) => [a.id, a]));
   const missing = new Set((data.missing ?? []).map((m) => m.id));
   const answered = data.questions.filter((q) => answers.has(q.id)).length;
@@ -134,9 +150,15 @@ export default function FormAnswers({ applicationId }: { applicationId: string }
                   </Button>
                 </div>
               ) : missing.has(q.id) ? (
-                <p className="mt-1.5 text-body-sm font-medium text-attention-text">You answer this one.</p>
+                <>
+                  <p className="mt-1.5 text-body-sm font-medium text-attention-text">You answer this one. Save it and JobAgent will use it for this question from now on.</p>
+                  {ANSWERABLE.has(q.kind) && <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />}
+                </>
               ) : (
-                <p className="mt-1.5 text-body-sm text-ink-subtle">Optional — answer it yourself or leave it blank.</p>
+                <>
+                  <p className="mt-1.5 text-body-sm text-ink-subtle">Optional — answer it yourself or leave it blank.</p>
+                  {ANSWERABLE.has(q.kind) && q.label && <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />}
+                </>
               )}
 
               {a && SOURCE[a.source] && q.role !== "resume" && (

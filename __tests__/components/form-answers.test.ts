@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { createElement } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 // The fill-and-review section: every question on the real form, with
 // JobAgent's answer or "You answer this one" — never a guessed fact.
@@ -27,7 +27,7 @@ const FORM = {
     { id: "first_name", label: "First Name", kind: "text", required: true, role: "first_name", eeo: false },
     { id: "resume", label: "Resume/CV", kind: "file", required: true, role: "resume", eeo: false },
     { id: "q1", label: "Why Acme?", kind: "long_text", required: true, role: null, eeo: false },
-    { id: "q2", label: "Are you authorized to work in the UK?", kind: "select", required: true, role: null, eeo: false },
+    { id: "q2", label: "Are you authorized to work in the UK?", kind: "select", required: true, role: null, eeo: false, options: ["Yes", "No"] },
     { id: "q3", label: "Website", kind: "text", required: false, role: null, eeo: false },
   ],
   answers: [
@@ -54,7 +54,7 @@ describe("FormAnswers", () => {
     expect(screen.getByText("I build payment systems.")).toBeTruthy();
     expect(screen.getByText(/Written by Claude from your CV/)).toBeTruthy();
     expect(screen.getByText(/Attach your tailored CV/)).toBeTruthy();
-    expect(screen.getByText("You answer this one.")).toBeTruthy();
+    expect(screen.getByText(/^You answer this one\./)).toBeTruthy();
     expect(screen.getByText(/Optional/)).toBeTruthy();
     // The résumé counts as answered: the user attaches the tailored CV.
     const summary = document.body.textContent ?? "";
@@ -75,5 +75,28 @@ describe("FormAnswers", () => {
     respond({ error: "service_unavailable" }, false);
     await show();
     expect(screen.getByText(/couldn.t read this job.s application form/)).toBeTruthy();
+  });
+
+  // The user can answer a question JobAgent couldn't, here: saved for that
+  // exact question (POST /api/apply/answers), and shown as theirs at once.
+  it("saves the user's answer to a question it couldn't answer", async () => {
+    respond(FORM);
+    await show();
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+
+    // One control per unanswered question: the required one and the optional one.
+    expect(screen.getAllByRole("button", { name: "Save answer" })).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText("Your answer to: Are you authorized to work in the UK?"), { target: { value: "No" } });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Save answer" })[0]);
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/apply/answers", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ question: "Are you authorized to work in the UK?", answer: "No" }),
+    }));
+    expect(screen.getByText("Your saved answer")).toBeTruthy();
+    expect(document.body.textContent).toMatch(/4 of 5 questions answered/);
   });
 });

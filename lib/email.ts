@@ -220,9 +220,11 @@ export async function sendNeedsManualEmail(params: {
   jobUrl: string;
   applicationId: string;
   cvAttachment?: { filename: string; content: Buffer };
+  /** Required questions it stopped on because the user hadn't answered them. */
+  unansweredQuestions?: number;
 }) {
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const { userEmail, userName, jobTitle, company, jobUrl, applicationId, cvAttachment } = params;
+  const { userEmail, userName, jobTitle, company, jobUrl, applicationId, cvAttachment, unansweredQuestions = 0 } = params;
   const firstName = userName?.split(" ")[0] || "there";
 
   const html = `
@@ -253,6 +255,13 @@ export async function sendNeedsManualEmail(params: {
             <strong style="color:#111827;">${company}</strong> automatically. Please open the link below and apply
             yourself${cvAttachment ? " — we've attached your tailored CV for this role to save you a step." : "."}
           </p>
+          ${unansweredQuestions > 0 ? `
+          <p style="margin:0 0 24px; color:#6b7280; font-size:14px; line-height:1.6;">
+            The form asked ${unansweredQuestions === 1 ? "a question" : `${unansweredQuestions} questions`} you
+            haven't answered yet, and JobAgent doesn't guess facts.
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/applications" style="color:#c2410c; font-weight:600;">Answer
+            ${unansweredQuestions === 1 ? "it" : "them"} on your Applications page</a> and JobAgent will use your answers from then on.
+          </p>` : ""}
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:24px;">
             <tr>

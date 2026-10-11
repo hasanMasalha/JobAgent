@@ -179,7 +179,7 @@ def _answer(q: Question, applicant: ApplicantData, cover_letter: str) -> Answer 
             answer = "I agree"
             source = "consent"
         else:
-            answer = user_answer(q.label, applicant)
+            answer = user_answer(q.label, applicant, choice=True)
             source = _source(q.label, applicant)
         idx = match_option(q.options, answer)
         if idx == -1:

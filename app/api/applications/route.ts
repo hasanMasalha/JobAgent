@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
         company: string;
         job_url: string;
         location: string | null;
+        missing_questions: unknown;
       }[]
     >`
       SELECT
@@ -42,7 +43,8 @@ export async function GET(req: NextRequest) {
         j.title  AS job_title,
         j.company,
         j.url    AS job_url,
-        j.location
+        j.location,
+        a.missing_questions
       FROM "Application" a
       LEFT JOIN "Job" j ON j.id = a.job_id
       WHERE a.user_id = ${user.id}

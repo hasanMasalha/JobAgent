@@ -85,13 +85,14 @@ async def _resolve_greenhouse_embed_url(apply_url: str) -> str | None:
     return None
 
 
-def _answer_question(label_text: str, applicant: ApplicantData) -> str | None:
+def _answer_question(label_text: str, applicant: ApplicantData, choice: bool) -> str | None:
     """The user's own answer to a question, or None (see application_answers:
     facts come only from the user — no defaults). Data-processing consent is
-    the one thing answered for them: it's inherent in applying, not a fact."""
+    the one thing answered for them: it's inherent in applying, not a fact.
+    `choice`: the field has options (a Profile yes/no can be matched to them)."""
     if is_data_processing_consent(label_text):
         return "I agree"
-    return user_answer(label_text, applicant)
+    return user_answer(label_text, applicant, choice=choice)
 
 
 async def _ask_claude_for_answer(question: str, cv_text: str) -> str | None:
@@ -267,17 +268,25 @@ async def _phone_country_required(page) -> bool:
         return False
 
 
-def _missing_answers_result(missing: list[str], filled: list[str]) -> dict:
+def _missing_answers_result(
+    missing: list[str], filled: list[str], options: dict[str, list[str]] | None = None
+) -> dict:
     """Required questions the user hasn't answered: don't submit. The caller
-    marks the application needs_manual and refunds the credit."""
+    marks the application needs_manual and refunds the credit, and stores
+    `missing_questions` on it — the Applications page asks the user each one
+    (with the form's options where the filler knows them) and saves the answer
+    for that exact question, which every filler then uses."""
+    options = options or {}
     return {
         "success": False,
         "error": "missing_answers",
         "missing": missing,
+        "missing_questions": [{"question": q, "options": options.get(q, [])} for q in missing],
         "filled": filled,
-        "message": "Not submitted — this application asks for answers you haven't given JobAgent: "
+        "message": "Not submitted — this application asks questions you haven't answered yet: "
         + "; ".join(missing[:6])
-        + ". Apply on the employer's site, or save the answers in your Profile.",
+        + ". Answer them on your Applications page and JobAgent will use your answers from then on,"
+        " or apply on the employer's site.",
     }
 
 
@@ -644,10 +653,11 @@ async def _fill_lever_form(
     # Custom questions and surveys. Until 2026-10-04 every dropdown here was
     # set to "No" (e.g. "Are you a current SAP employee?") or its first
     # option, and custom radio / checkbox / text questions weren't answered.
-    missing = await _fill_lever_questions(page, applicant, cv_text, filled)
+    question_options: dict[str, list[str]] = {}
+    missing = await _fill_lever_questions(page, applicant, cv_text, filled, question_options)
     if missing:
         print(f"[ats-form] Lever: not submitting, no answer from the user for: {missing}")
-        return _missing_answers_result(missing, filled)
+        return _missing_answers_result(missing, filled, question_options)
 
     # Lever loads hCaptcha on every form. It isn't solved for the user (no
     # CAPTCHA-solving service — removed 2026-10-06): the form is submitted and
@@ -801,7 +811,10 @@ _LEVER_QUESTIONS_JS = """() => [...document.querySelectorAll('.application-quest
 _LEVER_STANDARD = ("name", "email", "phone", "org", "location", "resume", "comments", "urls[")
 
 
-async def _fill_lever_questions(page, applicant: ApplicantData, cv_text: str, filled: list[str]) -> list[str]:
+async def _fill_lever_questions(
+    page, applicant: ApplicantData, cv_text: str, filled: list[str],
+    options_out: dict[str, list[str]] | None = None,
+) -> list[str]:
     """Answer Lever's custom questions (cards[…]) and surveys from the user's
     own data. Returns the required questions left unanswered."""
     missing: list[str] = []
@@ -818,7 +831,7 @@ async def _fill_lever_questions(page, applicant: ApplicantData, cv_text: str, fi
             if q["required"]:
                 answer = next((t for t in texts if is_decline_option(t)), None)
         else:
-            answer = _answer_question(label, applicant)
+            answer = _answer_question(label, applicant, choice=kind in ("select", "radio", "checkbox"))
             if answer is None and kind == "textarea" and claude_may_answer(label, is_long_text=True):
                 answer = await _ask_claude_for_answer(label, cv_text)
 
@@ -845,6 +858,8 @@ async def _fill_lever_questions(page, applicant: ApplicantData, cv_text: str, fi
             print(f"[ats-form] Lever: answered {label!r}")
         elif q["required"]:
             missing.append(label or name)
+            if texts and options_out is not None:
+                options_out[label or name] = texts
     return missing
 
 
@@ -1336,6 +1351,7 @@ async def _fill_greenhouse_form(
     # submitted if any (see application_answers). Until 2026-10-04 these got
     # made-up defaults, a Claude-picked or the first option, or a Claude answer.
     missing: list[str] = list(phone_missing)
+    question_options: dict[str, list[str]] = {}
     for q in custom_questions:
         q_id = await q.get_attribute("id") or ""
         tag_name = await q.evaluate("el => el.tagName.toLowerCase()")
@@ -1353,7 +1369,9 @@ async def _fill_greenhouse_form(
         label_text = label_text.rstrip(" *")
         print(f"[ats-form] Custom question: {q_id} ({tag_name}) — {label_text} (required={required})")
 
-        answer = _answer_question(label_text, applicant) if label_text else None
+        # A select, or Greenhouse's react-select combobox (a text input).
+        is_choice = tag_name == "select" or await q.get_attribute("role") == "combobox"
+        answer = _answer_question(label_text, applicant, choice=is_choice) if label_text else None
         if answer is None and tag_name == "textarea" and claude_may_answer(label_text, is_long_text=True):
             answer = await _ask_claude_for_answer(label_text, cv_text)
 
@@ -1393,10 +1411,18 @@ async def _fill_greenhouse_form(
             print(f"[ats-form] Answered custom question {q_id} ({label_text!r})")
         elif required:
             missing.append(label_text or q_id)
+            if tag_name == "select":
+                try:
+                    texts = await q.evaluate(
+                        "el => Array.from(el.options).filter(o => o.value !== '').map(o => o.text.trim())"
+                    )
+                    question_options[label_text or q_id] = [t for t in texts if t]
+                except Exception:
+                    pass
 
     if missing:
         print(f"[ats-form] Not submitting — no answer from the user for: {missing}")
-        return {"early_result": _missing_answers_result(missing, filled)}
+        return {"early_result": _missing_answers_result(missing, filled, question_options)}
 
     # ── Verify no required fields were left empty ─────────────────────────────
     # A final sweep across the whole form (not just the custom questions

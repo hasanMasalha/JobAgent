@@ -141,3 +141,13 @@ def test_missing_name_or_email_stops():
 )
 def test_pick_location_needs_exactly_one_match(options, city, expected):
     assert pick_location(options, city) == expected
+
+
+# Checkout.com's form (2026-10-11): "Visa status" is a free-text field. With
+# the user's sponsorship answer in the Profile it used to be filled with a
+# bare "No"; now it's an unanswered required question.
+def test_visa_status_text_field_isnt_answered_with_a_profile_yes_no():
+    entry = _entry("visa", "String", "Visa status: What is your right to work or visa status?", True)
+    actions, missing = plan(_posting(*BASIC, entry), DANA)
+    assert "visa" not in _by_path(actions)
+    assert missing == ["Visa status: What is your right to work or visa status?"]

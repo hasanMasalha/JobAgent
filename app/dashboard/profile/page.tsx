@@ -945,7 +945,7 @@ function ProfileContent() {
         <section aria-labelledby="answers-heading" className={cardCls}>
           <h2 id="answers-heading" className={sectionHeading}>Saved answers</h2>
           <p className="mt-1.5 text-body-sm text-ink-muted">
-            Answers you gave to questions the extension didn&apos;t recognise. It reuses them on later applications.
+            Your answers to application questions — from the extension, the Applications page and the form answers on an apply page. JobAgent uses each one for that exact question on later applications.
           </p>
 
           {savedAnswers.length === 0 ? (
