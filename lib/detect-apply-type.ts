@@ -125,6 +125,20 @@ export function applyRoute(job: ApplyJob): ApplyRoute {
   return job.apply_type === "auto" ? "email" : "external";
 }
 
+/**
+ * The Matches apply-route tab a job falls under — from applyRoute(), so a tab
+ * shows exactly the jobs whose cards carry that badge. Email-only jobs can't
+ * be applied to from JobAgent, so they sit with External.
+ */
+export type ApplyTab = "direct" | "extension" | "external";
+
+export function applyTab(job: ApplyJob): ApplyTab {
+  const route = applyRoute(job);
+  if (route === "ats") return "direct";
+  if (route === "extension") return "extension";
+  return "external";
+}
+
 export function canApplyFromCard(job: ApplyJob): boolean {
   const route = applyRoute(job);
   return route === "ats" || route === "extension";

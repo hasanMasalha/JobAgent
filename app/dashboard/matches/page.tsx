@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 import { EXTENSION_ID, extensionReadiness } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
 import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
-import { isEasyApplyJob } from "@/lib/detect-apply-type";
+import { applyTab, isEasyApplyJob, type ApplyTab } from "@/lib/detect-apply-type";
 import {
   Button,
   buttonStyles,
@@ -22,6 +22,7 @@ import {
   RefreshIcon,
   SearchIcon,
   ChevronDownIcon,
+  DirectIcon,
   ExtensionIcon,
   ExternalIcon,
   BrokenRouteIllustration,
@@ -124,6 +125,7 @@ const FEATURED_LABEL: Record<Filters["sortBy"], string> = {
 
 const APPLY_TYPE_TABS = [
   { id: "all", label: "All", Icon: null },
+  { id: "direct", label: "Direct", Icon: DirectIcon },
   { id: "extension", label: "Extension", Icon: ExtensionIcon },
   { id: "external", label: "External", Icon: ExternalIcon },
 ] as const;
@@ -236,7 +238,7 @@ export default function MatchesPage() {
   const router = useRouter();
 
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  const [applyTypeFilter, setApplyTypeFilter] = useState<"all" | "extension" | "external">("all");
+  const [applyTypeFilter, setApplyTypeFilter] = useState<"all" | ApplyTab>("all");
   const [batchApplying, setBatchApplying] = useState(false);
 
   const [browseSearch, setBrowseSearch] = useState("");
@@ -527,7 +529,7 @@ export default function MatchesPage() {
   const filteredJobs = useMemo(() => {
     const filtered = jobs
       .filter((job) => !appliedJobIds.has(job.id))
-      .filter((job) => applyTypeFilter === "all" || (job.apply_type ?? "external") === applyTypeFilter)
+      .filter((job) => applyTypeFilter === "all" || applyTab(job) === applyTypeFilter)
       .filter((job) => workTypeMatch(job, filters.workTypes))
       .filter((job) => jobTypeMatch(job, filters.jobTypes))
       .filter((job) => dateMatch(job, filters.daysPosted))
