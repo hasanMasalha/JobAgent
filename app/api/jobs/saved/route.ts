@@ -20,13 +20,14 @@ export async function GET(_req: NextRequest) {
         company: string;
         location: string | null;
         url: string;
+        apply_url: string | null;
         salary_min: number | null;
         salary_max: number | null;
         scraped_at: Date;
         apply_type: string | null;
       }[]
     >`
-      SELECT j.id, j.title, j.company, j.location, j.url,
+      SELECT j.id, j.title, j.company, j.location, j.url, j.apply_url,
              j.salary_min, j.salary_max, j.scraped_at, j.apply_type
       FROM "UserJobInteraction" i
       JOIN "Job" j ON j.id = i.job_id

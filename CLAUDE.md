@@ -121,6 +121,20 @@ There are two supported apply paths — know which one a change affects:
    the `apply_type === "external"` branch, which would otherwise record the
    job as applied manually.
 
+**Card badge and Apply button = `applyRoute()`** (`lib/detect-apply-type.ts`),
+built from the same helpers quick apply branches on (`needsExtension`,
+`applySubmitUrl` = `apply_url` before `url`, `detectATS` incl. `gh_jid`):
+`ats` → Direct Apply, `extension` → Extension, `email` (stored `auto`, no ATS)
+→ "Email apply", `external`. Apply is enabled for `ats` and `extension` only.
+Every list that renders a card must return `apply_url`.
+`__tests__/lib/apply-route.test.ts` runs the real route and the card on the
+same rows. Until 2026-10-11 the card read only `url`, so ~3,000 Arbeitnow and
+company-site Greenhouse jobs had a disabled Apply.
+- **Known gap:** batch email auto-apply reads only `Job.recruiter_email`,
+  which the scraper never writes (null on every row as of 2026-10-11), so it
+  skips every job as `skipped_no_email`. Email-only jobs can't be applied to
+  from JobAgent; the badge says so, and single Apply isn't wired to email.
+
 **`apply_type = 'extension'` means a confirmed LinkedIn Easy Apply job.**
 The only source is LinkedIn's own marker on the logged-out job page:
 `public_jobs_apply-link-onsite` / `-simple_onsite` (the application happens on

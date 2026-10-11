@@ -61,14 +61,82 @@ export function isLinkedInListing(url: string | null | undefined): boolean {
   return u.includes("linkedin.com") && !DIRECT_APPLY_ATS_DOMAINS.some((d) => u.includes(d));
 }
 
+export type AtsPlatform = "greenhouse" | "lever" | "workable" | "comeet" | "ashby" | "bamboohr";
+
+/** The ATS `/api/apply/quick` submits to for this URL, if any. */
+export function detectATS(url: string | null | undefined): AtsPlatform | null {
+  const u = (url ?? "").toLowerCase();
+  // gh_jid means Greenhouse is embedded on the company's own domain instead
+  // of greenhouse.io directly.
+  if (u.includes("greenhouse.io") || u.includes("gh_jid=")) return "greenhouse";
+  if (u.includes("lever.co")) return "lever";
+  if (u.includes("workable.com")) return "workable";
+  if (u.includes("comeet.com")) return "comeet";
+  if (u.includes("ashbyhq.com")) return "ashby";
+  if (u.includes("bamboohr.com")) return "bamboohr";
+  return null;
+}
+
+type ApplyJob = { url: string | null | undefined; apply_url?: string | null; apply_type?: string | null };
+
+/**
+ * The URL quick apply submits to: `apply_url` is the confirmed ATS link
+ * (Arbeitnow's redirect, the ATS behind a LinkedIn listing); `url` is the
+ * listing, used only when there is none.
+ */
+export function applySubmitUrl(job: ApplyJob): string {
+  return job.apply_url || job.url || "";
+}
+
+/**
+ * A LinkedIn listing with no ATS `apply_url`: quick apply sends it to the
+ * extension (`needs_extension`) whatever its stored type.
+ */
+export function needsExtension(job: ApplyJob): boolean {
+  return !job.apply_url && (job.url ?? "").toLowerCase().includes("linkedin.com");
+}
+
+/**
+ * What Apply does for a job — the single decision behind a card's badge and
+ * whether its Apply button is enabled, taken in the same order as
+ * `/api/apply/quick`:
+ * - `ats`: quick apply submits to the ATS (`detectATS(applySubmitUrl(job))`).
+ * - `extension`: a confirmed LinkedIn Easy Apply job; Apply opens the review
+ *   screen and Confirm there hands it to the extension.
+ * - `email`: stored `auto` with no ATS — the scraper found an email address in
+ *   the description. Nothing applies by email from a card (batch auto-apply
+ *   reads `Job.recruiter_email`, which the scraper doesn't fill), so the badge
+ *   only says to apply by email; Apply stays disabled.
+ * - `external`: apply on the company's site.
+ * Apply is enabled for `ats` and `extension` only.
+ */
+export type ApplyRoute = "ats" | "extension" | "email" | "external";
+
+export function applyRoute(job: ApplyJob): ApplyRoute {
+  if (needsExtension(job)) {
+    // Quick apply would hand any of these to the extension, but only a
+    // confirmed Easy Apply job has anything there to automate.
+    if (job.apply_type === "extension") return "extension";
+    return job.apply_type === "auto" ? "email" : "external";
+  }
+  if (job.apply_type === "external") return "external";
+  if (detectATS(applySubmitUrl(job))) return "ats";
+  return job.apply_type === "auto" ? "email" : "external";
+}
+
+export function canApplyFromCard(job: ApplyJob): boolean {
+  const route = applyRoute(job);
+  return route === "ats" || route === "extension";
+}
+
 /**
  * A confirmed LinkedIn Easy Apply job: Apply opens the review screen
  * (`/dashboard/apply/[jobId]`) and Confirm there hands it to the extension.
  * Every job list (Matches' JobCard, Saved) decides with this, so they show
  * the same badge and Apply for the same job.
  */
-export function isEasyApplyJob(job: { url: string | null | undefined; apply_type?: string | null }): boolean {
-  return job.apply_type === "extension" && isLinkedInListing(job.url);
+export function isEasyApplyJob(job: ApplyJob): boolean {
+  return applyRoute(job) === "extension";
 }
 
 export function extractRecruiterEmail(description: string): string | null {

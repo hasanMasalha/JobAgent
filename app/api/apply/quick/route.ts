@@ -9,21 +9,9 @@ import {
   refundAutoApplyForApplication,
 } from "@/lib/usage";
 import { pythonFetch, pythonServiceUrl } from "@/lib/python-service";
+import { applySubmitUrl, detectATS, needsExtension } from "@/lib/detect-apply-type";
 
 export const maxDuration = 60;
-
-function detectATS(url: string): string | null {
-  const u = (url || "").toLowerCase();
-  // gh_jid means Greenhouse is embedded on the company's own domain instead
-  // of greenhouse.io directly.
-  if (u.includes("greenhouse.io") || u.includes("gh_jid=")) return "greenhouse";
-  if (u.includes("lever.co")) return "lever";
-  if (u.includes("workable.com")) return "workable";
-  if (u.includes("comeet.com")) return "comeet";
-  if (u.includes("ashbyhq.com")) return "ashby";
-  if (u.includes("bamboohr.com")) return "bamboohr";
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   // Set once an auto-apply credit is taken, so the catch block can give it
@@ -51,8 +39,9 @@ export async function POST(req: NextRequest) {
     // because nothing knows at scrape time whether a listing is Easy Apply.
     // This must come before the external branch, which would record the job as
     // applied manually. Nothing is created or charged here; the review screen's
-    // Confirm does that.
-    if (!job.apply_url && (job.url ?? "").toLowerCase().includes("linkedin.com")) {
+    // Confirm does that. Job cards decide their badge and Apply button with
+    // the same helpers (applyRoute in lib/detect-apply-type.ts).
+    if (needsExtension(job)) {
       return NextResponse.json({
         success: false,
         needs_extension: true,
@@ -87,9 +76,8 @@ export async function POST(req: NextRequest) {
     });
     if (!profile) return NextResponse.json({ error: "User profile not found" }, { status: 404 });
 
-    // apply_url is the confirmed ATS URL (scraped from LinkedIn page).
-    // Fall back to url only if apply_url is not set.
-    const applyUrl = job.apply_url ?? job.url ?? "";
+    // apply_url is the confirmed ATS URL; url only when there is none.
+    const applyUrl = applySubmitUrl(job);
 
     const atsPlatform = detectATS(applyUrl);
 

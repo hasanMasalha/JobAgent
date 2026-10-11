@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/app/components/Toast";
 import { JobDescription } from "./components/JobDescription";
 import { cn } from "@/lib/cn";
-import { DIRECT_APPLY_ATS_DOMAINS, isEasyApplyJob, isLinkedInListing } from "@/lib/detect-apply-type";
+import { applyRoute, canApplyFromCard, type ApplyRoute } from "@/lib/detect-apply-type";
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   Spinner,
   DirectIcon,
   ExtensionIcon,
-  AutoIcon,
+  MailIcon,
   ExternalIcon,
   ArrowRightIcon,
   PenIcon,
@@ -47,6 +47,7 @@ export interface Job {
   description: string;
   location: string | null;
   url: string;
+  apply_url?: string | null;
   source?: string;
   apply_type?: string;
   recruiter_email?: string | null;
@@ -74,39 +75,28 @@ interface Props {
   featuredLabel?: string;
 }
 
-const ATS_URL_PATTERNS = ["greenhouse.io", "lever.co", "workable.com", "ashbyhq.com"] as const;
-function isATSJob(url?: string): boolean {
-  return ATS_URL_PATTERNS.some((p) => (url ?? "").toLowerCase().includes(p));
+// The badge and the Apply button both come from applyRoute(), which takes the
+// same decision as /api/apply/quick — Apply is enabled for "ats" and
+// "extension" only.
+export function ApplyTypeBadge({ job }: { job: { url: string; apply_url?: string | null; apply_type?: string | null } }) {
+  return <ApplyRouteBadge route={applyRoute(job)} />;
 }
 
-// LinkedIn Easy Apply sends the résumé on the user's LinkedIn profile, so a
-// tailored CV is only useful there as a download.
-function isLinkedInOnly(job: Job): boolean {
-  return isLinkedInListing(job.url);
-}
-
-// Whether the card's Apply button does something: a job on an ATS we submit
-// to, or a LinkedIn listing the scraper confirmed as Easy Apply
-// (apply_type "extension"). A LinkedIn listing that isn't confirmed is
-// external like any other — no Apply that opens LinkedIn only to find there
-// is nothing to automate.
-function isAutoApplicable(job: Job): boolean {
-  if (job.apply_type === "external") return false;
-  const url = (job.url || "").toLowerCase();
-  return DIRECT_APPLY_ATS_DOMAINS.some((d) => url.includes(d)) || isEasyApplyJob(job);
-}
-
-export function ApplyTypeBadge({ type, url }: { type: string; url?: string }) {
-  if (type === "auto" && isATSJob(url))
+function ApplyRouteBadge({ route }: { route: ApplyRoute }) {
+  if (route === "ats")
     return (
       <span title="JobAgent will submit your application directly to the company ATS">
         <Badge tone="success"><DirectIcon className="h-3.5 w-3.5" />Direct Apply</Badge>
       </span>
     );
-  if (type === "extension")
+  if (route === "extension")
     return <Badge tone="info"><ExtensionIcon className="h-3.5 w-3.5" />Extension</Badge>;
-  if (type === "auto")
-    return <Badge tone="success"><AutoIcon className="h-3.5 w-3.5" />Auto Apply</Badge>;
+  if (route === "email")
+    return (
+      <span title="Apply by email — the address is in the job description">
+        <Badge tone="neutral"><MailIcon className="h-3.5 w-3.5" />Email apply</Badge>
+      </span>
+    );
   return <Badge tone="neutral"><ExternalIcon className="h-3.5 w-3.5" />External</Badge>;
 }
 
@@ -165,6 +155,7 @@ export default function JobCard({
   const [quickApplying, setQuickApplying] = useState(false);
   const [quickApplied, setQuickApplied] = useState(false);
   const router = useRouter();
+  const route = applyRoute(job);
   useExtensionInstalled();
 
   const score =
@@ -185,7 +176,7 @@ export default function JobCard({
     if (quickApplying || quickApplied) return;
     // LinkedIn Easy Apply: nothing to submit from here. The review screen shows
     // what LinkedIn will receive; Confirm there hands over to the extension.
-    if (isEasyApplyJob(job)) {
+    if (route === "extension") {
       router.push(`/dashboard/apply/${job.id}`);
       return;
     }
@@ -232,7 +223,10 @@ export default function JobCard({
     e.stopPropagation();
     e.preventDefault();
     onApply?.(job.id);
-    const download = !isAutoApplicable(job) || isLinkedInOnly(job);
+    // A tailored CV is only submitted for an ATS job; everywhere else
+    // (including Easy Apply, which sends the LinkedIn profile's résumé) it's a
+    // download.
+    const download = route !== "ats";
     router.push(`/dashboard/apply/${job.id}${download ? "?mode=download" : ""}`);
   };
 
@@ -277,7 +271,7 @@ export default function JobCard({
 
   const reasons = job.reasons ?? [];
   const gaps = job.gaps ?? [];
-  const autoApplicable = isAutoApplicable(job);
+  const autoApplicable = canApplyFromCard(job);
   const featured = variant === "featured";
   // Brass Apply only for a strong match — the accent always means "worth it".
   const strong = showScore && score >= 80;
@@ -341,7 +335,7 @@ export default function JobCard({
   const tailorButton = (
     <Button variant="secondary" size={featured ? "lg" : "sm"} block={featured} onClick={handleTailorApply}>
       <PenIcon className="h-3.5 w-3.5" />
-      {autoApplicable && !isLinkedInOnly(job) ? "Tailor CV" : "Tailor & Download"}
+      {route === "ats" ? "Tailor CV" : "Tailor & Download"}
     </Button>
   );
 
@@ -425,7 +419,7 @@ export default function JobCard({
               {featuredLabel && (
                 <Badge tone={strong && featuredLabel === "Top match" ? "accent" : "brand"}>{featuredLabel}</Badge>
               )}
-              {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
+              {job.apply_type && <ApplyRouteBadge route={route} />}
               {showSource && job.source && <SourcePill source={job.source} />}
               <span className="text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>
             </div>
@@ -474,7 +468,7 @@ export default function JobCard({
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
         {showScore ? <InlineScore score={score} /> : <span className="flex-1 text-body-sm text-ink-subtle">{daysAgo(job.scraped_at)}</span>}
         <div className="flex flex-wrap items-center gap-1.5">
-          {job.apply_type && <ApplyTypeBadge type={job.apply_type} url={job.url} />}
+          {job.apply_type && <ApplyRouteBadge route={route} />}
           {showSource && job.source && <SourcePill source={job.source} />}
         </div>
       </div>
