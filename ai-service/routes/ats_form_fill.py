@@ -290,6 +290,22 @@ def _missing_answers_result(
     }
 
 
+async def _debug_screenshot(page, name: str) -> str | None:
+    """A screenshot for the logs, or None. It never fails the application:
+    on 2026-10-11 three ElevenLabs applies ended needs_manual with
+    "Page.screenshot: Timeout 30000ms exceeded" from the page-load one, and
+    the post-submit one could do the same to an application that had gone
+    through. (The pre-submit screenshot is taken separately.)"""
+    path = f"/app/screenshots/{name}_{int(time.time())}.png"
+    try:
+        os.makedirs("/app/screenshots", exist_ok=True)
+        await page.screenshot(path=path, full_page=True, timeout=10000)
+        return path
+    except Exception as e:
+        print(f"[ats-form] {name} screenshot failed (ignored): {e}")
+        return None
+
+
 async def _human_delay(page, min_ms: int = 50, max_ms: int = 200) -> None:
     await page.wait_for_timeout(random.randint(min_ms, max_ms))
 
@@ -471,9 +487,7 @@ async def fill_ats_form(
             await page.goto(apply_url, wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_timeout(3000)
 
-            os.makedirs("/app/screenshots", exist_ok=True)
-            screenshot_path = f"/app/screenshots/ats_load_{int(time.time())}.png"
-            await page.screenshot(path=screenshot_path, full_page=True)
+            screenshot_path = await _debug_screenshot(page, "ats_load")
             print(f"[ats-form] Screenshot saved: {screenshot_path}")
 
             print(f"[ats-form] Current URL after load: {page.url}")
@@ -1761,8 +1775,7 @@ async def _fill_form_fields(
 
     if not submit_btn:
         print("[ats-form] ERROR: No visible submit button found")
-        os.makedirs("/app/screenshots", exist_ok=True)
-        await page.screenshot(path=f"/app/screenshots/no_submit_{int(time.time())}.png", full_page=True)
+        await _debug_screenshot(page, "no_submit")
         return {"success": False, "error": "No submit button found", "filled": filled, "errors": errors}
 
     try:
@@ -1779,9 +1792,7 @@ async def _fill_form_fields(
         url_after = page.url
         print(f"[ats-form] URL after 15s: {url_after}")
 
-        os.makedirs("/app/screenshots", exist_ok=True)
-        screenshot_path = f"/app/screenshots/post_submit_{int(time.time())}.png"
-        await page.screenshot(path=screenshot_path, full_page=True)
+        screenshot_path = await _debug_screenshot(page, "post_submit")
         print(f"[ats-form] Post-submit screenshot: {screenshot_path}")
 
         # Check for field validation errors. Named validation_error_msgs, not
@@ -1979,9 +1990,7 @@ async def _fill_form_fields(
 
         if real_errors:
             print(f"[ats-form] Real field errors detected: {real_errors}")
-            os.makedirs("/app/screenshots", exist_ok=True)
-            err_screenshot_path = f"/app/screenshots/form_error_{int(time.time())}.png"
-            await page.screenshot(path=err_screenshot_path, full_page=True)
+            err_screenshot_path = await _debug_screenshot(page, "form_error")
             print(f"[ats-form] Error screenshot: {err_screenshot_path}")
             return {
                 "success": False,
