@@ -578,6 +578,16 @@ BambooHR · 7 server-side submit switched off, then deleted.
   to our own server.
 
 ## Playwright / browser automation caveats
+- **ATS form filling runs at most `ATS_APPLY_MAX_BROWSERS` (default 2) at
+  once** (`routes/ats_apply.py` `_browser_slots`); the rest wait, still
+  `applying`, and their 5-minute timeout starts when they get a slot. Each is
+  a headed 1920×1080 Chromium in its own thread; on 2026-10-11 eleven at once
+  timed out on screenshots and form reads.
+- **Debug screenshots never fail an application** (`_debug_screenshot` in
+  `ats_form_fill.py`: page load, no submit button, form error, post-submit).
+  Until 2026-10-11 the page-load one could abandon it, and the post-submit
+  one could turn a submitted application into needs_manual with its credit
+  refunded.
 - Playwright runs headless=True. For LinkedIn the user must have a saved
   session in browser_profile/{user_id}/ — see the LinkedIn login flow in preferences.
 - Greenhouse's human-verification gate (its "security code" / "confirm

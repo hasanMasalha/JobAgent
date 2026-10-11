@@ -27,6 +27,13 @@ router = APIRouter()
 NEXTJS_URL = os.environ.get("NEXTJS_URL", "http://localhost:3000")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
+# How many application forms are filled at once. Each one is its own thread
+# and its own headed 1920x1080 Chromium; on 2026-10-11 eleven quick applies in
+# three minutes ran side by side and the browsers timed out taking
+# screenshots and reading forms. The rest wait their turn (still "applying").
+MAX_BROWSERS = max(1, int(os.environ.get("ATS_APPLY_MAX_BROWSERS", "2")))
+_browser_slots = threading.BoundedSemaphore(MAX_BROWSERS)
+
 
 async def _mark_needs_manual(
     conn, application_id: str, message: str | None, missing_questions: list[dict] | None = None
@@ -183,7 +190,10 @@ def _run_ats_apply_sync(request_dict: dict) -> None:
             await _send_application_confirmation_email(request_dict["application_id"])
             print("[ats-apply-bg] Step 8: outcome email step complete")
 
-        loop.run_until_complete(_run())
+        # The 5-minute submit timeout starts once a slot is free, not while
+        # waiting for one.
+        with _browser_slots:
+            loop.run_until_complete(_run())
         loop.close()
 
     except Exception as e:
