@@ -50,7 +50,6 @@ export interface Job {
   apply_url?: string | null;
   source?: string;
   apply_type?: string;
-  recruiter_email?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: string;
@@ -276,7 +275,9 @@ export default function JobCard({
   // Brass Apply only for a strong match — the accent always means "worth it".
   const strong = showScore && score >= 80;
 
-  const checkbox = job.apply_type && job.apply_type !== "external" && onSelect && (
+  // Batch apply goes through the extension, so only Easy Apply jobs can be
+  // selected for it.
+  const checkbox = route === "extension" && onSelect && (
     <input
       type="checkbox"
       checked={selected}

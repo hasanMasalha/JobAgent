@@ -104,9 +104,10 @@ export function needsExtension(job: ApplyJob): boolean {
  * - `extension`: a confirmed LinkedIn Easy Apply job; Apply opens the review
  *   screen and Confirm there hands it to the extension.
  * - `email`: stored `auto` with no ATS — the scraper found an email address in
- *   the description. Nothing applies by email from a card (batch auto-apply
- *   reads `Job.recruiter_email`, which the scraper doesn't fill), so the badge
- *   only says to apply by email; Apply stays disabled.
+ *   the description. JobAgent doesn't apply by email (the batch email path
+ *   was removed 2026-10-11: those addresses are mostly accommodation, EEO and
+ *   fraud-report inboxes), so the badge only says to apply by email; Apply
+ *   stays disabled.
  * - `external`: apply on the company's site.
  * Apply is enabled for `ats` and `extension` only.
  */
@@ -137,9 +138,4 @@ export function canApplyFromCard(job: ApplyJob): boolean {
  */
 export function isEasyApplyJob(job: ApplyJob): boolean {
   return applyRoute(job) === "extension";
-}
-
-export function extractRecruiterEmail(description: string): string | null {
-  const match = description?.match(EMAIL_RE);
-  return match ? match[0] : null;
 }

@@ -87,9 +87,9 @@ async function runQuickApply(row: Row) {
   return { body, submitted };
 }
 
-function renderCard(row: Row): string {
+function renderCard(row: Row, onSelect?: (id: string) => void): string {
   const job = { id: "j1", title: "Engineer", company: "Acme", description: "", location: null, salary_min: null, salary_max: null, scraped_at: new Date().toISOString(), ...row };
-  return renderToStaticMarkup(createElement(JobCard, { job }));
+  return renderToStaticMarkup(createElement(JobCard, { job, onSelect }));
 }
 
 const BADGE: Record<ApplyRoute, string> = {
@@ -119,5 +119,13 @@ describe.each(JOBS)("%s", (_what, row, expected) => {
     }
     const disabledApply = html.includes('title="Apply manually on their website"');
     expect(disabledApply).toBe(!canApplyFromCard(row));
+  });
+
+  // Batch apply is the extension's queue (batch-mark-pending). An ATS job used
+  // to be selectable too, went to batch email auto-apply, was skipped, and the
+  // page said "Sent 0 auto applications!" in green.
+  it("is offered for batch apply only if it's an Easy Apply job", () => {
+    const html = renderCard(row, () => {});
+    expect(html.includes('type="checkbox"')).toBe(applyRoute(row) === "extension");
   });
 });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
-import { detectApplyType, extractRecruiterEmail } from "@/lib/detect-apply-type";
+import { detectApplyType } from "@/lib/detect-apply-type";
 import { normalizePlan } from "@/lib/plan-limits";
 import { checkAndIncrementBrowseJobs } from "@/lib/usage";
 
@@ -31,7 +31,6 @@ type JobRow = {
   apply_url: string | null;
   source: string;
   apply_type: string | null;
-  recruiter_email: string | null;
   salary_min: number | null;
   salary_max: number | null;
   scraped_at: Date;
@@ -131,7 +130,7 @@ export async function GET(req: NextRequest) {
       db.$queryRaw<JobRow[]>`
         SELECT j.id, j.title, j.company, j.location, j.url, j.apply_url, j.source,
                j.salary_min, j.salary_max, j.scraped_at, j.description,
-               j.apply_type, j.recruiter_email, j.is_active
+               j.apply_type, j.is_active
         FROM "Job" j
         WHERE ${whereClause}
         ORDER BY (${relevanceExpr}) DESC, j.scraped_at DESC
@@ -162,7 +161,6 @@ export async function GET(req: NextRequest) {
         ...j,
         description: j.description ?? "",
         apply_type: j.apply_type ?? detectApplyType({ url: j.url, source: j.source, description: j.description ?? "" }),
-        recruiter_email: j.recruiter_email ?? extractRecruiterEmail(j.description ?? ""),
       })),
       total,
       page,

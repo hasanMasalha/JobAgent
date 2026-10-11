@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { EXTENSION_ID, extensionReadiness } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
 import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
+import { isEasyApplyJob } from "@/lib/detect-apply-type";
 import {
   Button,
   buttonStyles,
@@ -22,7 +23,6 @@ import {
   SearchIcon,
   ChevronDownIcon,
   ExtensionIcon,
-  AutoIcon,
   ExternalIcon,
   BrokenRouteIllustration,
   HorizonIllustration,
@@ -125,7 +125,6 @@ const FEATURED_LABEL: Record<Filters["sortBy"], string> = {
 const APPLY_TYPE_TABS = [
   { id: "all", label: "All", Icon: null },
   { id: "extension", label: "Extension", Icon: ExtensionIcon },
-  { id: "auto", label: "Auto", Icon: AutoIcon },
   { id: "external", label: "External", Icon: ExternalIcon },
 ] as const;
 
@@ -237,7 +236,7 @@ export default function MatchesPage() {
   const router = useRouter();
 
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  const [applyTypeFilter, setApplyTypeFilter] = useState<"all" | "extension" | "auto" | "external">("all");
+  const [applyTypeFilter, setApplyTypeFilter] = useState<"all" | "extension" | "external">("all");
   const [batchApplying, setBatchApplying] = useState(false);
 
   const [browseSearch, setBrowseSearch] = useState("");
@@ -330,31 +329,13 @@ export default function MatchesPage() {
       prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
     );
 
-  const getSelectedCounts = () => {
-    const sel = jobs.filter((j) => selectedJobs.includes(j.id));
-    return {
-      extension: sel.filter((j) => j.apply_type === "extension").length,
-      auto: sel.filter((j) => j.apply_type === "auto").length,
-    };
-  };
-
   const handleBatchApply = async () => {
     if (batchApplying) return;
-    const sel = jobs.filter((j) => selectedJobs.includes(j.id));
-    const extensionJobs = sel.filter((j) => j.apply_type === "extension");
-    const autoJobs = sel.filter((j) => j.apply_type === "auto");
+    // Only confirmed Easy Apply jobs can be selected (JobCard's checkbox): the
+    // extension is the one thing that applies to several jobs at once.
+    const extensionJobs = jobs.filter((j) => selectedJobs.includes(j.id) && isEasyApplyJob(j));
     setBatchApplying(true);
     try {
-      if (autoJobs.length > 0) {
-        const res = await fetch("/api/apply/batch-auto", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobIds: autoJobs.map((j) => j.id) }),
-        });
-        const data = await res.json();
-        if (res.ok) showToast(`Sent ${data.count} auto application${data.count !== 1 ? "s" : ""}!`, "success");
-        else if (data.error === "limit_reached") showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
-      }
       if (extensionJobs.length > 0) {
         // The LinkedIn automation notice first: nothing is queued or charged
         // for someone who hasn't accepted it.
@@ -554,13 +535,12 @@ export default function MatchesPage() {
     return applySort(filtered, filters.sortBy);
   }, [jobs, appliedJobIds, filters, applyTypeFilter]);
 
-  const selectAllVisible = () =>
-    setSelectedJobs(filteredJobs.filter((j) => j.apply_type && j.apply_type !== "external").map((j) => j.id));
+  const selectableJobs = filteredJobs.filter(isEasyApplyJob);
+  const selectAllVisible = () => setSelectedJobs(selectableJobs.map((j) => j.id));
 
   const hasBrowseFilter = browseSearch || browseLocation || browseCompany || browseSource;
   const browseFrom = browseTotal === 0 ? 0 : (browsePage - 1) * 20 + 1;
   const browseTo = browseFrom > 0 ? browseFrom + browseJobs.length - 1 : 0;
-  const counts = getSelectedCounts();
 
   const showBrowse = activeTab === "browse" && (plan === "pro" || plan === "unlimited") && browseError?.code !== "plan_restricted";
   const matchesReady = !loading && !error && jobs.length > 0;
@@ -632,12 +612,12 @@ export default function MatchesPage() {
                     );
                   })}
                 </div>
-                {applyTypeFilter !== "external" && applyTypeFilter !== "all" && filteredJobs.length > 0 && (
+                {applyTypeFilter === "extension" && selectableJobs.length > 0 && (
                   <button
                     onClick={selectAllVisible}
                     className="inline-flex h-9 items-center rounded-full border border-dashed border-white/30 px-3.5 text-body-sm font-semibold text-on-hero transition-colors hover:border-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                   >
-                    Select all {filteredJobs.length}
+                    Select all {selectableJobs.length}
                   </button>
                 )}
               </div>
@@ -836,8 +816,7 @@ export default function MatchesPage() {
           <div className="flex min-w-0 items-baseline gap-3 px-1 sm:px-0">
             <span className="whitespace-nowrap font-serif text-lg font-medium sm:text-xl">{selectedJobs.length} selected</span>
             <span className="flex items-center gap-2.5 whitespace-nowrap text-body-sm text-on-hero-muted">
-              {counts.extension > 0 && <span className="inline-flex items-center gap-1"><ExtensionIcon className="h-3.5 w-3.5" />{counts.extension} extension</span>}
-              {counts.auto > 0 && <span className="inline-flex items-center gap-1"><AutoIcon className="h-3.5 w-3.5" />{counts.auto} auto</span>}
+              <span className="inline-flex items-center gap-1"><ExtensionIcon className="h-3.5 w-3.5" />Easy Apply</span>
             </span>
           </div>
           <div className="mt-2 flex items-center gap-1 sm:mt-0 sm:shrink-0">

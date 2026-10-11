@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
-// The remaining auto-apply submit paths: the jobId branch of
-// mark-pending-extension, and batch email auto-apply.
+// The remaining auto-apply submit path: the jobId branch of
+// mark-pending-extension.
 
 jest.mock("@/lib/supabase.server", () => ({
   createServerClient: () => ({
@@ -24,14 +24,9 @@ jest.mock("@/lib/usage", () => ({
   checkAndIncrementAutoApply: jest.fn(),
 }));
 
-const sendEmail = jest.fn();
-jest.mock("resend", () => ({ Resend: jest.fn(() => ({ emails: { send: sendEmail } })) }));
-jest.mock("@/lib/email", () => ({ sendApplicationConfirmationEmail: jest.fn() }));
-
 import { db } from "@/lib/db";
 import * as usage from "@/lib/usage";
 import { POST as markPendingExtension } from "@/app/api/apply/mark-pending-extension/route";
-import { POST as batchAuto } from "@/app/api/apply/batch-auto/route";
 
 const mdb = db as unknown as {
   $queryRaw: jest.Mock;
@@ -54,7 +49,6 @@ beforeEach(() => {
     linkedin_automation_consent_at: new Date("2026-10-05T10:00:00Z"),
   });
   charge.mockResolvedValue({ allowed: true, remaining: 3 });
-  sendEmail.mockResolvedValue({ id: "email-1" });
   mdb.application.create.mockResolvedValue({ id: "app-1", applied_at: new Date() });
 });
 
@@ -143,44 +137,5 @@ describe("POST /api/apply/mark-pending-extension", () => {
     expect(res.status).toBe(404);
     expect(charge).not.toHaveBeenCalled();
     expect(mdb.$executeRaw).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST /api/apply/batch-auto", () => {
-  beforeEach(() => {
-    mdb.$queryRaw.mockResolvedValue([{ clean_summary: "Summary" }]);
-    mdb.job.findMany.mockResolvedValue([
-      { id: "j1", title: "A", company: "Acme", url: "u1", recruiter_email: "hr@acme.example" },
-      { id: "j2", title: "B", company: "Beta", url: "u2", recruiter_email: null },
-      { id: "j3", title: "C", company: "Gamma", url: "u3", recruiter_email: "jobs@gamma.example" },
-    ]);
-  });
-
-  it("charges one credit per email sent and none for jobs it skips", async () => {
-    const data = await (await batchAuto(post("/api/apply/batch-auto", { jobIds: ["j1", "j2", "j3"] }))).json();
-
-    expect(charge).toHaveBeenCalledTimes(2); // j2 has no recruiter email
-    expect(sendEmail).toHaveBeenCalledTimes(2);
-    expect(data.count).toBe(2);
-    expect(data.results).toContainEqual({ jobId: "j2", status: "skipped_no_email" });
-  });
-
-  it("stops sending once the limit runs out", async () => {
-    charge.mockResolvedValueOnce({ allowed: true, remaining: 0 }).mockResolvedValueOnce({ allowed: false, remaining: 0 });
-
-    const data = await (await batchAuto(post("/api/apply/batch-auto", { jobIds: ["j1", "j2", "j3"] }))).json();
-
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(data.results).toContainEqual({ jobId: "j3", status: "limit_reached" });
-  });
-
-  it("returns the limit 403 and sends nothing when no credit is left", async () => {
-    charge.mockResolvedValue({ allowed: false, remaining: 0 });
-
-    const res = await batchAuto(post("/api/apply/batch-auto", { jobIds: ["j1", "j3"] }));
-
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("limit_reached");
-    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

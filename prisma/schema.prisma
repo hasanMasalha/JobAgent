@@ -124,7 +124,6 @@ model Job {
   embedding       Unsupported("vector(384)")?
   scraped_at      DateTime                    @default(now())
   apply_type        String?                     @default("external")
-  recruiter_email   String?
   ats_platform      String?
   is_active         Boolean                     @default(true)
   last_status_check DateTime?
