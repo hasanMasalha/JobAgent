@@ -79,7 +79,7 @@ async def check_linkedin_job_closed(
 
             return False
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False  # Timeout — assume still open
     except Exception as e:
         print(f"[check_job] error checking {url}: {e}", file=sys.stderr)
