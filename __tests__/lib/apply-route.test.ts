@@ -35,7 +35,7 @@ import { db } from "@/lib/db";
 import * as usage from "@/lib/usage";
 import { POST as quickApply } from "@/app/api/apply/quick/route";
 import JobCard from "@/app/dashboard/JobCard";
-import { applyRoute, canApplyFromCard, needsExtension, type ApplyRoute } from "@/lib/detect-apply-type";
+import { applyRoute, applyTab, canApplyFromCard, needsExtension, type ApplyRoute, type ApplyTab } from "@/lib/detect-apply-type";
 
 const mdb = db as unknown as {
   $queryRaw: jest.Mock;
@@ -92,6 +92,9 @@ function renderCard(row: Row, onSelect?: (id: string) => void): string {
   return renderToStaticMarkup(createElement(JobCard, { job, onSelect }));
 }
 
+// The Matches tab a job is listed under, by its card's badge.
+const TAB: Record<ApplyRoute, ApplyTab> = { ats: "direct", extension: "extension", email: "external", external: "external" };
+
 const BADGE: Record<ApplyRoute, string> = {
   ats: "Direct Apply",
   extension: "Extension",
@@ -127,5 +130,11 @@ describe.each(JOBS)("%s", (_what, row, expected) => {
   it("is offered for batch apply only if it's an Easy Apply job", () => {
     const html = renderCard(row, () => {});
     expect(html.includes('type="checkbox"')).toBe(applyRoute(row) === "extension");
+  });
+
+  // Direct = every job whose card says Direct Apply, so filtering to it finds
+  // all of them and only them.
+  it("is listed under the Matches tab that matches its badge", () => {
+    expect(applyTab(row)).toBe(TAB[applyRoute(row)]);
   });
 });
