@@ -20,11 +20,15 @@ interface FormQuestion {
   role: string | null;
   eeo: boolean;
   options?: string[];
+  // Whether an answer saved for it would be used (answer_resolver
+  // saved_answer_used). Not for the fields JobAgent takes from Profile, EEO,
+  // files or dates — offering an answer that's then ignored is worse than none.
+  saveable?: boolean;
 }
 
-// Questions the user can give JobAgent an answer to here: anything but a file
-// or a date. Yes/no questions are answered Yes or No.
+// Before the server said `saveable`: anything but a file, a date or a city.
 const ANSWERABLE = new Set(["text", "long_text", "email", "phone", "number", "url", "select", "radio", "multi_select", "boolean", "checkbox"]);
+const canSave = (q: FormQuestion) => q.saveable ?? ANSWERABLE.has(q.kind);
 const choicesFor = (q: FormQuestion) => (q.kind === "boolean" || q.kind === "checkbox" ? ["Yes", "No"] : q.options);
 
 interface FormAnswer {
@@ -151,13 +155,21 @@ export default function FormAnswers({ applicationId }: { applicationId: string }
                 </div>
               ) : missing.has(q.id) ? (
                 <>
-                  <p className="mt-1.5 text-body-sm font-medium text-attention-text">You answer this one. Save it and JobAgent will use it for this question from now on.</p>
-                  {ANSWERABLE.has(q.kind) && <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />}
+                  {canSave(q) ? (
+                    <>
+                      <p className="mt-1.5 text-body-sm font-medium text-attention-text">You answer this one. Save it and JobAgent will use it for this question from now on.</p>
+                      <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />
+                    </>
+                  ) : q.role && q.role !== "cover_letter" ? (
+                    <p className="mt-1.5 text-body-sm font-medium text-attention-text">JobAgent fills this in from your Profile. Add it there and it&apos;s used from your next application.</p>
+                  ) : (
+                    <p className="mt-1.5 text-body-sm font-medium text-attention-text">You fill this one in on the form yourself.</p>
+                  )}
                 </>
               ) : (
                 <>
                   <p className="mt-1.5 text-body-sm text-ink-subtle">Optional — answer it yourself or leave it blank.</p>
-                  {ANSWERABLE.has(q.kind) && q.label && <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />}
+                  {canSave(q) && q.label && <SaveAnswer question={q.label} options={choicesFor(q)} onSaved={(v) => savedHere(q, v)} />}
                 </>
               )}
 

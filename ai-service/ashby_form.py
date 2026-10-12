@@ -92,7 +92,10 @@ def plan(posting: dict, applicant: ApplicantData, cover_letter: str = "") -> tup
         elif path == "_systemfield_resume":
             action = Action(path, "file", title)
         elif ftype == "Location":
-            action = Action(path, "location", title, applicant.city) if applicant.city else None
+            # An answer saved for this question, else the Profile city (as
+            # answer_resolver).
+            city = saved_answer(title, applicant) or applicant.city
+            action = Action(path, "location", title, city) if city else None
         elif ftype == "Phone":
             action = Action(path, "text", title, applicant.phone) if applicant.phone else None
         elif ftype == "Boolean":

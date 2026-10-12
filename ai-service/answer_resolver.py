@@ -98,6 +98,17 @@ class Answer:
         return d
 
 
+def saved_answer_used(q: Question) -> bool:
+    """Whether an answer the user saves for this exact question would be used
+    for it. Pages offer to save one only then: an offered answer that's
+    ignored is worse than none. Not for the fields the ATS names (from
+    Profile), the phone country (from the phone number), EEO (decline or
+    nothing), files and dates (not answered)."""
+    if q.eeo or q.role is not None:
+        return False
+    return q.kind not in ("phone_country", "file", "date")
+
+
 def _source(label: str, applicant: ApplicantData) -> str:
     return "saved" if saved_answer(label, applicant) else "profile"
 
@@ -159,6 +170,12 @@ def _answer(q: Question, applicant: ApplicantData, cover_letter: str) -> Answer 
         return Answer(q.id, "phone_country", option=q.options[idx], value=info.national_digits)
 
     if q.kind == "location":
+        # An answer saved for this question, else the Profile city. Until
+        # 2026-10-12 only the city: the Applications page offered to save an
+        # answer to "Location" and it was never used.
+        saved = saved_answer(q.label, applicant)
+        if saved:
+            return Answer(q.id, "saved", value=saved)
         return Answer(q.id, "profile", value=applicant.city) if applicant.city else None
 
     if q.kind == "checkbox":

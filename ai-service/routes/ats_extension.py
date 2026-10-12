@@ -24,7 +24,7 @@ import asyncpg
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from answer_resolver import MAX_CLAUDE_ANSWERS, Answer, Question, claude_answer, plan_answers
+from answer_resolver import MAX_CLAUDE_ANSWERS, Answer, Question, claude_answer, plan_answers, saved_answer_used
 from applicant_store import application_cv_file, load_applicant, load_cv_row
 from form_questions import form_questions
 from application_answers import normalize
@@ -106,7 +106,9 @@ async def _resolve(conn, user_id: str, app, questions: list[Question]) -> tuple[
 def _result(answers: list[Answer], missing: list[Question]) -> dict:
     return {
         "answers": [a.to_dict() for a in answers],
-        "missing": [{"id": q.id, "label": q.label or q.id} for q in missing],
+        # saveable: an answer saved for it would be used (saved_answer_used);
+        # otherwise it's filled from Profile or on the form, and isn't offered.
+        "missing": [{"id": q.id, "label": q.label or q.id, "saveable": saved_answer_used(q)} for q in missing],
     }
 
 
@@ -221,7 +223,7 @@ async def form_answers(req: ApplicationRef):
         "form_url": target,
         "questions": [
             {"id": q.id, "label": q.label, "kind": q.kind, "required": q.required, "role": q.role, "eeo": q.eeo,
-             "options": q.options}
+             "options": q.options, "saveable": saved_answer_used(q)}
             for q in questions
         ],
         **_result(answers, missing),

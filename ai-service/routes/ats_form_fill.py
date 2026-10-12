@@ -269,24 +269,40 @@ async def _phone_country_required(page) -> bool:
 
 
 def _missing_answers_result(
-    missing: list[str], filled: list[str], options: dict[str, list[str]] | None = None
+    missing: list[str],
+    filled: list[str],
+    options: dict[str, list[str]] | None = None,
+    elsewhere: list[str] | None = None,
 ) -> dict:
     """Required questions the user hasn't answered: don't submit. The caller
     marks the application needs_manual and refunds the credit, and stores
     `missing_questions` on it — the Applications page asks the user each one
     (with the form's options where the filler knows them) and saves the answer
-    for that exact question, which every filler then uses."""
+    for that exact question, which every filler then uses.
+
+    `elsewhere`: required fields a saved answer wouldn't fill (the phone
+    country comes from the phone number). They stop it too, but aren't
+    offered as questions — an answer saved there would be ignored."""
     options = options or {}
+    elsewhere = elsewhere or []
+    parts = []
+    if missing:
+        parts.append(
+            "this application asks questions you haven't answered yet: " + "; ".join(missing[:6])
+            + ". Answer them on your Applications page and JobAgent will use your answers from then on"
+        )
+    if elsewhere:
+        parts.append(
+            "it needs " + "; ".join(elsewhere[:6])
+            + ", which JobAgent couldn't fill in from your Profile"
+        )
     return {
         "success": False,
         "error": "missing_answers",
-        "missing": missing,
+        "missing": missing + elsewhere,
         "missing_questions": [{"question": q, "options": options.get(q, [])} for q in missing],
         "filled": filled,
-        "message": "Not submitted — this application asks questions you haven't answered yet: "
-        + "; ".join(missing[:6])
-        + ". Answer them on your Applications page and JobAgent will use your answers from then on,"
-        " or apply on the employer's site.",
+        "message": "Not submitted — " + "; and ".join(parts) + ". Or apply on the employer's site.",
     }
 
 
@@ -1364,7 +1380,7 @@ async def _fill_greenhouse_form(
     # Required questions the user gave us no answer for — the form is not
     # submitted if any (see application_answers). Until 2026-10-04 these got
     # made-up defaults, a Claude-picked or the first option, or a Claude answer.
-    missing: list[str] = list(phone_missing)
+    missing: list[str] = []
     question_options: dict[str, list[str]] = {}
     for q in custom_questions:
         q_id = await q.get_attribute("id") or ""
@@ -1434,9 +1450,9 @@ async def _fill_greenhouse_form(
                 except Exception:
                     pass
 
-    if missing:
-        print(f"[ats-form] Not submitting — no answer from the user for: {missing}")
-        return {"early_result": _missing_answers_result(missing, filled, question_options)}
+    if missing or phone_missing:
+        print(f"[ats-form] Not submitting — no answer from the user for: {missing + phone_missing}")
+        return {"early_result": _missing_answers_result(missing, filled, question_options, elsewhere=phone_missing)}
 
     # ── Verify no required fields were left empty ─────────────────────────────
     # A final sweep across the whole form (not just the custom questions
