@@ -1,38 +1,57 @@
 # JobAgent Chrome Extension — Privacy Policy
 
-**Last updated: May 2026**
+**Version 1.6.0 — Last updated: 12 October 2026**
 
-## What We Collect
+The published policy is https://jobagent.uk/privacy (`app/privacy/page.tsx`);
+this file is a summary of it and must say the same thing.
 
-The JobAgent Chrome Extension collects and stores the following data:
+## What the extension does
 
-| Data | Purpose | Storage |
-|---|---|---|
-| JobAgent session token | Authenticate API requests | `chrome.storage.local` (local device only) |
-| JobAgent user ID and email | Display account status in popup | `chrome.storage.local` (local device only) |
-| Easy Apply step marker (that Easy Apply was clicked in a tab, and when — nothing about you or the job) | The extension's own error logs | `chrome.storage.session` (memory only, cleared when the application finishes or the browser closes) |
-| LinkedIn `li_at` session cookie | Detect LinkedIn login status | Read-only; sent to JobAgent server to enable Easy Apply |
+It fills in and submits LinkedIn Easy Apply forms and Greenhouse application
+forms for applications you start in JobAgent.
 
-## What We Do Not Collect
+## Stored on your device (`chrome.storage.local`)
 
-- We do not collect browsing history
-- We do not collect personal data beyond your JobAgent account email
-- We do not sell or share any data with third parties
-- We do not use analytics or tracking services
+| Data | Purpose |
+|---|---|
+| A JobAgent sign-in token (expires after 14 days) | Make requests for your account |
+| Your JobAgent user ID and email | Show your account in the popup |
+| The LinkedIn applications you queued and how far through them it is | Fill them one at a time |
+| A Greenhouse application in progress: its ID, the tab, how far it got and, after Submit, the form page's text from just before | Tell Greenhouse's confirmation from text already on the page; deleted when it finishes |
 
-## How Data Is Used
+`chrome.storage.session` (memory only) holds a marker that Easy Apply was
+clicked in a tab, and when — nothing about you or the job — for the
+extension's own error logs. The popup reads LinkedIn's `li_at` cookie on your
+device to show whether you're signed in to LinkedIn; it is never sent anywhere.
 
-- **Session token / user info**: Used solely to verify you are signed in to JobAgent and to display your account status in the extension popup. Stored only on your local device.
-- **LinkedIn cookie**: Read once when you open the popup to confirm you are logged in to LinkedIn. The value is sent to the JobAgent server to enable automated Easy Apply — it is never stored permanently or shared with third parties.
+## Sent to jobagent.uk
 
-## Data Sharing
+- Answers you give to questions it doesn't recognise (question and answer), saved to your account.
+- The outcome of an application and its ID; when it stopped, why: a short reason and, for Greenhouse, the names of the fields involved, the error messages the form showed, or the address and headings of the page it was on (not your answers); when it stopped at questions you haven't answered, those questions and their options.
+- The list of countries a Greenhouse form's phone picker offers, so JobAgent can pick your phone number's country from it.
+- The extension's version number, with every request.
 
-Data is only transmitted to `jobagent.uk` (the JobAgent service you are already using). No data is shared with LinkedIn or any other third party.
+## Received from jobagent.uk, for one application at a time
 
-## Data Retention
+- Your account email, Profile → Application details, your CV's skills and your saved answers.
+- For Greenhouse: the form's questions with JobAgent's answer to each, your CV file (tailored for the job, or the file you uploaded) and the cover letter, which it attaches to the employer's form.
 
-Data stored in `chrome.storage.local` remains on your device until you uninstall the extension or clear extension storage. You can clear it at any time via `chrome://extensions` → JobAgent → Storage.
+Nothing received is kept after the application. It answers only with what
+you have given; if a form requires something you haven't, it stops without
+submitting.
+
+## Permissions
+
+- linkedin.com and jobagent.uk: fill Easy Apply forms; pick up your sign-in.
+- greenhouse.io (optional): asked the first time you apply to a Greenhouse job, used only in the tab opened for that application.
+- Cookies, storage, notifications, active tab and scripting: as above.
+
+## What it does not do
+
+It doesn't read your browsing history or other pages, doesn't use analytics,
+and doesn't sell or share your data. Apart from the applications you submit to
+employers through LinkedIn or Greenhouse, it sends data only to jobagent.uk.
 
 ## Contact
 
-For questions about this privacy policy, contact us at **support@jobagent.uk**.
+support@jobagent.uk

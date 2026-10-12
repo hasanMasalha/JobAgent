@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>JobAgent — allow Greenhouse</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; background: #f6f7f9; color: #1c2430; font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 520px; margin: 64px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 12px; color: #1B3A5C; }
+    ul { padding-left: 20px; margin: 12px 0; }
+    .actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    button { font: inherit; border-radius: 8px; padding: 10px 16px; cursor: pointer; border: 1px solid #1B3A5C; }
+    #allow { background: #1B3A5C; color: #fff; }
+    #cancel { background: #fff; color: #1B3A5C; }
+    #status { margin-top: 16px; color: #5b6573; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>Let JobAgent fill in Greenhouse applications</h1>
+      <p>To apply for you, the extension needs access to Greenhouse's pages (greenhouse.io). Chrome will ask you to allow it. With it, the extension:</p>
+      <ul>
+        <li>opens the application form only for jobs you click Apply on;</li>
+        <li>fills it in with your details, your CV and the answers you saved;</li>
+        <li>stops without submitting when a required question has no answer from you.</li>
+      </ul>
+      <p>It doesn't read other Greenhouse pages. You can remove the access in Chrome's extension settings at any time.</p>
+      <div class="actions">
+        <button id="allow" type="button">Allow and continue</button>
+        <button id="cancel" type="button">Not now</button>
+      </div>
+      <p id="status" role="status"></p>
+    </div>
+  </main>
+  <script src="grant.js"></script>
+</body>
+</html>

@@ -81,15 +81,30 @@ describe("GET /api/apply/ats-package/[applicationId]", () => {
 describe("GET /api/apply/ats-package/[applicationId]/cv", () => {
   it("returns the file with its type and a safe filename", async () => {
     pythonFetch.mockReturnValue(
-      json({ filename: 'Dana "L"_cv.pdf', mime_type: "application/pdf", base64: Buffer.from("%PDF-1").toString("base64") }),
+      json({ filename: 'Dana "R" resume.pdf', mime_type: "application/pdf", base64: Buffer.from("%PDF-1").toString("base64") }),
     );
     const res = await atsCv(getReq("/api/apply/ats-package/app-1/cv"), params);
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
-    expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="Dana _L__cv.pdf"');
+    // Quotes replaced in the ASCII name; letters kept ("r" was stripped until
+    // 2026-10-12); the real name in filename*.
+    expect(res.headers.get("Content-Disposition")).toBe(
+      "attachment; filename=\"Dana _R_ resume.pdf\"; filename*=UTF-8''Dana%20%22R%22%20resume.pdf",
+    );
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe("%PDF-1");
+  });
+
+  it("sends a Hebrew file name without breaking the header", async () => {
+    pythonFetch.mockReturnValue(
+      json({ filename: "קורות חיים.pdf", mime_type: "application/pdf", base64: Buffer.from("%PDF-1").toString("base64") }),
+    );
+    const res = await atsCv(getReq("/api/apply/ats-package/app-1/cv"), params);
+    expect(res.status).toBe(200);
+    const header = res.headers.get("Content-Disposition")!;
+    expect(header).toMatch(/^attachment; filename="[ -~]+"; filename\*=UTF-8''/);
+    expect(decodeURIComponent(header.split("UTF-8''")[1])).toBe("קורות חיים.pdf");
   });
 
   it("says when the CV can't be used", async () => {

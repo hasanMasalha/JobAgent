@@ -150,9 +150,13 @@ def _answer(q: Question, applicant: ApplicantData, cover_letter: str) -> Answer 
         return Answer(q.id, "profile", value=value) if value else None
 
     if q.kind == "phone_country":
+        # With the country chosen, the number field takes the national number
+        # (value), as the server-side filler types it.
         info = parse_phone(applicant.phone)
         idx = match_country_option(q.options, info) if info else -1
-        return Answer(q.id, "phone_country", option=q.options[idx]) if idx != -1 else None
+        if idx == -1:
+            return None
+        return Answer(q.id, "phone_country", option=q.options[idx], value=info.national_digits)
 
     if q.kind == "location":
         return Answer(q.id, "profile", value=applicant.city) if applicant.city else None

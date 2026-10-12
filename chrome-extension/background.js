@@ -341,6 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
+            ...(message.reason ? { reason: message.reason } : {}),
           }),
         })
         const resText = await res.text()
@@ -420,6 +421,283 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 })
 
+// ── Greenhouse applications (1.6.0) ─────────────────────────────────────────
+// The site hands over one application at a time (START_ATS_APPLY), already
+// charged an auto-apply and marked pending_extension. The extension opens the
+// form in a tab of the user's own browser and greenhouse.js fills it with the
+// server's answers. Every way this can end reports back: applied only on
+// Greenhouse's confirmation; anything else is "manual", which refunds the
+// credit — including the user closing the tab.
+//
+// Access to Greenhouse's pages is asked for the first time it's needed
+// (optional_host_permissions), from grant.html: Chrome only shows that prompt
+// after a click on an extension page.
+const GREENHOUSE_ORIGINS = ['https://*.greenhouse.io/*']
+
+function isGreenhouseUrl(raw) {
+  try {
+    const u = new URL(raw)
+    return u.protocol === 'https:' && (u.hostname === 'greenhouse.io' || u.hostname.endsWith('.greenhouse.io'))
+  } catch {
+    return false
+  }
+}
+
+// One application at a time, kept in storage so it survives the service
+// worker being stopped: { applicationId, tabId, phase, … }.
+//   phase: permission → filling → submitted (→ awaiting_code)
+async function getAtsApply() {
+  return (await chrome.storage.local.get(['atsApply'])).atsApply || null
+}
+
+async function setAtsApply(patch) {
+  const current = await getAtsApply()
+  const next = { ...(current || {}), ...patch }
+  await chrome.storage.local.set({ atsApply: next })
+  return next
+}
+
+async function apiFetch(path, init = {}) {
+  const stored = await chrome.storage.local.get(['extensionToken'])
+  const serverUrl = await getServerUrl()
+  return fetch(`${serverUrl}${path}`, {
+    ...init,
+    headers: { ...(init.headers || {}), ...versionHeader, ...authHeader(stored) },
+  })
+}
+
+// The file name from a Content-Disposition header: filename* (UTF-8, the real
+// name — lib/content-disposition.ts) before the ASCII filename="…".
+function dispositionFilename(disposition) {
+  const d = disposition || ''
+  const star = d.match(/filename\*=UTF-8''([^;]+)/i)
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()) } catch {}
+  }
+  return (d.match(/filename="([^"]+)"/) || [])[1] || null
+}
+
+function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(bin)
+}
+
+const ATS_MESSAGES = {
+  applied: 'Your application was submitted — Greenhouse confirmed it.',
+  missing_answers: "Stopped before submitting: the form asks questions you haven't answered. Nothing was sent and the auto-apply was returned. Finish in the open tab.",
+  needs_user: 'Stopped before submitting: the form has fields JobAgent can\'t fill for you. Nothing was sent and the auto-apply was returned. Finish in the open tab.',
+  fill_failed: "Stopped before submitting: a field couldn't be filled in. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  submit_unconfirmed: "Submit was clicked but Greenhouse didn't confirm it. Check the tab: it may have gone in. The auto-apply was returned.",
+  upload_unfinished: "Stopped before submitting: an attached file didn't finish uploading. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  form_shows_errors: "Stopped before submitting: Greenhouse showed an error on the form. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  fill_changed: "Stopped before submitting: the form changed after JobAgent filled it. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  form_error: "Greenhouse didn't accept the form, so it wasn't sent. The auto-apply was returned. Check the open tab.",
+  captcha_detected: 'Greenhouse asked for a security check before the form. Nothing was sent and the auto-apply was returned.',
+  permission_denied: 'JobAgent needs access to Greenhouse pages to fill in the form. Nothing was sent and the auto-apply was returned.',
+  tab_closed: 'The application tab was closed before it finished. Nothing was confirmed and the auto-apply was returned.',
+  dry_run: 'Dry run: everything was filled in and Submit was not clicked.',
+}
+
+// Reports the application's outcome and forgets it. "manual" refunds the
+// auto-apply (update-status), and may carry the questions the user hasn't
+// answered, which the Applications page then asks.
+// `reason` (a code) and `detail` (a short line: field labels, the page's
+// errors) are stored with the application, so a stopped one says why.
+async function finishAtsApply(state, status, reason, missingQuestions, detail) {
+  await chrome.storage.local.remove(['atsApply'])
+  try {
+    const res = await apiFetch('/api/applications/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        applicationId: state.applicationId,
+        status,
+        ...(reason ? { reason } : {}),
+        ...(detail ? { detail: String(detail).slice(0, 500) } : {}),
+        ...(missingQuestions && missingQuestions.length ? { missingQuestions } : {}),
+      }),
+    })
+    console.log('[JobAgent bg] ATS result', state.applicationId, status, reason, detail || '', res.status)
+  } catch (e) {
+    console.error('[JobAgent bg] could not report ATS result', state.applicationId, e)
+  }
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon48.png',
+    title: status === 'applied' ? 'JobAgent — Application submitted ✅' : 'JobAgent — Finish this one yourself',
+    message: ATS_MESSAGES[status === 'applied' ? 'applied' : reason] ||
+      'JobAgent could not submit this application. Nothing was confirmed and the auto-apply was returned.',
+  })
+}
+
+// Opens the form for an application (in `tabId` when given: the grant page).
+async function openAtsForm(applicationId, tabId) {
+  const state = await getAtsApply()
+  if (!state || state.applicationId !== applicationId) return
+  let pkg = null
+  let pkgStatus = 'no response'
+  try {
+    const res = await apiFetch(`/api/apply/ats-package/${encodeURIComponent(applicationId)}`)
+    pkgStatus = `HTTP ${res.status}`
+    pkg = res.ok ? await res.json() : null
+  } catch (e) {
+    pkgStatus = String(e && e.message || e)
+  }
+  if (!pkg || pkg.ats !== 'greenhouse' || !isGreenhouseUrl(pkg.form_url)) {
+    console.warn('[JobAgent bg] no Greenhouse form for', applicationId, pkg && pkg.ats, pkg && pkg.form_url)
+    const detail = pkg ? `package ats=${pkg.ats} form_url=${pkg.form_url || 'none'}` : `package ${pkgStatus}`
+    return finishAtsApply(state, 'manual', 'form_not_found', null, detail)
+  }
+  // The phase is set before the tab loads, so the load can't be missed.
+  await setAtsApply({ phase: 'filling', formUrl: pkg.form_url })
+  let tab
+  try {
+    tab = tabId
+      ? await chrome.tabs.update(tabId, { url: pkg.form_url, active: true })
+      : await chrome.tabs.create({ url: pkg.form_url, active: true })
+  } catch {
+    tab = await chrome.tabs.create({ url: pkg.form_url, active: true })
+  }
+  await setAtsApply({ tabId: tab.id })
+  // A load that finished before tabId was stored (greenhouse.js runs once per page).
+  const now = await chrome.tabs.get(tab.id).catch(() => null)
+  if (now && now.status === 'complete' && isGreenhouseUrl(now.url || '')) injectGreenhouse(tab.id)
+}
+
+function injectGreenhouse(tabId) {
+  chrome.scripting.executeScript({ target: { tabId }, files: ['greenhouse.js'] })
+    .catch(e => console.error('[JobAgent bg] could not start greenhouse.js', e))
+}
+
+async function startAtsApply(applicationId) {
+  const current = await getAtsApply()
+  if (current) {
+    const alive = current.tabId ? await chrome.tabs.get(current.tabId).then(() => true, () => false) : false
+    if (alive) return false // one at a time
+    await finishAtsApply(current, 'manual', 'tab_closed', null, `replaced by application ${applicationId}`)
+  }
+  await chrome.storage.local.set({ atsApply: { applicationId, phase: 'permission', startedAt: Date.now() } })
+  if (await chrome.permissions.contains({ origins: GREENHOUSE_ORIGINS })) {
+    openAtsForm(applicationId)
+  } else {
+    const tab = await chrome.tabs.create({ url: chrome.runtime.getURL('grant.html'), active: true })
+    await setAtsApply({ tabId: tab.id })
+  }
+  return true
+}
+
+chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  if (info.status !== 'complete') return
+  const state = await getAtsApply()
+  if (!state || state.tabId !== tabId || state.phase === 'permission') return
+  const url = tab.url || ''
+  if (url.startsWith('chrome-extension:') || url === 'about:blank') return // the grant page, before it navigates
+  if (!isGreenhouseUrl(url)) {
+    // Greenhouse's form only lives on greenhouse.io; JobAgent doesn't follow
+    // it anywhere else. After Submit that means no confirmation it can read.
+    return finishAtsApply(state, 'manual', state.phase === 'filling' ? 'form_not_found' : 'submit_unconfirmed')
+  }
+  injectGreenhouse(tabId)
+})
+
+chrome.tabs.onRemoved.addListener(async tabId => {
+  const state = await getAtsApply()
+  if (state && state.tabId === tabId) {
+    await finishAtsApply(state, 'manual', state.phase === 'filling' || state.phase === 'permission' ? 'tab_closed' : 'submit_unconfirmed')
+  }
+})
+
+// From greenhouse.js (the application's own tab only) and grant.js.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message.type || !message.type.startsWith('ATS_')) return false
+  ;(async () => {
+    const state = await getAtsApply()
+    const ours = !!state && !!sender.tab && sender.tab.id === state.tabId
+
+    if (message.type === 'ATS_PERMISSION_RESULT') {
+      if (!state || state.phase !== 'permission' || !ours) return sendResponse({ ok: false })
+      sendResponse({ ok: true })
+      if (message.granted) return openAtsForm(state.applicationId, state.tabId)
+      return finishAtsApply(state, 'manual', 'permission_denied')
+    }
+    if (!ours) return sendResponse(null)
+
+    if (message.type === 'ATS_GET_STATE') {
+      return sendResponse({
+        applicationId: state.applicationId, phase: state.phase,
+        submittedAt: state.submittedAt, codeAt: state.codeAt, textBefore: state.textBefore,
+      })
+    }
+
+    if (message.type === 'ATS_GET_DATA') {
+      try {
+        const res = await apiFetch(`/api/apply/form-answers/${encodeURIComponent(state.applicationId)}`)
+        const form = res.ok ? await res.json() : null
+        if (!form) return sendResponse({ ok: false, reason: 'data_unavailable', detail: `form-answers HTTP ${res.status}` })
+        if (!form.supported) return sendResponse({ ok: false, reason: 'form_not_found', detail: 'form-answers: not supported' })
+        let cv = null
+        const cvRes = await apiFetch(`/api/apply/ats-package/${encodeURIComponent(state.applicationId)}/cv`)
+        const cvStatus = cvRes.ok ? null : `HTTP ${cvRes.status}`
+        if (cvRes.ok) {
+          const filename = dispositionFilename(cvRes.headers.get('Content-Disposition')) || 'CV.pdf'
+          cv = {
+            filename,
+            mimeType: cvRes.headers.get('Content-Type') || 'application/pdf',
+            base64: bufferToBase64(await cvRes.arrayBuffer()),
+          }
+        }
+        return sendResponse({ ok: true, questions: form.questions, answers: form.answers, missing: form.missing, cv, cvStatus })
+      } catch (e) {
+        console.error('[JobAgent bg] ATS_GET_DATA', e)
+        return sendResponse({ ok: false, reason: 'data_unavailable', detail: String(e && e.message || e) })
+      }
+    }
+
+    if (message.type === 'ATS_RESOLVE') {
+      try {
+        const res = await apiFetch('/api/apply/resolve-answers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ applicationId: state.applicationId, questions: message.questions }),
+        })
+        return sendResponse(res.ok ? await res.json() : null)
+      } catch {
+        return sendResponse(null)
+      }
+    }
+
+    if (message.type === 'ATS_SUBMITTING') {
+      await setAtsApply({ phase: 'submitted', submittedAt: Date.now(), textBefore: message.textBefore || '' })
+      return sendResponse({ ok: true })
+    }
+
+    if (message.type === 'ATS_AWAITING_CODE') {
+      await setAtsApply({ phase: 'awaiting_code', codeAt: Date.now() })
+      chrome.tabs.update(sender.tab.id, { active: true }).catch(() => {})
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon48.png',
+        title: 'JobAgent — Greenhouse sent you a code',
+        message: 'Greenhouse emailed you a security code. Enter it in the application tab and press Submit.',
+      })
+      return sendResponse({ ok: true })
+    }
+
+    if (message.type === 'ATS_RESULT') {
+      sendResponse({ ok: true })
+      const status = message.status === 'applied' ? 'applied' : 'manual'
+      return finishAtsApply(state, status, message.reason, message.missingQuestions, message.detail)
+    }
+
+    sendResponse(null)
+  })()
+  return true
+})
+
 // Messages sent from the jobagent web app (externally_connectable)
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
   console.log('[JobAgent bg] external message:', message.type, 'from:', sender.url)
@@ -435,6 +713,22 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     sendResponse({ success: true })
     openApplyWindow(message.jobUrl, message.applicationId)
     return false
+  }
+
+  // One Greenhouse application, already charged and pending_extension.
+  // Answered at once: the page gives up after 5 seconds and refunds.
+  if (message.type === 'START_ATS_APPLY') {
+    if (typeof message.applicationId !== 'string' || !message.applicationId) {
+      sendResponse({ success: false })
+      return false
+    }
+    startAtsApply(message.applicationId)
+      .then(ok => sendResponse({ success: ok }))
+      .catch(e => {
+        console.error('[JobAgent bg] START_ATS_APPLY', e)
+        sendResponse({ success: false })
+      })
+    return true
   }
 
   // Queue multiple LinkedIn jobs for batch apply.

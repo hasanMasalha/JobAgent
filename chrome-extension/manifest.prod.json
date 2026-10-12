@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JobAgent — AI Job Assistant",
-  "version": "1.5.0",
-  "description": "Fills in and submits LinkedIn Easy Apply for jobs you pick in JobAgent, with answers you saved. Stops if an answer is missing.",
+  "version": "1.6.0",
+  "description": "Fills in and submits LinkedIn Easy Apply and Greenhouse forms for jobs you pick, with answers you gave. Stops if one is missing.",
   "author": "JobAgent",
   "homepage_url": "https://jobagent.uk",
   "permissions": [
@@ -15,6 +15,9 @@
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://jobagent.uk/*"
+  ],
+  "optional_host_permissions": [
+    "https://*.greenhouse.io/*"
   ],
   "background": {
     "service_worker": "background.js"

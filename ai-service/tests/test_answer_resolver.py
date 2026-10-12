@@ -123,6 +123,8 @@ def test_phone_country_by_name_and_dial_code():
     options = ["United States +1", "Israel +972", "United Kingdom +44"]
     answers, _, _ = run(q(id="pc", label="Country", kind="phone_country", options=options, required=True))
     assert answers["pc"].option == "Israel +972"
+    # The number to type once the country is chosen.
+    assert answers["pc"].value == "0502345678"
 
 
 def test_phone_country_unplaceable_is_missing():
