@@ -462,6 +462,18 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   messages never point there (until 2026-10-11 they said "save the answers in
   your Profile"). Nothing retries the application that stopped: the answers
   count from the next application that asks the same question.
+- **Only offer to save an answer that would be used.** `saved_answer_used`
+  (`answer_resolver.py`) says which: not the fields the ATS names (name,
+  email, phone, résumé, cover letter — from Profile), the phone country (from
+  the number), EEO, files or dates. `/form-answers` and `/resolve-answers`
+  mark each question and missing item `saveable`; fill-and-review offers
+  Save only then (otherwise "from your Profile" or "fill it in on the form"),
+  the extension (1.6.0) sends only saveable ones as `missingQuestions`, and the
+  server-side filler passes the phone country as `elsewhere`. A location
+  question uses an answer saved for it before the Profile city (resolver and
+  `ashby_form`) — until 2026-10-12 only the city, so "Location" was offered on
+  the Applications page and the saved answer ignored. Greenhouse still needs
+  the city as it names it ("Tel Aviv-Yafo"); "Tel Aviv" stops for the user.
 - **A Profile yes/no only answers a question with options** (`user_answer(…,
   choice=True)`: selects, radios, Greenhouse's react-select combobox). In a
   text field it used to type a bare "Yes"/"No". And the sponsorship answer is

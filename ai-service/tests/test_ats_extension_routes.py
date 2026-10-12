@@ -83,7 +83,7 @@ def test_resolves_facts_from_profile_open_ended_from_claude_and_reports_missing(
     by_id = {a["id"]: a for a in r["answers"]}
     assert by_id["name"] == {"id": "name", "source": "profile", "value": "Dana Levi"}
     assert by_id["why"]["source"] == "claude"
-    assert r["missing"] == [{"id": "salary", "label": "Expected annual salary (USD)"}]
+    assert r["missing"] == [{"id": "salary", "label": "Expected annual salary (USD)", "saveable": True}]
     assert setup["claude_calls"] == ["Why do you want to join Acme?"]
 
 
@@ -167,7 +167,7 @@ def test_form_answers_reads_the_form_and_answers_it(setup, monkeypatch):
     assert r["supported"] is True and r["ats"] == "lever"
     assert [q["id"] for q in r["questions"]] == ["name", "why", "auth"]
     assert {a["id"]: a["source"] for a in r["answers"]} == {"name": "profile", "why": "claude"}
-    assert r["missing"] == [{"id": "auth", "label": "Authorized to work in the UK?"}]
+    assert r["missing"] == [{"id": "auth", "label": "Authorized to work in the UK?", "saveable": True}]
 
 
 def test_form_answers_unsupported_ats(setup, monkeypatch):

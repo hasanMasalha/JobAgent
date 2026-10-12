@@ -109,6 +109,9 @@ def test_location_and_phone():
     assert a["ph"].value == "+972501234567"
     _, missing = plan(posting, ApplicantData(first_name="A", last_name="B", email="a@b.c"))
     assert missing == ["Where are you based?", "Phone"]
+    # An answer saved for the location question is used, before the city.
+    saved = ApplicantData(first_name="A", last_name="B", email="a@b.c", saved_answers={"where are you based?": "Haifa"})
+    assert _by_path(plan(posting, saved)[0])["_systemfield_location"].value == "Haifa"
 
 
 def test_eeo_survey_declines_only_when_required():

@@ -23,6 +23,18 @@ def test_missing_answers_result_lists_each_question_with_its_options():
     ]
 
 
+def test_a_field_a_saved_answer_wouldnt_fill_stops_it_but_isnt_offered():
+    # The phone country comes from the phone number; an answer saved for
+    # "Phone country" would be ignored.
+    r = _missing_answers_result(["Notice period"], [], elsewhere=["Phone country"])
+    assert r["missing"] == ["Notice period", "Phone country"]
+    assert r["missing_questions"] == [{"question": "Notice period", "options": []}]
+    assert "Phone country" in r["message"]
+    only = _missing_answers_result([], [], elsewhere=["Phone country"])
+    assert only["missing_questions"] == []
+    assert "Applications page" not in only["message"]
+
+
 def test_message_sends_the_user_to_the_applications_page_not_profile():
     msg = _missing_answers_result(["Notice period"], [])["message"]
     assert "Applications page" in msg

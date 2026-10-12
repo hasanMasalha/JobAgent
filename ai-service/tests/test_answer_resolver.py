@@ -165,3 +165,36 @@ def test_files_and_dates_are_not_answered():
 def test_unknown_kind_is_read_as_text():
     answers, _, _ = run(q(id="x", label="LinkedIn profile", kind="something-new"))
     assert answers["x"].value == "https://linkedin.com/in/dana"
+
+
+def test_location_uses_an_answer_saved_for_it_then_the_profile_city():
+    saved = ApplicantData(city="", saved_answers={"location": "Haifa"})
+    answers, _, missing = run(q(id="loc", label="Location", kind="location", required=True), applicant=saved)
+    assert (answers["loc"].value, answers["loc"].source) == ("Haifa", "saved")
+    assert missing == []
+    answers, _, _ = run(q(id="loc", label="Location", kind="location"))
+    assert (answers["loc"].value, answers["loc"].source) == ("Tel Aviv", "profile")
+    _, _, missing = run(q(id="loc", label="Location", kind="location", required=True), applicant=ApplicantData())
+    assert missing == ["loc"]
+
+
+@pytest.mark.parametrize(
+    "question, used",
+    [
+        ({"label": "How did you hear about us?", "kind": "text"}, True),
+        ({"label": "Location", "kind": "location"}, True),
+        ({"label": "Will you require sponsorship?", "kind": "select", "options": ["Yes", "No"]}, True),
+        # Filled from Profile, the phone number, or not answered: a saved
+        # answer would be ignored, so none is offered.
+        ({"label": "Phone", "kind": "phone", "role": "phone"}, False),
+        ({"label": "First Name", "kind": "text", "role": "first_name"}, False),
+        ({"label": "Country", "kind": "phone_country", "options": ["Israel +972"]}, False),
+        ({"label": "Gender", "kind": "select", "options": ["Male", "Female"], "eeo": True}, False),
+        ({"label": "Portfolio PDF", "kind": "file"}, False),
+        ({"label": "Earliest start date", "kind": "date"}, False),
+    ],
+)
+def test_saved_answer_used_only_where_one_would_be(question, used):
+    from answer_resolver import saved_answer_used
+
+    assert saved_answer_used(q(**question)) is used
