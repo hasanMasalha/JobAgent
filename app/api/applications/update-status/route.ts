@@ -6,13 +6,45 @@ import { refundAutoApplyForApplication } from "@/lib/usage";
 // Statuses that mean the application went out. "manual"/"failed" never replace these.
 const SUBMITTED_STATUSES = new Set(["applied", "interviewing", "offer", "rejected"]);
 
+// The required questions the extension stopped on because the user hadn't
+// answered them, stored like the AI service's (Application.missing_questions):
+// [{ question, options }]. Anything else in the body is dropped.
+function missingQuestions(raw: unknown): { question: string; options: string[] }[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out = raw
+    .slice(0, 50)
+    .map((q) => ({
+      question: typeof q?.question === "string" ? q.question.slice(0, 1000) : "",
+      options: Array.isArray(q?.options)
+        ? q.options.filter((o: unknown): o is string => typeof o === "string").slice(0, 100).map((o: string) => o.slice(0, 300))
+        : [],
+    }))
+    .filter((q) => q.question.trim());
+  return out.length ? out : null;
+}
+
+// Why the extension stopped, kept as Application.error_message so a stopped
+// application says what happened: its reason code ("fill_failed",
+// "missing_answers"…) and a short detail (field labels, the form's errors, the
+// page it was on — never the user's answers). Codes are lower_snake; anything
+// else is dropped.
+function stopReason(raw: { reason?: unknown; detail?: unknown }): string | null {
+  const reason = typeof raw.reason === "string" && /^[a-z_]{1,40}$/.test(raw.reason) ? raw.reason : null;
+  if (!reason) return null;
+  const detail = typeof raw.detail === "string"
+    ? raw.detail.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 500)
+    : "";
+  return `extension: ${reason}${detail ? ` — ${detail}` : ""}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Session, or the extension's signed token (its service worker can't send
     // the session cookie). A userId in the body is ignored — it used to be
     // trusted, which let anyone change another user's statuses and refunds.
     const userId = await getSessionOrExtensionUserId(req);
-    const { applicationId, status } = await req.json();
+    const body = await req.json();
+    const { applicationId, status } = body;
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -45,9 +77,14 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[update-status] updating:", applicationId, "to:", status, "for user:", userId);
+    const missing = status === "manual" ? missingQuestions(body.missingQuestions) : null;
+    // Applied clears an earlier stop's reason; a stop without one keeps what's there.
+    const reason = status === "applied" ? null : stopReason(body);
     await db.$executeRaw`
       UPDATE "Application"
-      SET status = ${status}
+      SET status = ${status},
+          missing_questions = ${missing ? JSON.stringify(missing) : null}::jsonb,
+          error_message = CASE WHEN ${status === "applied"} THEN NULL ELSE COALESCE(${reason}, error_message) END
       WHERE id = ${applicationId} AND user_id = ${userId}
     `;
     console.log("[update-status] done");

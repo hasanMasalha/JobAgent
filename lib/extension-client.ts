@@ -36,9 +36,30 @@ export function extensionVersion(): Promise<string | null> {
   return ask().then((v) => v ?? ask());
 }
 
-/** "ok", or why the extension can't be handed an application. */
-export async function extensionReadiness(): Promise<"ok" | "missing" | "outdated"> {
+/** "ok", or why the extension can't be handed an application. `min` is the
+ *  version the job needs: 1.5.0 for LinkedIn Easy Apply, 1.6.0 for an
+ *  employer job site (MIN_ATS_EXTENSION_VERSION). */
+export async function extensionReadiness(min?: string): Promise<"ok" | "missing" | "outdated"> {
   const version = await extensionVersion();
-  if (isVersionAtLeast(version)) return "ok";
+  if (isVersionAtLeast(version, min)) return "ok";
   return version ? "outdated" : "missing";
+}
+
+/** Sends one message to the extension; true when it answered without error. */
+export function sendToExtension(message: Record<string, unknown>): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!EXTENSION_ID || typeof chrome === "undefined" || !chrome?.runtime?.sendMessage) return resolve(false);
+    const timer = setTimeout(() => resolve(false), 5000);
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, message, (response) => {
+        clearTimeout(timer);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((chrome.runtime as any).lastError) return resolve(false);
+        resolve(response?.success === true);
+      });
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
 }

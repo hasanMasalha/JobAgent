@@ -10,6 +10,7 @@ import {
 } from "@/lib/usage";
 import { pythonFetch, pythonServiceUrl } from "@/lib/python-service";
 import { applySubmitUrl, detectATS, needsExtension, serverSubmits } from "@/lib/detect-apply-type";
+import { greenhouseViaExtension } from "@/lib/job-site-consent";
 
 export const maxDuration = 60;
 
@@ -62,6 +63,13 @@ export async function POST(req: NextRequest) {
         external_url: job.url,
         message: "External job — apply manually",
       });
+    }
+
+    // Greenhouse through the extension (when enabled): the card starts it via
+    // /api/apply/ats-extension/start. This is the backstop; nothing is
+    // created or charged.
+    if (greenhouseViaExtension() && detectATS(applySubmitUrl(job)) === "greenhouse") {
+      return NextResponse.json({ success: false, extension_required: true });
     }
 
     const profile = await db.user.findFirst({

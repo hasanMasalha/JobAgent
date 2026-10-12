@@ -10,6 +10,10 @@ import type { NextRequest } from "next/server";
 // It is also the first that sends this header at all, so a request without it
 // is an older version.
 export const MIN_EXTENSION_VERSION = "1.5.0";
+// The first version that fills in and submits employer job-site forms
+// (Greenhouse). An older one doesn't know START_ATS_APPLY, so the site asks
+// for an update before handing it one.
+export const MIN_ATS_EXTENSION_VERSION = "1.6.0";
 export const EXTENSION_VERSION_HEADER = "x-jobagent-extension-version";
 
 function parts(version: string): number[] | null {

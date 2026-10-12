@@ -53,6 +53,10 @@ model User {
   /// first consent is kept. Without it nothing is handed to the extension
   /// (mark-pending-extension, batch-mark-pending refuse). See lib/linkedin-consent.ts.
   linkedin_automation_consent_at DateTime?
+  /// When the user accepted the job-site automation notice: the extension
+  /// fills and submits employer-site applications (Greenhouse) and receives
+  /// their CV. Null = not given; /api/apply/ats-extension/start refuses.
+  job_site_automation_consent_at DateTime?
   cover_letter_default String?
   currentCompany       String?  @default("")
 
