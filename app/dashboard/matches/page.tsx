@@ -375,6 +375,17 @@ export default function MatchesPage() {
           showToast("You've reached your monthly auto-apply limit. Upgrade on the Pricing page for more.", "error");
           return;
         }
+        // Jobs JobAgent is already applying to, or has applied to: not queued again.
+        const already: number = data.alreadyQueued?.length ?? 0;
+        if (res.ok && !data.results?.length && already > 0) {
+          showToast(
+            already === 1
+              ? "JobAgent is already applying to that job, or has applied. Check your Applications page."
+              : `JobAgent is already applying to those ${already} jobs, or has applied. Check your Applications page.`,
+            "success",
+          );
+          return;
+        }
         if (!res.ok || !data.results?.length) {
           showToast("Failed to prepare applications. Please try again.", "error");
           return;
@@ -385,7 +396,8 @@ export default function MatchesPage() {
         const overBatch: number = data.overBatchLimit?.length ?? 0;
         const skippedNote =
           (skipped > 0 ? ` ${skipped} not queued — monthly auto-apply limit reached.` : "") +
-          (overBatch > 0 ? ` ${overBatch} not queued — a batch is limited to ${MAX_EXTENSION_BATCH} jobs. Nothing was charged for them.` : "");
+          (overBatch > 0 ? ` ${overBatch} not queued — a batch is limited to ${MAX_EXTENSION_BATCH} jobs. Nothing was charged for them.` : "") +
+          (already > 0 ? ` ${already} skipped — already being applied to, or applied.` : "");
         const queueJobs: { id: string; url: string }[] = data.results.map((r: { jobId: string; applicationId: string; jobUrl: string }) => ({
           id: r.applicationId,
           url: r.jobUrl,

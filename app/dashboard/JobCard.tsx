@@ -279,6 +279,11 @@ export default function JobCard({
         router.push(setup);
         return;
       }
+      // Already with the extension, or applied (lib/extension-handover.ts).
+      if (res.status === 409) {
+        showToast(typeof data.message === "string" ? data.message : "JobAgent is already applying to this job.", "success");
+        return;
+      }
       if (!res.ok || !data.application_id) {
         showToast("Couldn't start this application. Please try again.", "error");
         return;

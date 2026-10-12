@@ -116,4 +116,5 @@ def test_scheduler_has_one_intake_job():
         ids = sorted(job.id for job in scheduler.scheduler.get_jobs())
     finally:
         scheduler.scheduler.remove_all_jobs()
-    assert ids == ["daily_pipeline", "startup_recovery"]
+    # One intake trigger; release_stale_pending isn't intake (pending_release.py).
+    assert ids == ["daily_pipeline", "release_stale_pending", "startup_recovery"]

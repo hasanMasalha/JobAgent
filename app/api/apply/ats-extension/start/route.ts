@@ -6,6 +6,7 @@ import { AUTO_APPLY_LIMIT_RESPONSE, checkAndIncrementAutoApply } from "@/lib/usa
 import { applyRoute, applySubmitUrl, detectATS } from "@/lib/detect-apply-type";
 import { greenhouseViaExtension, JOB_SITE_CONSENT_REQUIRED_RESPONSE } from "@/lib/job-site-consent";
 import { jobSiteAutomationConsentAt } from "@/lib/job-site-consent.server";
+import { blockedResponse, blockingApplication, withJobLock } from "@/lib/extension-handover";
 
 // Hands a Greenhouse application to the extension, which fills in and
 // submits the form in the user's own browser (stage 3 of moving ATS applying
@@ -43,38 +44,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "not_greenhouse" }, { status: 400 });
     }
 
-    const existing = await db.$queryRaw<{ id: string; status: string; auto_apply_charged: boolean }[]>`
-      SELECT id, status, auto_apply_charged FROM "Application"
-      WHERE user_id = ${user.id} AND job_id = ${jobId}
-      ORDER BY applied_at DESC
-      LIMIT 1
-    `;
-    if (["applied", "interviewing", "offer", "rejected"].includes(existing[0]?.status ?? "")) {
-      return NextResponse.json({ error: "already_applied" }, { status: 409 });
-    }
+    // One hand-over per job at a time (lib/extension-handover.ts), decided and
+    // charged under a lock so a double click can't make two.
+    const result = await withJobLock(user.id, jobId, async (tx) => {
+      const blocking = await blockingApplication(tx, user.id, jobId);
+      if (blocking) return { kind: "blocked", status: blocking.status } as const;
 
-    if (!existing[0]?.auto_apply_charged) {
-      const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
-      const { allowed } = await checkAndIncrementAutoApply(user.id, normalizePlan(dbUser?.plan));
-      if (!allowed) return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
-    }
-
-    let applicationId: string;
-    if (existing.length) {
-      await db.$executeRaw`
-        UPDATE "Application"
-        SET status = 'pending_extension', auto_apply_charged = true, error_message = NULL, missing_questions = NULL
-        WHERE id = ${existing[0].id} AND user_id = ${user.id}
+      const existing = await tx.$queryRaw<{ id: string; auto_apply_charged: boolean }[]>`
+        SELECT id, auto_apply_charged FROM "Application"
+        WHERE user_id = ${user.id} AND job_id = ${jobId}
+        ORDER BY applied_at DESC
+        LIMIT 1
       `;
-      applicationId = existing[0].id;
-    } else {
-      const rows = await db.$queryRaw<{ id: string }[]>`
+      if (!existing[0]?.auto_apply_charged) {
+        const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { plan: true } });
+        const { allowed } = await checkAndIncrementAutoApply(user.id, normalizePlan(dbUser?.plan));
+        if (!allowed) return { kind: "limit" } as const;
+      }
+
+      if (existing.length) {
+        await tx.$executeRaw`
+          UPDATE "Application"
+          SET status = 'pending_extension', auto_apply_charged = true, applied_at = NOW(),
+              error_message = NULL, missing_questions = NULL
+          WHERE id = ${existing[0].id} AND user_id = ${user.id}
+        `;
+        return { kind: "ok", applicationId: existing[0].id } as const;
+      }
+      const rows = await tx.$queryRaw<{ id: string }[]>`
         INSERT INTO "Application" (id, user_id, job_id, status, applied_at, auto_apply_charged)
-        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'pending_extension', now(), true)
+        VALUES (gen_random_uuid(), ${user.id}, ${jobId}, 'pending_extension', NOW(), true)
         RETURNING id
       `;
-      applicationId = rows[0].id;
-    }
+      return { kind: "ok", applicationId: rows[0].id } as const;
+    });
+
+    if (result.kind === "blocked") return NextResponse.json(blockedResponse(result.status), { status: 409 });
+    if (result.kind === "limit") return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
+    const applicationId = result.applicationId;
 
     return NextResponse.json({ application_id: applicationId });
   } catch (err) {

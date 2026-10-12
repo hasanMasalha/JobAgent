@@ -7,6 +7,7 @@ import { isLinkedInListing } from "@/lib/detect-apply-type";
 import { MAX_EXTENSION_BATCH } from "@/lib/extension-batch";
 import { LINKEDIN_CONSENT_REQUIRED_RESPONSE } from "@/lib/linkedin-consent";
 import { linkedInAutomationConsentAt } from "@/lib/linkedin-consent.server";
+import { blockingApplication, withJobLock } from "@/lib/extension-handover";
 
 // Creates Application rows (status = pending_extension) for each job so
 // the extension queue can pick them up. Does not call Claude — the
@@ -53,31 +54,34 @@ export async function POST(req: NextRequest) {
     const results: { jobId: string; applicationId: string; jobUrl: string }[] = [];
     const limitReached: string[] = [];
 
+    // Jobs already submitted or with the extension now: not queued again, not
+    // charged (lib/extension-handover.ts).
+    const alreadyQueued: string[] = [];
+
     for (const job of jobs) {
-      // Reuse existing pending application or create a new one
-      const existing = await db.application.findFirst({
-        where: { user_id: user.id, job_id: job.id },
-        orderBy: { applied_at: "desc" },
-        select: { id: true, auto_apply_charged: true },
-      });
+      const outcome = await withJobLock(user.id, job.id, async (tx) => {
+        if (await blockingApplication(tx, user.id, job.id)) return { kind: "blocked" } as const;
 
-      if (!existing?.auto_apply_charged) {
-        const { allowed } = await checkAndIncrementAutoApply(user.id, plan);
-        if (!allowed) {
-          limitReached.push(job.id);
-          continue;
-        }
-      }
-
-      let applicationId: string;
-      if (existing) {
-        await db.application.update({
-          where: { id: existing.id },
-          data: { status: "pending_extension", auto_apply_charged: true },
+        // Reuse the job's latest application or create one.
+        const existing = await tx.application.findFirst({
+          where: { user_id: user.id, job_id: job.id },
+          orderBy: { applied_at: "desc" },
+          select: { id: true, auto_apply_charged: true },
         });
-        applicationId = existing.id;
-      } else {
-        const created = await db.application.create({
+
+        if (!existing?.auto_apply_charged) {
+          const { allowed } = await checkAndIncrementAutoApply(user.id, plan);
+          if (!allowed) return { kind: "limit" } as const;
+        }
+
+        if (existing) {
+          await tx.application.update({
+            where: { id: existing.id },
+            data: { status: "pending_extension", auto_apply_charged: true, applied_at: new Date() },
+          });
+          return { kind: "ok", applicationId: existing.id } as const;
+        }
+        const created = await tx.application.create({
           data: {
             user_id: user.id,
             job_id: job.id,
@@ -86,10 +90,12 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true },
         });
-        applicationId = created.id;
-      }
+        return { kind: "ok", applicationId: created.id } as const;
+      });
 
-      results.push({ jobId: job.id, applicationId, jobUrl: job.url });
+      if (outcome.kind === "blocked") alreadyQueued.push(job.id);
+      else if (outcome.kind === "limit") limitReached.push(job.id);
+      else results.push({ jobId: job.id, applicationId: outcome.applicationId, jobUrl: job.url });
     }
 
     // Nothing queued and the only reason is quota — same 403 as quick apply.
@@ -97,7 +103,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(AUTO_APPLY_LIMIT_RESPONSE, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, results, limitReached, overBatchLimit });
+    return NextResponse.json({ success: true, results, limitReached, overBatchLimit, alreadyQueued });
   } catch (err) {
     console.error("[batch-mark-pending]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

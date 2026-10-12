@@ -10,13 +10,16 @@ jest.mock("@/lib/supabase.server", () => ({
     auth: { getUser: async () => ({ data: { user: { id: "u1", email: "u1@example.com" } } }) },
   }),
 }));
-jest.mock("@/lib/db", () => ({
-  db: {
+jest.mock("@/lib/db", () => {
+  const db: Record<string, unknown> = {
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
     user: { findUnique: jest.fn(), findFirst: jest.fn() },
-  },
-}));
+  };
+  // Transactions run on the same mock (lib/extension-handover.ts withJobLock).
+  db.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
+  return { db };
+});
 jest.mock("@/lib/usage", () => ({
   ...jest.requireActual("@/lib/usage"),
   checkAndIncrementAutoApply: jest.fn(),
@@ -42,10 +45,16 @@ const post = (url: string, body: unknown) =>
 
 const GREENHOUSE = { url: "https://job-boards.greenhouse.io/acme/jobs/1", apply_url: null, apply_type: "auto" };
 
-function rows({ job = GREENHOUSE as Record<string, unknown> | null, existing = [] as Record<string, unknown>[] } = {}) {
+function rows({
+  job = GREENHOUSE as Record<string, unknown> | null,
+  existing = [] as Record<string, unknown>[],
+  blocking = [] as Record<string, unknown>[],
+} = {}) {
   mdb.$queryRaw.mockImplementation((strings: TemplateStringsArray) => {
     const sql = strings.join("?");
     if (sql.includes('FROM "Job"')) return Promise.resolve(job ? [{ ...job, title: "Engineer", company: "Acme" }] : []);
+    // The blocking check (lib/extension-handover.ts).
+    if (sql.includes("make_interval")) return Promise.resolve(blocking);
     if (sql.includes('FROM "Application"')) return Promise.resolve(existing);
     if (sql.includes('INSERT INTO "Application"')) return Promise.resolve([{ id: "app-new" }]);
     return Promise.resolve([]);
@@ -84,14 +93,16 @@ describe("POST /api/apply/ats-extension/start", () => {
     ["the flag is off", () => setFlag(false), 404],
     ["the job-site notice hasn't been accepted", () => mdb.user.findUnique.mockResolvedValue({ plan: "pro", job_site_automation_consent_at: null }), 403],
     ["the job isn't on Greenhouse", () => rows({ job: { url: "https://jobs.lever.co/acme/1", apply_url: null, apply_type: "auto" } }), 400],
-    ["it was already applied to", () => rows({ existing: [{ id: "app-1", status: "applied", auto_apply_charged: false }] }), 409],
+    ["it was already applied to", () => rows({ blocking: [{ id: "app-1", status: "applied" }] }), 409],
+    ["the extension is applying to it now", () => rows({ blocking: [{ id: "app-1", status: "pending_extension" }] }), 409],
     ["no auto-apply is left", () => charge.mockResolvedValue({ allowed: false, remaining: 0 }), 403],
   ])("charges and marks nothing when %s", async (_what, arrange, status) => {
     rows();
     arrange();
     const res = await start(post("/api/apply/ats-extension/start", { jobId: "j1" }));
     expect(res.status).toBe(status);
-    expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    // No write (the job lock is an $executeRaw too).
+    expect(mdb.$executeRaw.mock.calls.some(([s]) => s.join("?").includes("UPDATE"))).toBe(false);
     expect(mdb.$queryRaw.mock.calls.some(([s]) => s.join("?").includes("INSERT"))).toBe(false);
     if (status !== 403 || _what.includes("notice")) expect(charge).not.toHaveBeenCalled();
   });

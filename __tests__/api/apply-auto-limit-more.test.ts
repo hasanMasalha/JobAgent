@@ -9,15 +9,18 @@ jest.mock("@/lib/supabase.server", () => ({
   }),
 }));
 
-jest.mock("@/lib/db", () => ({
-  db: {
+jest.mock("@/lib/db", () => {
+  const db: Record<string, unknown> = {
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
     user: { findUnique: jest.fn() },
     job: { findMany: jest.fn() },
     application: { create: jest.fn() },
-  },
-}));
+  };
+  // Transactions run on the same mock (lib/extension-handover.ts withJobLock).
+  db.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
+  return { db };
+});
 
 jest.mock("@/lib/usage", () => ({
   ...jest.requireActual("@/lib/usage"),
@@ -39,6 +42,8 @@ const charge = usage.checkAndIncrementAutoApply as jest.Mock;
 const post = (url: string, body: unknown) =>
   new NextRequest(`http://localhost${url}`, { method: "POST", body: JSON.stringify(body) });
 const sqlOf = (call: unknown[]) => (call[0] as TemplateStringsArray).join("?");
+// Writes to Application (the job lock is an $executeRaw too).
+const updates = () => mdb.$executeRaw.mock.calls.filter((c) => sqlOf(c).includes("UPDATE"));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -67,10 +72,14 @@ describe("POST /api/apply/mark-pending-extension", () => {
     },
   );
 
-  // SELECT existing → `existing`; INSERT → new id; CV skills → [].
-  const route = (existing: unknown[]) =>
+  // The blocking check (lib/extension-handover.ts) → `blocking`; the
+  // application's job → j1; SELECT existing → `existing`; INSERT → new id;
+  // CV skills → [].
+  const route = (existing: unknown[], blocking: unknown[] = []) =>
     mdb.$queryRaw.mockImplementation((strings: TemplateStringsArray) => {
       const sql = strings.join("?");
+      if (sql.includes("make_interval")) return Promise.resolve(blocking);
+      if (sql.includes("SELECT job_id")) return Promise.resolve(existing.length ? [{ job_id: "j1" }] : []);
       if (sql.includes("SELECT id, auto_apply_charged")) return Promise.resolve(existing);
       if (sql.includes('INSERT INTO "Application"')) return Promise.resolve([{ id: "app-new" }]);
       return Promise.resolve([]);
@@ -95,7 +104,7 @@ describe("POST /api/apply/mark-pending-extension", () => {
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe("limit_reached");
     expect(mdb.$queryRaw.mock.calls.some((c) => sqlOf(c).includes("INSERT"))).toBe(false);
-    expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    expect(updates()).toEqual([]);
   });
 
   it("jobId flow doesn't charge again for an application already holding a credit", async () => {
@@ -112,7 +121,7 @@ describe("POST /api/apply/mark-pending-extension", () => {
     const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
     expect(res.status).toBe(200);
     expect(charge).toHaveBeenCalledTimes(1);
-    expect(sqlOf(mdb.$executeRaw.mock.calls[0])).toContain("auto_apply_charged = true");
+    expect(sqlOf(updates()[0])).toContain("auto_apply_charged = true");
   });
 
   it("application_id flow returns the limit 403 and marks nothing when no credit is left", async () => {
@@ -121,7 +130,7 @@ describe("POST /api/apply/mark-pending-extension", () => {
     const res = await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe("limit_reached");
-    expect(mdb.$executeRaw).not.toHaveBeenCalled();
+    expect(updates()).toEqual([]);
   });
 
   it("application_id flow doesn't charge again for an application already holding a credit", async () => {
@@ -137,5 +146,31 @@ describe("POST /api/apply/mark-pending-extension", () => {
     expect(res.status).toBe(404);
     expect(charge).not.toHaveBeenCalled();
     expect(mdb.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  // One hand-over per job: a reopened apply page has a new draft, and
+  // confirming it used to charge and queue the job a second time.
+  it.each([
+    ["pending_extension", "in_progress"],
+    ["applied", "already_applied"],
+  ])("hands nothing over while the job is %s, and charges nothing", async (status, error) => {
+    for (const body of [{ jobId: "j1" }, { application_id: "app-t" }]) {
+      jest.clearAllMocks();
+      route([{ id: "app-t", auto_apply_charged: false }], [{ id: "app-first", status }]);
+      const res = await markPendingExtension(post("/api/apply/mark-pending-extension", body));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe(error);
+      expect(charge).not.toHaveBeenCalled();
+      expect(updates()).toEqual([]);
+      expect(mdb.$queryRaw.mock.calls.some((c) => sqlOf(c).includes("INSERT"))).toBe(false);
+    }
+  });
+
+  it("decides under a lock per user and job, and records when it was handed over", async () => {
+    route([{ id: "app-t", auto_apply_charged: false }]);
+    await markPendingExtension(post("/api/apply/mark-pending-extension", { application_id: "app-t" }));
+    const lock = mdb.$executeRaw.mock.calls.find((c) => sqlOf(c).includes("pg_advisory_xact_lock"))!;
+    expect(lock.slice(1)).toEqual(["u1", "j1"]);
+    expect(sqlOf(updates()[0])).toContain("applied_at = NOW()");
   });
 });

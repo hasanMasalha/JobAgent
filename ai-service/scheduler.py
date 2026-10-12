@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import scrape_runner
+from pending_release import release_stale_pending
 from active_jobs_fetcher import fetch_and_save_jobs as _fetch_active_jobs
 from arbeitnow_fetcher import fetch_and_save_jobs as _fetch_arbeitnow
 from routes.jobs import run_scrape
@@ -122,7 +123,24 @@ async def _recovery_scrape_if_stale():
         logger.exception("[scheduler] Recovery scrape check failed")
 
 
+async def _release_stale_pending():
+    """Applications left with the extension too long: manual, credit back
+    (pending_release.py)."""
+    try:
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            released = await release_stale_pending(conn)
+        finally:
+            await conn.close()
+        if released:
+            logger.info(f"[scheduler] Released {len(released)} stale pending_extension application(s): {released}")
+    except Exception:
+        logger.exception("[scheduler] Releasing stale pending_extension applications failed")
+
+
 def start_scheduler():
+    from datetime import datetime, timedelta
+
     # The only scheduled intake trigger; GitHub workflows run it manually only.
     scheduler.add_job(
         _run_daily_pipeline,
@@ -131,13 +149,21 @@ def start_scheduler():
         max_instances=1,
         misfire_grace_time=3600,
     )
+    scheduler.add_job(
+        _release_stale_pending,
+        "interval",
+        minutes=15,
+        id="release_stale_pending",
+        max_instances=1,
+        next_run_time=datetime.now(UTC) + timedelta(seconds=30),
+    )
     # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
-    from datetime import datetime, timedelta
     scheduler.add_job(_recovery_scrape_if_stale, "date",
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
-    logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → Arbeitnow → match) @05:00 UTC, recovery check in 5s")
+    logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → Arbeitnow → match) @05:00 UTC, "
+                "stale pending_extension release every 15 min, recovery check in 5s")
 
 
 def stop_scheduler():
