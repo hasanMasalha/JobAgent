@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from applicant_store import application_cv_file, load_applicant, load_cv_row
+from pending_release import refund_auto_apply
 
 # Python fully-buffers stdout by default when it isn't attached to a TTY
 # (true under uvicorn/Docker) — a slow background thread's print()s can sit
@@ -59,18 +60,7 @@ async def _mark_needs_manual(
             json.dumps(missing_questions) if missing_questions else None,
             application_id,
         )
-        charged = await conn.fetchrow(
-            'UPDATE "Application" SET auto_apply_charged = false '
-            "WHERE id = $1 AND auto_apply_charged = true RETURNING user_id",
-            application_id,
-        )
-        if charged:
-            await conn.execute(
-                'UPDATE "UserUsage" SET "autoAppliesThisMonth" = "autoAppliesThisMonth" - 1, '
-                '"totalAutoApplies" = "totalAutoApplies" - 1 '
-                'WHERE "userId" = $1 AND "autoAppliesThisMonth" > 0',
-                charged["user_id"],
-            )
+        if await refund_auto_apply(conn, application_id):
             print(f"[ats-apply] refunded the auto-apply for {application_id}")
 
 

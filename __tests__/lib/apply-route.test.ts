@@ -16,13 +16,16 @@ jest.mock("@/lib/supabase.server", () => ({
   }),
 }));
 
-jest.mock("@/lib/db", () => ({
-  db: {
+jest.mock("@/lib/db", () => {
+  const db: Record<string, unknown> = {
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
     user: { findUnique: jest.fn(), findFirst: jest.fn() },
-  },
-}));
+  };
+  // Transactions run on the same mock (lib/extension-handover.ts withJobLock).
+  db.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
+  return { db };
+});
 
 jest.mock("@/lib/usage", () => ({
   ...jest.requireActual("@/lib/usage"),

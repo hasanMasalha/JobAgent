@@ -322,6 +322,16 @@ export default function ApplyPage() {
           return;
         }
       }
+      // Already with the extension, or applied (lib/extension-handover.ts).
+      if (markRes?.status === 409) {
+        const json = await markRes.json().catch(() => ({}));
+        showToast(
+          typeof json.message === "string" ? json.message : "JobAgent is already applying to this job.",
+          "success",
+        );
+        setConfirming(false);
+        return;
+      }
       const marked = !!markRes?.ok;
       if (!marked) {
         showToast("Couldn't start the LinkedIn application, so nothing was opened. Please try again.", "error");

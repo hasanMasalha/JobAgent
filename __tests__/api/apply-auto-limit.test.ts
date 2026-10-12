@@ -9,15 +9,18 @@ jest.mock("@/lib/supabase.server", () => ({
   }),
 }));
 
-jest.mock("@/lib/db", () => ({
-  db: {
+jest.mock("@/lib/db", () => {
+  const db: Record<string, unknown> = {
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
     user: { findUnique: jest.fn(), findFirst: jest.fn() },
     job: { findMany: jest.fn() },
     application: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
-  },
-}));
+  };
+  // Transactions run on the same mock (lib/extension-handover.ts withJobLock).
+  db.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
+  return { db };
+});
 
 jest.mock("@/lib/usage", () => ({
   ...jest.requireActual("@/lib/usage"),
@@ -163,6 +166,8 @@ describe("POST /api/apply/batch-mark-pending", () => {
     ]);
     mdb.application.findFirst.mockResolvedValue(null);
     mdb.application.create.mockImplementation(({ data }) => Promise.resolve({ id: `app-${data.job_id}` }));
+    // No job is with the extension or applied (lib/extension-handover.ts).
+    mdb.$queryRaw.mockReset().mockResolvedValue([]);
   });
 
   it("refuses without the LinkedIn automation consent, queueing and charging nothing", async () => {
@@ -193,6 +198,20 @@ describe("POST /api/apply/batch-mark-pending", () => {
 
     expect(data.results.map((r: { jobId: string }) => r.jobId)).toEqual(["j1"]);
     expect(data.limitReached).toEqual(["j2"]);
+  });
+
+  // One hand-over per job (lib/extension-handover.ts): a job the extension is
+  // applying to now, or already applied to, isn't queued or charged again.
+  it("skips a job that's already with the extension or applied", async () => {
+    mdb.$queryRaw.mockImplementation((strings: TemplateStringsArray, _userId: string, jobId: string) =>
+      Promise.resolve(strings.join("?").includes("make_interval") && jobId === "j1" ? [{ id: "app-first", status: "pending_extension" }] : []),
+    );
+    const data = await (await batchMarkPending(post("/api/apply/batch-mark-pending", { jobIds: ["j1", "j2"] }))).json();
+
+    expect(data.alreadyQueued).toEqual(["j1"]);
+    expect(data.results.map((r: { jobId: string }) => r.jobId)).toEqual(["j2"]);
+    expect(charge).toHaveBeenCalledTimes(1);
+    expect(mdb.application.create).toHaveBeenCalledTimes(1);
   });
 
   it("returns the limit 403 when nothing could be queued", async () => {

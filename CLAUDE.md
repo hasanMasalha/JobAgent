@@ -211,6 +211,23 @@ one auto-apply, then the page sends `START_APPLY_QUEUE` to the extension.
   job it didn't reach as `manual` so the credits return.
 - `update-status` ignores `manual` / `failed` for an application that is
   already `applied` or later, so a late release can't undo a submission.
+- **One hand-over per job** (`lib/extension-handover.ts`, since 2026-10-12).
+  The Greenhouse start, the LinkedIn confirm (`mark-pending-extension`, both
+  flows) and the batch decide and charge under `pg_advisory_xact_lock` per
+  user + job (`withJobLock`), and refuse a job that's already submitted or
+  `pending_extension` within the timeout: 409 `in_progress` /
+  `already_applied`, the batch's `alreadyQueued`. Before, reopening a LinkedIn
+  apply page while the job was pending made a second draft (`prepare` looks
+  only for drafts) that Confirm charged and queued too, and the Greenhouse
+  start re-handed a running application, which the site then refunded as
+  manual. `applied_at` is set at hand-over (= when it went to the extension).
+- **A stale hand-over is released**: the AI service's scheduler
+  (`pending_release.py`, every 15 min) marks `pending_extension` older than
+  `PENDING_EXTENSION_TIMEOUT_HOURS` (3, in both files) `manual` with
+  `extension: timed_out — …` and refunds it once. A lost report (tab or
+  browser closed, site unreachable) used to leave it pending and charged for
+  good — eleven on 2026-10-12, the oldest a week. If the extension's
+  "applied" arrives later it still wins (the credit stays refunded).
 - No review screen in batch: the server still sends only answers the user
   gave, and the six Application details only once confirmed.
 
