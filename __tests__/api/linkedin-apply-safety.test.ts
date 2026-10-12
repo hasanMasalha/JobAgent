@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { NextRequest } from "next/server";
 
 // LinkedIn Easy Apply through the extension must never carry an answer the
@@ -314,10 +316,7 @@ describe("Easy Apply submit confirmation (chrome-extension/answers.js)", () => {
 
 describe("extension release safety", () => {
   it("does not ship with the dry run switched on", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const src = require("fs").readFileSync(
-      require("path").join(__dirname, "../../chrome-extension/content.js"), "utf8"
-    ) as string;
+    const src = fs.readFileSync(path.join(__dirname, "../../chrome-extension/content.js"), "utf8");
     expect(src).toMatch(/^const JA_DRY_RUN = false$/m);
   });
 });
