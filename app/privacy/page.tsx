@@ -69,9 +69,9 @@ export default function PrivacyPage() {
                 <Td>Saved to your JobAgent account and reused on later applications. You can see, edit or delete them in Profile → Saved answers.</Td>
               </tr>
               <tr>
-                <Td>The outcome of an application (submitted, or needs you to finish it yourself) and the application&apos;s ID; when it stopped at questions you haven&apos;t answered, those questions and their options</Td>
+                <Td>The outcome of an application (submitted, or needs you to finish it yourself) and the application&apos;s ID; when it stopped, why: a short reason and, for Greenhouse, the names of the fields involved, the error messages the form showed, or the address and headings of the page it was on (not your answers); when it stopped at questions you haven&apos;t answered, those questions and their options</Td>
                 <Td>When a form is submitted or stops</Td>
-                <Td>Updates your applications tracker in JobAgent, which then asks you those questions so the next application can use your answers.</Td>
+                <Td>Updates your applications tracker in JobAgent, which then asks you those questions so the next application can use your answers. The reason is kept with the application so a problem can be found and fixed.</Td>
               </tr>
               <tr>
                 <Td>The list of countries a Greenhouse form&apos;s phone-number picker offers</Td>

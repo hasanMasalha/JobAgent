@@ -36,10 +36,14 @@ const gh = require("../../chrome-extension/greenhouse.js") as {
     doc: Document,
     data: Record<string, unknown>,
     resolvePhoneCountry: (q: Record<string, unknown>) => Promise<Record<string, unknown> | null>,
-  ) => Promise<{ filled: string[]; missing: { id: string; question: string; options: string[] }[]; userFill: string[]; failed: string[] }>;
+  ) => Promise<{
+    filled: string[]; missing: { id: string; question: string; options: string[] }[]; userFill: string[]; failed: string[]; checks: unknown[];
+  }>;
   ghSetFile: (doc: Document, inputId: string, file: File, timeoutMs?: number) => Promise<boolean>;
   ghUploadDone: (doc: Document, inputId: string, filename: string) => boolean;
   ghFormErrors: (doc: Document) => string[];
+  ghSetText: (el: HTMLInputElement, value: string, opts?: { leave?: boolean }) => boolean;
+  ghChangedFields: (doc: Document, checks: unknown[]) => string[];
 };
 
 jest.setTimeout(30000);
@@ -286,7 +290,7 @@ describe("greenhouse.js", () => {
       },
       async () => null,
     );
-    expect(result.failed).toEqual(["Resume/CV"]);
+    expect(result.failed).toEqual(["Resume/CV (JobAgent couldn't provide the CV file)"]);
   });
 
   it("recognises Greenhouse's errors under the fields, the résumé's included", () => {
@@ -304,5 +308,78 @@ describe("greenhouse.js", () => {
     document.body.innerHTML = "";
     text("first_name", "First Name", true);
     expect(gh.ghFormErrors(document)).toEqual([]);
+  });
+
+  it("leaves a typed field the way a person does: change, then a real blur", () => {
+    text("first_name", "First Name", true);
+    const el = document.getElementById("first_name") as HTMLInputElement;
+    const events: string[] = [];
+    for (const type of ["input", "change", "focusout"]) el.addEventListener(type, () => events.push(type));
+    expect(gh.ghSetText(el, "Dana")).toBe(true);
+    // React 17+ hears focusout, which only a real blur sends.
+    expect(events).toEqual(["input", "change", "focusout"]);
+    expect(document.activeElement).not.toBe(el);
+    // Typing to filter a menu stays in the field.
+    text("q", "Q");
+    const q = document.getElementById("q") as HTMLInputElement;
+    gh.ghSetText(q, "Isr", { leave: false });
+    expect(document.activeElement).toBe(q);
+  });
+
+  it("fires input before change when attaching a file, as the browser does", async () => {
+    upload("resume", "Resume/CV", { ms: 50 });
+    const input = document.getElementById("resume")!;
+    const events: string[] = [];
+    // Capture: the fake uploader replaces the input on change.
+    input.addEventListener("input", () => events.push("input"), true);
+    input.addEventListener("change", () => events.push("change"), true);
+    expect(await gh.ghSetFile(document, "resume", new File(["%PDF"], "CV.pdf"))).toBe(true);
+    expect(events).toEqual(["input", "change"]);
+  });
+
+  it("notices a field the page changed after it was filled", async () => {
+    text("first_name", "First Name", true);
+    combo("question_2", "Will you require sponsorship?", ["Yes", "No"], true);
+    upload("resume", "Resume/CV", { ms: 50 });
+    const result = await gh.ghFill(
+      document,
+      {
+        questions: [
+          { id: "first_name", label: "First Name", kind: "text", required: true, role: "first_name" },
+          { id: "question_2", label: "Will you require sponsorship?", kind: "select", required: true, options: ["Yes", "No"] },
+          { id: "resume", label: "Resume/CV", kind: "file", required: true, role: "resume" },
+        ],
+        answers: [
+          { id: "first_name", source: "profile", value: "Dana" },
+          { id: "question_2", source: "profile", option: "No" },
+          { id: "resume", source: "resume" },
+        ],
+        missing: [],
+        cv: { base64: Buffer.from("%PDF").toString("base64"), filename: "CV.pdf", mimeType: "application/pdf" },
+      },
+      async () => null,
+    );
+    expect(result.failed).toEqual([]);
+    expect(gh.ghChangedFields(document, result.checks)).toEqual([]);
+    // A re-render clears the name and the choice.
+    (document.getElementById("first_name") as HTMLInputElement).value = "";
+    document.querySelector(".select__single-value")!.remove();
+    expect(gh.ghChangedFields(document, result.checks)).toEqual(["First Name", "Will you require sponsorship?"]);
+  });
+
+  it("says why the CV is missing when JobAgent couldn't send it", async () => {
+    upload("resume", "Resume/CV");
+    const result = await gh.ghFill(
+      document,
+      {
+        questions: [{ id: "resume", label: "Resume/CV", kind: "file", required: true, role: "resume" }],
+        answers: [{ id: "resume", source: "resume" }],
+        missing: [],
+        cv: null,
+        cvStatus: "HTTP 409",
+      },
+      async () => null,
+    );
+    expect(result.failed).toEqual(["Resume/CV (JobAgent couldn't provide the CV file, HTTP 409)"]);
   });
 });

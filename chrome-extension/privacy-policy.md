@@ -27,7 +27,7 @@ device to show whether you're signed in to LinkedIn; it is never sent anywhere.
 ## Sent to jobagent.uk
 
 - Answers you give to questions it doesn't recognise (question and answer), saved to your account.
-- The outcome of an application and its ID; when it stopped at questions you haven't answered, those questions and their options.
+- The outcome of an application and its ID; when it stopped, why: a short reason and, for Greenhouse, the names of the fields involved, the error messages the form showed, or the address and headings of the page it was on (not your answers); when it stopped at questions you haven't answered, those questions and their options.
 - The list of countries a Greenhouse form's phone picker offers, so JobAgent can pick your phone number's country from it.
 - The extension's version number, with every request.
 

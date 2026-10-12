@@ -326,8 +326,10 @@ stay free of a tailoring charge.
 ## Chrome extension privacy policy
 `/privacy` is the extension's policy and the Chrome Web Store listing links
 to it. It lists what the extension stores (`chrome.storage.local`), sends
-(saved answers, application outcomes and the questions an application
-stopped on, a Greenhouse form's phone-country list, its version number) and
+(saved answers, application outcomes with the reason one stopped — for
+Greenhouse with field labels, the form's errors or the page's URL and
+headings, never answers — and the questions an application stopped on, a
+Greenhouse form's phone-country list, its version number) and
 receives (account email, Application details, CV skills, saved answers; for
 Greenhouse since 1.6.0 also the form's answers, the CV file and the cover
 letter — LinkedIn still gets no CV and no cover letter).
@@ -643,8 +645,24 @@ BambooHR · 7 server-side submit switched off, then deleted.
   still empty that a saved answer wouldn't fill — phone country, an ambiguous
   city, fields the board API doesn't list (Stripe's School / Degree) — reason
   `needs_user`, not offered as questions; or a field it had an answer for
-  couldn't be set (`fill_failed`) — including a file still uploading, or an
-  error Greenhouse already shows on the form.
+  couldn't be set (`fill_failed`); a file still uploading
+  (`upload_unfinished`), an error Greenhouse already shows
+  (`form_shows_errors`), or a filled field that no longer holds its value
+  just before Submit (`fill_changed` — `ghChangedFields` re-reads every field;
+  React re-renders, hydration or reformatting could change one after it was
+  checked).
+- **Events as the browser sends them, no pacing.** Text goes in like a paste
+  (value setter, `input`), then `change` and a real `blur()` — React 17+
+  listens for `focusout`, which a dispatched `blur` event never sent; typing
+  to filter a react-select stays in it (`leave: false`). Files and `<select>`s
+  get `input` before `change`. No per-letter typing, delays, mouse movement
+  or pointer coordinates (decided 2026-10-12): waiting is only for what the
+  page is doing (uploads, menus, suggestions).
+- **Every stop says why.** `update-status` gets `reason` (a code) and
+  `detail` (≤500 chars: field labels, Greenhouse's error lines, or the page's
+  host/path, headings and alerts — never answers), stored as
+  `Application.error_message`. LinkedIn sends its `reason` too. The dashboard
+  doesn't show `error_message`; it's for finding out what happened.
 - **Applied only on Greenhouse's confirmation**: a `/confirmation` page, or
   "thank you for applying" / "your application has been submitted|received"
   appearing (text already on the page before Submit doesn't count). The

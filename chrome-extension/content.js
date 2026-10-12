@@ -337,7 +337,7 @@ async function fillApplicationForm(application, panel) {
   console.log('[JobAgent] form loop ended without success, reporting manual')
   logStep('end', 'no submitted confirmation recognised. The form now shows:',
     describeFormStep(getEasyApplyPanel() || scope))
-  await reportResult(application.id, 'manual', { keepTab: true })
+  await reportResult(application.id, 'manual', { keepTab: true, reason: 'no_confirmation_after_steps' })
 }
 
 // "Applied … ago" in the job's top card (jaIsAppliedConfirmation, answers.js).
@@ -597,7 +597,7 @@ async function stopForUser(application, missing) {
   box.append(title, body, list, foot, close)
   overlayHost().appendChild(box)
 
-  await reportResult(application.id, 'manual', { keepTab: true })
+  await reportResult(application.id, 'manual', { keepTab: true, reason: 'missing_answers' })
 }
 
 // Fills in what the user has given us an answer for (see answers.js) and

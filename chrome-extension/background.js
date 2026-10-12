@@ -341,6 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
+            ...(message.reason ? { reason: message.reason } : {}),
           }),
         })
         const resText = await res.text()
@@ -491,6 +492,9 @@ const ATS_MESSAGES = {
   needs_user: 'Stopped before submitting: the form has fields JobAgent can\'t fill for you. Nothing was sent and the auto-apply was returned. Finish in the open tab.',
   fill_failed: "Stopped before submitting: a field couldn't be filled in. Nothing was sent and the auto-apply was returned. Check the open tab.",
   submit_unconfirmed: "Submit was clicked but Greenhouse didn't confirm it. Check the tab: it may have gone in. The auto-apply was returned.",
+  upload_unfinished: "Stopped before submitting: an attached file didn't finish uploading. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  form_shows_errors: "Stopped before submitting: Greenhouse showed an error on the form. Nothing was sent and the auto-apply was returned. Check the open tab.",
+  fill_changed: "Stopped before submitting: the form changed after JobAgent filled it. Nothing was sent and the auto-apply was returned. Check the open tab.",
   form_error: "Greenhouse didn't accept the form, so it wasn't sent. The auto-apply was returned. Check the open tab.",
   captcha_detected: 'Greenhouse asked for a security check before the form. Nothing was sent and the auto-apply was returned.',
   permission_denied: 'JobAgent needs access to Greenhouse pages to fill in the form. Nothing was sent and the auto-apply was returned.',
@@ -501,7 +505,9 @@ const ATS_MESSAGES = {
 // Reports the application's outcome and forgets it. "manual" refunds the
 // auto-apply (update-status), and may carry the questions the user hasn't
 // answered, which the Applications page then asks.
-async function finishAtsApply(state, status, reason, missingQuestions) {
+// `reason` (a code) and `detail` (a short line: field labels, the page's
+// errors) are stored with the application, so a stopped one says why.
+async function finishAtsApply(state, status, reason, missingQuestions, detail) {
   await chrome.storage.local.remove(['atsApply'])
   try {
     const res = await apiFetch('/api/applications/update-status', {
@@ -510,10 +516,12 @@ async function finishAtsApply(state, status, reason, missingQuestions) {
       body: JSON.stringify({
         applicationId: state.applicationId,
         status,
+        ...(reason ? { reason } : {}),
+        ...(detail ? { detail: String(detail).slice(0, 500) } : {}),
         ...(missingQuestions && missingQuestions.length ? { missingQuestions } : {}),
       }),
     })
-    console.log('[JobAgent bg] ATS result', state.applicationId, status, reason, res.status)
+    console.log('[JobAgent bg] ATS result', state.applicationId, status, reason, detail || '', res.status)
   } catch (e) {
     console.error('[JobAgent bg] could not report ATS result', state.applicationId, e)
   }
@@ -531,13 +539,18 @@ async function openAtsForm(applicationId, tabId) {
   const state = await getAtsApply()
   if (!state || state.applicationId !== applicationId) return
   let pkg = null
+  let pkgStatus = 'no response'
   try {
     const res = await apiFetch(`/api/apply/ats-package/${encodeURIComponent(applicationId)}`)
+    pkgStatus = `HTTP ${res.status}`
     pkg = res.ok ? await res.json() : null
-  } catch {}
+  } catch (e) {
+    pkgStatus = String(e && e.message || e)
+  }
   if (!pkg || pkg.ats !== 'greenhouse' || !isGreenhouseUrl(pkg.form_url)) {
     console.warn('[JobAgent bg] no Greenhouse form for', applicationId, pkg && pkg.ats, pkg && pkg.form_url)
-    return finishAtsApply(state, 'manual', 'form_not_found')
+    const detail = pkg ? `package ats=${pkg.ats} form_url=${pkg.form_url || 'none'}` : `package ${pkgStatus}`
+    return finishAtsApply(state, 'manual', 'form_not_found', null, detail)
   }
   // The phase is set before the tab loads, so the load can't be missed.
   await setAtsApply({ phase: 'filling', formUrl: pkg.form_url })
@@ -565,7 +578,7 @@ async function startAtsApply(applicationId) {
   if (current) {
     const alive = current.tabId ? await chrome.tabs.get(current.tabId).then(() => true, () => false) : false
     if (alive) return false // one at a time
-    await finishAtsApply(current, 'manual', 'tab_closed')
+    await finishAtsApply(current, 'manual', 'tab_closed', null, `replaced by application ${applicationId}`)
   }
   await chrome.storage.local.set({ atsApply: { applicationId, phase: 'permission', startedAt: Date.now() } })
   if (await chrome.permissions.contains({ origins: GREENHOUSE_ORIGINS })) {
@@ -624,10 +637,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const res = await apiFetch(`/api/apply/form-answers/${encodeURIComponent(state.applicationId)}`)
         const form = res.ok ? await res.json() : null
-        if (!form) return sendResponse({ ok: false, reason: 'data_unavailable' })
-        if (!form.supported) return sendResponse({ ok: false, reason: 'form_not_found' })
+        if (!form) return sendResponse({ ok: false, reason: 'data_unavailable', detail: `form-answers HTTP ${res.status}` })
+        if (!form.supported) return sendResponse({ ok: false, reason: 'form_not_found', detail: 'form-answers: not supported' })
         let cv = null
         const cvRes = await apiFetch(`/api/apply/ats-package/${encodeURIComponent(state.applicationId)}/cv`)
+        const cvStatus = cvRes.ok ? null : `HTTP ${cvRes.status}`
         if (cvRes.ok) {
           const filename = dispositionFilename(cvRes.headers.get('Content-Disposition')) || 'CV.pdf'
           cv = {
@@ -636,10 +650,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             base64: bufferToBase64(await cvRes.arrayBuffer()),
           }
         }
-        return sendResponse({ ok: true, questions: form.questions, answers: form.answers, missing: form.missing, cv })
+        return sendResponse({ ok: true, questions: form.questions, answers: form.answers, missing: form.missing, cv, cvStatus })
       } catch (e) {
         console.error('[JobAgent bg] ATS_GET_DATA', e)
-        return sendResponse({ ok: false, reason: 'data_unavailable' })
+        return sendResponse({ ok: false, reason: 'data_unavailable', detail: String(e && e.message || e) })
       }
     }
 
@@ -676,7 +690,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'ATS_RESULT') {
       sendResponse({ ok: true })
       const status = message.status === 'applied' ? 'applied' : 'manual'
-      return finishAtsApply(state, status, message.reason, message.missingQuestions)
+      return finishAtsApply(state, status, message.reason, message.missingQuestions, message.detail)
     }
 
     sendResponse(null)

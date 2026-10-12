@@ -157,7 +157,9 @@ describe("background.js — Greenhouse applications", () => {
     await t.external({ type: "START_ATS_APPLY", applicationId: "app-1" });
     await t.flush();
     expect(t.tabs.size).toBe(0);
-    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual" }]);
+    expect(t.statusReports()).toEqual([
+      { applicationId: "app-1", status: "manual", reason: "form_not_found", detail: "package ats=greenhouse form_url=https://careers.acme.com/jobs/1?gh_jid=1" },
+    ]);
   });
 
   it("asks for access to Greenhouse first; a refusal hands the application back", async () => {
@@ -170,7 +172,7 @@ describe("background.js — Greenhouse applications", () => {
     expect(await t.fromTab(999, { type: "ATS_PERMISSION_RESULT", granted: true })).toEqual({ ok: false });
     await t.fromTab(grant.id, { type: "ATS_PERMISSION_RESULT", granted: false });
     await t.flush();
-    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual" }]);
+    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual", reason: "permission_denied" }]);
     expect(t.store.atsApply).toBeUndefined();
   });
 
@@ -190,7 +192,7 @@ describe("background.js — Greenhouse applications", () => {
     await t.external({ type: "START_ATS_APPLY", applicationId: "app-1" });
     await t.flush();
     await t.closed(Array.from(t.tabs.keys())[0]);
-    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual" }]);
+    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual", reason: "tab_closed" }]);
   });
 
   it("takes one at a time", async () => {
@@ -208,12 +210,16 @@ describe("background.js — Greenhouse applications", () => {
     expect(await t.fromTab(tabId + 1, { type: "ATS_RESULT", status: "applied" })).toBeNull();
     expect(await t.fromTab(tabId + 1, { type: "ATS_GET_DATA" })).toBeNull();
     await t.fromTab(tabId, {
-      type: "ATS_RESULT", status: "manual", reason: "missing_answers",
+      type: "ATS_RESULT", status: "manual", reason: "missing_answers", detail: "Current employer",
       missingQuestions: [{ question: "Current employer", options: [] }],
     });
     await t.flush();
+    // The reason and its detail are kept with the application.
     expect(t.statusReports()).toEqual([
-      { applicationId: "app-1", status: "manual", missingQuestions: [{ question: "Current employer", options: [] }] },
+      {
+        applicationId: "app-1", status: "manual", reason: "missing_answers", detail: "Current employer",
+        missingQuestions: [{ question: "Current employer", options: [] }],
+      },
     ]);
   });
 
@@ -251,6 +257,6 @@ describe("background.js — Greenhouse applications", () => {
     await t.fromTab(tabId, { type: "ATS_SUBMITTING", textBefore: "form" });
     t.tabs.get(tabId)!.url = "https://careers.acme.com/thanks";
     await t.loaded(tabId);
-    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual" }]);
+    expect(t.statusReports()).toEqual([{ applicationId: "app-1", status: "manual", reason: "submit_unconfirmed" }]);
   });
 });

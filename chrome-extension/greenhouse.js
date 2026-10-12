@@ -170,16 +170,21 @@ async function ghWaitFor(fn, timeoutMs = 3000, stepMs = 100) {
   }
 }
 
-// Typed text, the way React sees a user's typing: the element's own value
-// setter (React tracks the last value it set) and then input / change events.
-function ghSetText(el, value) {
+// Text put in the way a paste is: the element's own value setter (React
+// tracks the last value it set), then input; on leaving the field, change and
+// a real blur — React 17+ listens for focusout, which a dispatched "blur"
+// event never was. `leave: false` stays in the field (typing to filter a
+// react-select's menu, which leaving would close).
+function ghSetText(el, value, { leave = true } = {}) {
   const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   const setter = Object.getOwnPropertyDescriptor(proto, 'value').set
   el.focus()
   setter.call(el, value)
   el.dispatchEvent(new Event('input', { bubbles: true }))
-  el.dispatchEvent(new Event('change', { bubbles: true }))
-  el.dispatchEvent(new Event('blur', { bubbles: true }))
+  if (leave) {
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+    el.blur()
+  }
   // The phone field formats the number as it's typed ("07400 123456").
   if (el.type === 'tel') return el.value.replace(/\D/g, '') === String(value).replace(/\D/g, '')
   return ghClean(el.value) === ghClean(value)
@@ -224,6 +229,8 @@ async function ghSetFile(doc, inputId, file, timeoutMs = GH_UPLOAD_WAIT_MS) {
   const dt = new DataTransfer()
   dt.items.add(file)
   input.files = dt.files
+  // A file picked in the browser's dialog fires input, then change.
+  input.dispatchEvent(new Event('input', { bubbles: true }))
   input.dispatchEvent(new Event('change', { bubbles: true }))
   const done = !!(await ghWaitFor(() => ghUploadDone(doc, inputId, file.name), timeoutMs, 200))
   console.log(`JobAgent [greenhouse] upload ${inputId}: ${done ? 'done' : 'not finished'} after ${Date.now() - started} ms`)
@@ -314,7 +321,7 @@ async function ghChooseOption(doc, input, wanted, pick = ghExactOption) {
   let options = ghMenuOptions(doc, input)
   let idx = pick(options.map(o => o.textContent), wanted)
   if (idx === -1) {
-    ghSetText(input, wanted)
+    ghSetText(input, wanted, { leave: false })
     await ghWaitFor(() => pick(ghMenuOptions(doc, input).map(o => o.textContent), wanted) !== -1, 4000)
     options = ghMenuOptions(doc, input)
     idx = pick(options.map(o => o.textContent), wanted)
@@ -352,6 +359,34 @@ function ghLooksBlocked(doc) {
   return !!doc.querySelector('#security-input-0')
 }
 
+// What a filled field holds now, read fresh from the page (React may have
+// replaced the element since): a file field's shown name, a checkbox group's
+// ticked boxes, a react-select's chosen chips, a <select>'s option, a text
+// field's text (a phone number's digits — the field formats it).
+function ghReadField(doc, domId, name) {
+  const group = ghUploadGroup(doc, domId)
+  if (group) {
+    if (group.querySelector('[role="progressbar"]')) return ''
+    return ghClean(group.querySelector('.file-upload__filename')?.textContent)
+  }
+  const boxes = name ? [...doc.getElementsByName(name)].filter(b => b.type === 'checkbox') : []
+  if (boxes.length) return boxes.filter(b => b.checked).map(b => b.id).join('|')
+  const el = doc.getElementById(domId)
+  if (!el) return ''
+  if (ghIsCombobox(el)) return ghChosen(el).join('|')
+  if (el.tagName === 'SELECT') return ghClean(el.options[el.selectedIndex]?.textContent)
+  if (el.type === 'tel') return el.value.replace(/\D/g, '')
+  return ghClean(el.value)
+}
+
+// The filled fields that no longer hold what was put in (labels). Checked
+// just before Submit: each field is checked as it's set, but the page can
+// change one afterwards — a re-render after a later choice, React taking
+// over server-rendered fields, a field reformatting itself.
+function ghChangedFields(doc, checks) {
+  return (checks || []).filter(c => ghReadField(doc, c.domId, c.name) !== c.value).map(c => c.label)
+}
+
 // Fills the form. Returns:
 //   filled    the fields it set;
 //   missing   questions the user hasn't answered — the server's list. Saving
@@ -360,7 +395,8 @@ function ghLooksBlocked(doc) {
 //             phone country or city when they can't be placed, and required
 //             fields the board API doesn't list (School, Degree). A saved
 //             answer wouldn't be used for these, so they aren't offered;
-//   failed    fields it had an answer for but couldn't set.
+//   failed    fields it had an answer for but couldn't set;
+//   checks    what each filled field held once set, for ghChangedFields.
 //   data: { questions, answers, missing, cv: {base64, filename, mimeType} }
 //   resolvePhoneCountry(question) → the phone_country answer or null
 async function ghFill(doc, data, resolvePhoneCountry) {
@@ -368,6 +404,8 @@ async function ghFill(doc, data, resolvePhoneCountry) {
   const filled = []
   const failed = []
   const userFill = []
+  const checks = []
+  const remember = (domId, label, name) => checks.push({ domId, label, name, value: ghReadField(doc, domId, name) })
   const missing = (data.missing || []).map(m => ({
     id: m.id,
     question: m.label || byId.get(m.id)?.label || m.id,
@@ -388,6 +426,7 @@ async function ghFill(doc, data, resolvePhoneCountry) {
     }) : null
     if (answer?.option && await ghChooseOption(doc, country, answer.option)) {
       filled.push('country')
+      remember('country', 'Phone country')
       if (answer.value) phoneValue = answer.value
     } else if (answer?.option) {
       failed.push('Phone country')
@@ -435,6 +474,7 @@ async function ghFill(doc, data, resolvePhoneCountry) {
           const idx = ghExactOption([...input.options].map(o => o.textContent), a.option)
           if (idx !== -1) {
             input.selectedIndex = idx
+            input.dispatchEvent(new Event('input', { bubbles: true }))
             input.dispatchEvent(new Event('change', { bubbles: true }))
             ok = true
           }
@@ -448,12 +488,16 @@ async function ghFill(doc, data, resolvePhoneCountry) {
       console.warn('JobAgent [greenhouse] could not fill', label, e)
       ok = false
     }
-    if (ok) filled.push(domId)
-    else failed.push(label)
+    if (ok) {
+      filled.push(domId)
+      remember(domId, label, a.id)
+    } else if ((q.role === 'resume' || a.source === 'resume') && !data.cv) {
+      failed.push(`${label} (JobAgent couldn't provide the CV file${data.cvStatus ? `, ${data.cvStatus}` : ''})`)
+    } else failed.push(label)
   }
 
   for (const extra of ghRequiredEmpty(doc, handled)) userFill.push(extra.question)
-  return { filled, missing, userFill, failed }
+  return { filled, missing, userFill, failed, checks }
 }
 
 function ghSubmitButton(doc) {
@@ -485,8 +529,28 @@ function ghBanner(doc, text) {
   el.textContent = `JobAgent: ${text}`
 }
 
+// `detail` says why, for the application's record on JobAgent (field labels,
+// Greenhouse's error lines, what the page showed): a short line, no answers.
 async function ghReport(status, reason, extra = {}) {
-  await ghSend({ type: 'ATS_RESULT', status, reason, ...extra })
+  const detail = extra.detail == null ? undefined : String(extra.detail).slice(0, 500)
+  await ghSend({ type: 'ATS_RESULT', status, reason, ...extra, detail })
+}
+
+const ghList = items => items.filter(Boolean).slice(0, 8).join('; ')
+
+// What the page showed when an outcome wasn't recognised, as one line.
+function ghPageSummary(doc) {
+  const p = ghDescribePage(doc)
+  let path = p.url
+  try { const u = new URL(p.url); path = u.host + u.pathname } catch {}
+  return [
+    `page ${path}`,
+    p.headings.length ? `headings: ${ghList(p.headings.slice(0, 3))}` : '',
+    p.alerts.length ? `alerts: ${ghList(p.alerts.slice(0, 3))}` : '',
+    p.formStillThere ? 'form still showing' : 'form gone',
+    p.securityCode ? 'security code step' : '',
+    p.uploading ? 'upload in progress' : '',
+  ].filter(Boolean).join(' | ')
 }
 
 async function ghWatchForConfirmation(doc, until, before) {
@@ -528,7 +592,9 @@ async function ghAfterSubmit(doc, state) {
     ghBanner(doc, errors.length
       ? `Greenhouse didn't accept the form, so it wasn't sent:\n${errors.slice(0, 5).map(e => `• ${e}`).join('\n')}\nFix it here and press Submit application.`
       : "Submit was clicked but Greenhouse didn't confirm it. Check this tab: it may have gone in.")
-    await ghReport('manual', errors.length ? 'form_error' : 'submit_unconfirmed')
+    await ghReport('manual', errors.length ? 'form_error' : 'submit_unconfirmed', {
+      detail: errors.length ? ghList(errors) : `${outcome}: ${ghPageSummary(doc)}`,
+    })
     return
   }
 }
@@ -543,19 +609,19 @@ async function ghRun() {
 
   if (ghLooksBlocked(doc)) {
     ghBanner(doc, 'Greenhouse wants a security code before showing the form. Finish this application yourself.')
-    return ghReport('manual', 'captcha_detected')
+    return ghReport('manual', 'captcha_detected', { detail: 'security code before the form' })
   }
   const form = await ghWaitFor(() => doc.getElementById('first_name') && ghSubmitButton(doc), 20000, 250)
   if (!form) {
     ghBanner(doc, "this page doesn't have the application form JobAgent expected. Nothing was submitted.")
-    return ghReport('manual', 'form_not_found')
+    return ghReport('manual', 'form_not_found', { detail: ghPageSummary(doc) })
   }
 
   ghBanner(doc, 'filling in your application…')
   const data = await ghSend({ type: 'ATS_GET_DATA' })
   if (!data || !data.ok) {
     ghBanner(doc, "couldn't load your answers, so nothing was submitted. Finish this application yourself.")
-    return ghReport('manual', data?.reason || 'data_unavailable')
+    return ghReport('manual', data?.reason || 'data_unavailable', { detail: data?.detail || null })
   }
 
   const result = await ghFill(doc, data, async question => {
@@ -571,11 +637,12 @@ async function ghRun() {
       (result.missing.length ? ' Answers you save on your Applications page are used next time.' : ''))
     return ghReport('manual', result.missing.length ? 'missing_answers' : 'needs_user', {
       missingQuestions: result.missing.map(m => ({ question: m.question, options: m.options || [] })),
+      detail: ghList([...result.missing.map(m => m.question), ...result.userFill]),
     })
   }
   if (result.failed.length) {
     ghBanner(doc, `stopped before submitting: couldn't fill ${result.failed.slice(0, 3).join(', ')}. Check the form and submit it yourself.`)
-    return ghReport('manual', 'fill_failed')
+    return ghReport('manual', 'fill_failed', { detail: ghList(result.failed) })
   }
 
   // Each file was waited for as it was attached; this covers anything still
@@ -584,13 +651,20 @@ async function ghRun() {
   if (!(await ghWaitFor(() => !ghUploading(doc), GH_UPLOAD_WAIT_MS, 250))) {
     console.log('JobAgent [greenhouse] upload never finished', ghDescribePage(doc))
     ghBanner(doc, "stopped before submitting: an attached file didn't finish uploading. Attach it again here and press Submit application.")
-    return ghReport('manual', 'fill_failed')
+    return ghReport('manual', 'upload_unfinished', { detail: ghPageSummary(doc) })
   }
   const shownErrors = ghFormErrors(doc)
   if (shownErrors.length) {
     console.log('JobAgent [greenhouse] form shows errors before Submit', ghDescribePage(doc))
     ghBanner(doc, `stopped before submitting — Greenhouse shows these on the form:\n${shownErrors.slice(0, 5).map(e => `• ${e}`).join('\n')}\nFix them here and press Submit application.`)
-    return ghReport('manual', 'fill_failed')
+    return ghReport('manual', 'form_shows_errors', { detail: ghList(shownErrors) })
+  }
+  // Every field still holds what was put in.
+  const changed = ghChangedFields(doc, result.checks)
+  if (changed.length) {
+    console.log('JobAgent [greenhouse] fields changed after filling', changed, ghDescribePage(doc))
+    ghBanner(doc, `stopped before submitting — the form changed after JobAgent filled it:\n${changed.slice(0, 5).map(c => `• ${c}`).join('\n')}\nCheck them here and press Submit application.`)
+    return ghReport('manual', 'fill_changed', { detail: ghList(changed) })
   }
 
   const submit = ghSubmitButton(doc)
@@ -609,11 +683,12 @@ if (typeof module !== 'undefined') {
   module.exports = {
     GH_DRY_RUN, ghDomId, ghExactOption, ghLocationOption, ghIsConfirmation, ghRequiredEmpty, ghFill,
     ghSetText, ghTickBoxes, ghSubmitButton, ghChosen, ghSetFile, ghUploadDone, ghFormErrors,
+    ghChangedFields, ghReadField,
   }
 } else if (!window.__jobagentGreenhouse) {
   window.__jobagentGreenhouse = true
   ghRun().catch(e => {
     console.error('JobAgent [greenhouse]', e)
-    ghReport('manual', 'script_error')
+    ghReport('manual', 'script_error', { detail: String(e && e.message || e) })
   })
 }
