@@ -146,4 +146,26 @@ describe("POST /api/applications/update-status from the extension", () => {
     }));
     expect(mdb.$executeRaw.mock.calls[0][2]).toBeNull();
   });
+
+  it("keeps why it stopped, and clears it once applied", async () => {
+    await updateStatus(post("/api/applications/update-status", {
+      applicationId: "app-1", status: "manual", reason: "fill_failed", detail: "Resume/CV\n(upload)",
+    }));
+    const [sql, , , clear, reason] = mdb.$executeRaw.mock.calls[0];
+    expect(sql.join("?")).toContain("error_message");
+    expect(clear).toBe(false);
+    expect(reason).toBe("extension: fill_failed — Resume/CV (upload)");
+
+    mdb.$executeRaw.mockClear();
+    await updateStatus(post("/api/applications/update-status", { applicationId: "app-1", status: "applied" }));
+    expect(mdb.$executeRaw.mock.calls[0][3]).toBe(true);
+    expect(mdb.$executeRaw.mock.calls[0][4]).toBeNull();
+  });
+
+  it("drops a reason that isn't a code", async () => {
+    await updateStatus(post("/api/applications/update-status", {
+      applicationId: "app-1", status: "manual", reason: "<script>", detail: "x",
+    }));
+    expect(mdb.$executeRaw.mock.calls[0][4]).toBeNull();
+  });
 });

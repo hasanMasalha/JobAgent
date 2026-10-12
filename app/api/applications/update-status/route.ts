@@ -23,6 +23,20 @@ function missingQuestions(raw: unknown): { question: string; options: string[] }
   return out.length ? out : null;
 }
 
+// Why the extension stopped, kept as Application.error_message so a stopped
+// application says what happened: its reason code ("fill_failed",
+// "missing_answers"…) and a short detail (field labels, the form's errors, the
+// page it was on — never the user's answers). Codes are lower_snake; anything
+// else is dropped.
+function stopReason(raw: { reason?: unknown; detail?: unknown }): string | null {
+  const reason = typeof raw.reason === "string" && /^[a-z_]{1,40}$/.test(raw.reason) ? raw.reason : null;
+  if (!reason) return null;
+  const detail = typeof raw.detail === "string"
+    ? raw.detail.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 500)
+    : "";
+  return `extension: ${reason}${detail ? ` — ${detail}` : ""}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Session, or the extension's signed token (its service worker can't send
@@ -64,10 +78,13 @@ export async function POST(req: NextRequest) {
 
     console.log("[update-status] updating:", applicationId, "to:", status, "for user:", userId);
     const missing = status === "manual" ? missingQuestions(body.missingQuestions) : null;
+    // Applied clears an earlier stop's reason; a stop without one keeps what's there.
+    const reason = status === "applied" ? null : stopReason(body);
     await db.$executeRaw`
       UPDATE "Application"
       SET status = ${status},
-          missing_questions = ${missing ? JSON.stringify(missing) : null}::jsonb
+          missing_questions = ${missing ? JSON.stringify(missing) : null}::jsonb,
+          error_message = CASE WHEN ${status === "applied"} THEN NULL ELSE COALESCE(${reason}, error_message) END
       WHERE id = ${applicationId} AND user_id = ${userId}
     `;
     console.log("[update-status] done");
