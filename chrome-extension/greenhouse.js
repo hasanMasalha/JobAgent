@@ -406,12 +406,18 @@ async function ghFill(doc, data, resolvePhoneCountry) {
   const userFill = []
   const checks = []
   const remember = (domId, label, name) => checks.push({ domId, label, name, value: ghReadField(doc, domId, name) })
-  const missing = (data.missing || []).map(m => ({
+  const missingAll = (data.missing || []).map(m => ({
     id: m.id,
     question: m.label || byId.get(m.id)?.label || m.id,
     options: byId.get(m.id)?.options || [],
+    // The server says whether an answer saved for it would be used
+    // (saved_answer_used); one that wouldn't (a field from Profile, a file)
+    // isn't offered as a question to answer — the user fills it in here.
+    saveable: m.saveable !== false,
   }))
-  const handled = new Set(missing.flatMap(m => [m.id, ghDomId(m.id)]))
+  const missing = missingAll.filter(m => m.saveable).map(({ saveable: _s, ...m }) => m)
+  for (const m of missingAll) if (!m.saveable) userFill.push(m.question)
+  const handled = new Set(missingAll.flatMap(m => [m.id, ghDomId(m.id)]))
   const answers = data.answers || []
   const phoneAnswer = answers.find(a => byId.get(a.id)?.role === 'phone')
 

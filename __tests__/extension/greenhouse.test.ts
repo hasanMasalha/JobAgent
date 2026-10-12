@@ -382,4 +382,28 @@ describe("greenhouse.js", () => {
     );
     expect(result.failed).toEqual(["Resume/CV (JobAgent couldn't provide the CV file, HTTP 409)"]);
   });
+
+  it("asks the user to save an answer only where the server says one would be used", async () => {
+    text("first_name", "First Name", true);
+    text("question_1", "Current employer", true);
+    const result = await gh.ghFill(
+      document,
+      {
+        questions: [
+          { id: "first_name", label: "First Name", kind: "text", required: true, role: "first_name" },
+          { id: "question_1", label: "Current employer", kind: "text", required: true },
+        ],
+        answers: [],
+        missing: [
+          // From Profile: saving an answer for it would be ignored.
+          { id: "first_name", label: "First Name", saveable: false },
+          // An older server doesn't say: offered, as before.
+          { id: "question_1", label: "Current employer" },
+        ],
+      },
+      async () => null,
+    );
+    expect(result.missing).toEqual([{ id: "question_1", question: "Current employer", options: [] }]);
+    expect(result.userFill).toEqual(["First Name"]);
+  });
 });
