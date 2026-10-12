@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { callAtsExtension } from "@/lib/ats-extension";
+import { attachmentDisposition } from "@/lib/content-disposition";
 
 // The CV file the extension uploads to the form: the same file the server-
 // side applier sends (tailored CV, else the user's own upload byte-for-byte,
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: { applicationI
   return new NextResponse(Buffer.from(base64, "base64"), {
     headers: {
       "Content-Type": mime_type,
-      "Content-Disposition": `attachment; filename="${filename.replace(/["\\r\n]/g, "_")}"`,
+      "Content-Disposition": attachmentDisposition(filename),
       "Cache-Control": "private, no-store",
     },
   });

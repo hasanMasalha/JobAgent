@@ -22,6 +22,9 @@
 const GH_DRY_RUN = false
 
 const GH_SUBMIT_WATCH_MS = 30 * 1000
+// An attached file is uploaded to Greenhouse's storage before the form counts
+// it; a large CV on a slow connection can take a while.
+const GH_UPLOAD_WAIT_MS = 60 * 1000
 // Greenhouse emails an 8-character code when its bot check scores the browser
 // low; the user types it into this tab, and that can take a while.
 const GH_CODE_WATCH_MS = 30 * 60 * 1000
@@ -140,11 +143,12 @@ function ghRequiredEmpty(doc, skip) {
       out.push({ id: name, question: ghClean(fs.querySelector('legend')?.textContent).replace(/\s*\*$/, '') })
     }
   }
-  // A required résumé that wasn't attached (the file input is replaced by the
-  // file's name once one is).
-  const resume = doc.getElementById('resume')
+  // A required résumé that isn't attached: the file's name shows once it is
+  // (not just the input gone — that's also the case while it's uploading).
+  const resumeGroup = ghUploadGroup(doc, 'resume')
+  const attached = resumeGroup ? !!resumeGroup.querySelector('.file-upload__filename') : !doc.getElementById('resume')
   const resumeLabel = doc.getElementById('upload-label-resume')
-  if (resume && !seen.has('resume') && /\*\s*$/.test(ghClean(resumeLabel?.textContent))) {
+  if (!attached && !seen.has('resume') && /\*\s*$/.test(ghClean(resumeLabel?.textContent))) {
     out.push({ id: 'resume', question: 'Resume/CV' })
   }
   return out
@@ -188,16 +192,78 @@ function ghBytes(base64) {
   return bytes
 }
 
-// Attaches a file to Greenhouse's file input. Greenhouse replaces the input
-// with the file's name once it has taken it.
-async function ghSetFile(doc, inputId, file) {
+// A file field's group: <div role="group" class="file-upload"
+// aria-labelledby="upload-label-<id>">, which stays while its contents change.
+function ghUploadGroup(doc, inputId) {
+  return doc.getElementById(`upload-label-${inputId}`)?.closest('.file-upload') || null
+}
+
+// Greenhouse takes an attached file in three steps (seen on job-boards,
+// 2026-10-12): the input is replaced by a progress bar while the file is
+// uploaded to its storage, then by .file-upload__filename with the file's name.
+// Only that last step means the form has the file — Submit during the upload
+// fails with "Resume/CV is required." A failed upload stays on the bar.
+function ghUploadDone(doc, inputId, filename) {
+  const group = ghUploadGroup(doc, inputId)
+  if (!group || group.querySelector('[role="progressbar"]')) return false
+  const shown = group.querySelector('.file-upload__filename')
+  return !!shown && ghClean(shown.textContent).includes(ghClean(filename))
+}
+
+// Any file still uploading anywhere on the form.
+function ghUploading(doc) {
+  return !!doc.querySelector('.file-upload [role="progressbar"]')
+}
+
+// Attaches a file to Greenhouse's file input and waits until the form shows it
+// as uploaded.
+async function ghSetFile(doc, inputId, file, timeoutMs = GH_UPLOAD_WAIT_MS) {
   const input = doc.getElementById(inputId)
   if (!input) return false
+  const started = Date.now()
   const dt = new DataTransfer()
   dt.items.add(file)
   input.files = dt.files
   input.dispatchEvent(new Event('change', { bubbles: true }))
-  return !!(await ghWaitFor(() => !doc.getElementById(inputId) || doc.body.textContent.includes(file.name), 4000))
+  const done = !!(await ghWaitFor(() => ghUploadDone(doc, inputId, file.name), timeoutMs, 200))
+  console.log(`JobAgent [greenhouse] upload ${inputId}: ${done ? 'done' : 'not finished'} after ${Date.now() - started} ms`)
+  return done
+}
+
+// The errors Greenhouse shows on the form: <p id="<field>-error"
+// class="helper-text helper-text--error">Resume/CV is required.</p> under a
+// field, plus fields marked aria-invalid without such a line. The résumé's
+// error has no aria-invalid anywhere, so both are needed.
+function ghFormErrors(doc) {
+  const out = []
+  const withText = new Set()
+  for (const el of doc.querySelectorAll('.helper-text--error')) {
+    const text = ghClean(el.textContent)
+    if (!text) continue
+    out.push(text)
+    if (el.id) withText.add(el.id.replace(/-error$/, ''))
+  }
+  for (const el of doc.querySelectorAll('[aria-invalid="true"]')) {
+    if (el.id && withText.has(el.id)) continue
+    const label = ghLabelFor(doc, el)
+    if (label) out.push(label)
+  }
+  return [...new Set(out)]
+}
+
+// What the page shows, for the console when an outcome isn't recognised.
+function ghDescribePage(doc) {
+  const texts = sel => [...doc.querySelectorAll(sel)].map(e => ghClean(e.textContent)).filter(Boolean).slice(0, 8)
+  return {
+    url: location.href,
+    title: doc.title,
+    headings: texts('h1, h2, h3'),
+    alerts: texts('[role="alert"], [aria-live]'),
+    errors: ghFormErrors(doc),
+    uploading: ghUploading(doc),
+    formStillThere: !!ghSubmitButton(doc),
+    securityCode: ghLooksBlocked(doc),
+  }
 }
 
 function ghPress(el, key) {
@@ -427,6 +493,9 @@ async function ghWatchForConfirmation(doc, until, before) {
   for (;;) {
     if (ghIsConfirmation(location.href, doc.body.innerText || doc.body.textContent, before)) return 'confirmed'
     if (ghLooksBlocked(doc)) return 'code'
+    // Greenhouse refused the form (its own validation, shown under the fields).
+    // Nothing was sent.
+    if (ghFormErrors(doc).length) return 'rejected'
     if (Date.now() >= until) return 'timeout'
     await ghSleep(500)
   }
@@ -453,9 +522,11 @@ async function ghAfterSubmit(doc, state) {
       // Still waiting for the user to type the code.
       if (Date.now() < watchUntil) { await ghSleep(1000); continue }
     }
-    const errors = [...doc.querySelectorAll('[aria-invalid="true"]')].map(el => ghLabelFor(doc, el)).filter(Boolean)
+    if (outcome === 'rejected') await ghSleep(300) // let every field's error render
+    const errors = ghFormErrors(doc)
+    console.log(`JobAgent [greenhouse] after Submit: ${outcome}`, ghDescribePage(doc))
     ghBanner(doc, errors.length
-      ? `Greenhouse didn't accept the form (${errors.slice(0, 3).join(', ')}). Nothing was confirmed — check this tab and finish it yourself.`
+      ? `Greenhouse didn't accept the form, so it wasn't sent:\n${errors.slice(0, 5).map(e => `• ${e}`).join('\n')}\nFix it here and press Submit application.`
       : "Submit was clicked but Greenhouse didn't confirm it. Check this tab: it may have gone in.")
     await ghReport('manual', errors.length ? 'form_error' : 'submit_unconfirmed')
     return
@@ -507,6 +578,21 @@ async function ghRun() {
     return ghReport('manual', 'fill_failed')
   }
 
+  // Each file was waited for as it was attached; this covers anything still
+  // uploading, and an error Greenhouse is already showing (a field it
+  // validated on blur). Submit now would only be refused.
+  if (!(await ghWaitFor(() => !ghUploading(doc), GH_UPLOAD_WAIT_MS, 250))) {
+    console.log('JobAgent [greenhouse] upload never finished', ghDescribePage(doc))
+    ghBanner(doc, "stopped before submitting: an attached file didn't finish uploading. Attach it again here and press Submit application.")
+    return ghReport('manual', 'fill_failed')
+  }
+  const shownErrors = ghFormErrors(doc)
+  if (shownErrors.length) {
+    console.log('JobAgent [greenhouse] form shows errors before Submit', ghDescribePage(doc))
+    ghBanner(doc, `stopped before submitting — Greenhouse shows these on the form:\n${shownErrors.slice(0, 5).map(e => `• ${e}`).join('\n')}\nFix them here and press Submit application.`)
+    return ghReport('manual', 'fill_failed')
+  }
+
   const submit = ghSubmitButton(doc)
   if (GH_DRY_RUN) {
     ghBanner(doc, 'dry run: everything is filled in. Submit was not clicked.')
@@ -522,7 +608,7 @@ async function ghRun() {
 if (typeof module !== 'undefined') {
   module.exports = {
     GH_DRY_RUN, ghDomId, ghExactOption, ghLocationOption, ghIsConfirmation, ghRequiredEmpty, ghFill,
-    ghSetText, ghTickBoxes, ghSubmitButton, ghChosen,
+    ghSetText, ghTickBoxes, ghSubmitButton, ghChosen, ghSetFile, ghUploadDone, ghFormErrors,
   }
 } else if (!window.__jobagentGreenhouse) {
   window.__jobagentGreenhouse = true

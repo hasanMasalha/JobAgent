@@ -8,6 +8,8 @@
 //   - only the application's own tab can report its result;
 //   - one at a time: a second one is refused, and the site refunds it.
 
+import { attachmentDisposition } from "@/lib/content-disposition";
+
 type Listener = (...args: unknown[]) => unknown;
 
 interface Call {
@@ -15,7 +17,12 @@ interface Call {
   init?: { method?: string; body?: string; headers?: Record<string, string> };
 }
 
-function setup({ permission = true, formUrl = "https://job-boards.greenhouse.io/acme/jobs/1", ats = "greenhouse" } = {}) {
+function setup({
+  permission = true,
+  formUrl = "https://job-boards.greenhouse.io/acme/jobs/1",
+  ats = "greenhouse",
+  cvDisposition = 'attachment; filename="Dana_CV.pdf"',
+} = {}) {
   const store: Record<string, unknown> = { extensionToken: "tok", serverUrl: "https://jobagent.uk" };
   const listeners = { message: [] as Listener[], external: [] as Listener[], updated: [] as Listener[], removed: [] as Listener[] };
   const tabs = new Map<number, { id: number; url: string; status: string }>();
@@ -79,7 +86,7 @@ function setup({ permission = true, formUrl = "https://job-boards.greenhouse.io/
     if (path === "/api/apply/ats-package/app-1/cv") {
       return {
         ok: true, status: 200,
-        headers: { get: (h: string) => (h === "Content-Type" ? "application/pdf" : 'attachment; filename="Dana_CV.pdf"') },
+        headers: { get: (h: string) => (h === "Content-Type" ? "application/pdf" : cvDisposition) },
         arrayBuffer: async () => new TextEncoder().encode("%PDF").buffer,
       };
     }
@@ -222,6 +229,17 @@ describe("background.js — Greenhouse applications", () => {
     // Every call carries the extension token and version.
     for (const c of t.calls) {
       expect(c.init?.headers).toMatchObject({ Authorization: "Bearer tok", "X-JobAgent-Extension-Version": "1.6.0" });
+    }
+  });
+
+  it("keeps the CV's own file name, letters and Hebrew included", async () => {
+    // The real header the CV route sends.
+    for (const name of ["Hasan.Masalha resume.docx", "קורות חיים.pdf"]) {
+      const t = setup({ cvDisposition: attachmentDisposition(name) });
+      await t.external({ type: "START_ATS_APPLY", applicationId: "app-1" });
+      await t.flush();
+      const data = await t.fromTab(Array.from(t.tabs.keys())[0], { type: "ATS_GET_DATA" });
+      expect(data).toMatchObject({ cv: { filename: name } });
     }
   });
 

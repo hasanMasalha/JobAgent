@@ -627,21 +627,37 @@ BambooHR · 7 server-side submit switched off, then deleted.
   `phone_country`), which also returns the national number to type. A city is
   chosen only when exactly one suggestion is that place ("London" → several →
   the user's). Résumé and cover letter (as `Cover_Letter.txt`) are attached
-  with DataTransfer; Greenhouse swaps the input for the file name.
+  with DataTransfer. **Wait for the upload:** Greenhouse swaps the input for a
+  progress bar while the file goes to its S3 storage, then for
+  `.file-upload__filename` — only that means the form has it (`ghUploadDone`,
+  up to 60s; a failed upload stays on the bar → `fill_failed`). The first real
+  runs (2026-10-12) clicked Submit during the upload and Greenhouse refused
+  with "Resume/CV is required."
+- **The CV's name** comes in `filename*` (UTF-8) as well as an ASCII
+  `filename` (`lib/content-disposition.ts`). The route used to strip with
+  `/["\\r\n]/`, which in a regex class is a backslash and the letter "r" — every
+  "r" in the name became "_" ("_esume.docx").
 - **It stops before Submit** (`manual`, tab and a banner left for the user)
   when: the server lists a required question as missing (sent as
   `missingQuestions`, so the Applications page asks it); a required field is
   still empty that a saved answer wouldn't fill — phone country, an ambiguous
   city, fields the board API doesn't list (Stripe's School / Degree) — reason
   `needs_user`, not offered as questions; or a field it had an answer for
-  couldn't be set (`fill_failed`).
+  couldn't be set (`fill_failed`) — including a file still uploading, or an
+  error Greenhouse already shows on the form.
 - **Applied only on Greenhouse's confirmation**: a `/confirmation` page, or
   "thank you for applying" / "your application has been submitted|received"
   appearing (text already on the page before Submit doesn't count). The
   security-code step (`#security-input-0`) happens in the user's own tab, so
   it waits up to 30 minutes for them to enter it (`ATS_AWAITING_CODE`
-  notifies). No confirmation within 30s, leaving greenhouse.io after Submit,
-  or closing the tab → `manual` (`submit_unconfirmed` — it may have gone in).
+  notifies). Greenhouse's own refusal is `form_error` (nothing was sent): its
+  errors are `<p class="helper-text helper-text--error">` under the field
+  ("Resume/CV is required." — the résumé gets no `aria-invalid`), plus
+  `aria-invalid="true"` fields (`ghFormErrors`). No confirmation within 30s,
+  leaving greenhouse.io after Submit, or closing the tab → `manual`
+  (`submit_unconfirmed` — it may have gone in). An unrecognised outcome logs
+  `JobAgent [greenhouse] after Submit` with the URL, headings, alerts and
+  errors (console only; nothing is sent).
 - Checked 2026-10-12 against live forms (GitLab on job-boards, Airbnb and
   Stripe through the embed) with Playwright and `GH_DRY_RUN`, never
   submitting: all fields filled on two, Stripe stopped on School / Degree.

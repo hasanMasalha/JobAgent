@@ -15,6 +15,15 @@ import path from "path";
   escape: (s: string) => s.replace(/["\\\]\[]/g, "\\$&"),
 };
 
+// Nor DataTransfer (how greenhouse.js puts a file in an input).
+(globalThis as unknown as { DataTransfer: unknown }).DataTransfer = class {
+  private list: File[] = [];
+  items = { add: (f: File) => void this.list.push(f) };
+  get files() {
+    return this.list;
+  }
+};
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const gh = require("../../chrome-extension/greenhouse.js") as {
   GH_DRY_RUN: boolean;
@@ -28,6 +37,9 @@ const gh = require("../../chrome-extension/greenhouse.js") as {
     data: Record<string, unknown>,
     resolvePhoneCountry: (q: Record<string, unknown>) => Promise<Record<string, unknown> | null>,
   ) => Promise<{ filled: string[]; missing: { id: string; question: string; options: string[] }[]; userFill: string[]; failed: string[] }>;
+  ghSetFile: (doc: Document, inputId: string, file: File, timeoutMs?: number) => Promise<boolean>;
+  ghUploadDone: (doc: Document, inputId: string, filename: string) => boolean;
+  ghFormErrors: (doc: Document) => string[];
 };
 
 jest.setTimeout(30000);
@@ -70,6 +82,31 @@ function text(id: string, label: string, required = false) {
     "beforeend",
     `<label for="${id}">${label}${required ? "*" : ""}</label><input id="${id}" type="text" aria-required="${required}">`,
   );
+}
+
+// A stand-in for Greenhouse's uploader, as seen on job-boards: attaching
+// replaces the input with a progress bar while the file goes to its storage,
+// then with .file-upload__filename. `ms: null` = the upload never finishes.
+function upload(id: string, label: string, { required = true, ms = 300 as number | null } = {}) {
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div role="group" aria-labelledby="upload-label-${id}" class="file-upload">` +
+      `<div id="upload-label-${id}" class="label upload-label">${label}${required ? '<span class="required">*</span>' : ""}</div>` +
+      `<div class="file-upload__wrapper"><input id="${id}" type="file"></div></div>`,
+  );
+  const input = document.getElementById(id) as HTMLInputElement;
+  Object.defineProperty(input, "files", { writable: true, value: [] });
+  const wrapper = input.parentElement!;
+  input.addEventListener("change", () => {
+    const name = (input.files as unknown as File[])[0].name;
+    wrapper.innerHTML = `<div role="progressbar" aria-valuenow="0" class="file-upload__progressbar"></div>`;
+    if (ms !== null) {
+      setTimeout(() => {
+        wrapper.outerHTML = `<div class="file-upload__filename"><p class="body body__secondary">${name}</p>` +
+          `<button type="button" aria-label="Remove file"></button></div>`;
+      }, ms);
+    }
+  });
 }
 
 const chosen = (id: string) =>
@@ -220,5 +257,52 @@ describe("greenhouse.js", () => {
     );
     expect(chosen("country")).toBeNull();
     expect(result.userFill).toEqual(["Phone country"]);
+  });
+
+  it("waits for Greenhouse to finish uploading a file, not just to take it", async () => {
+    upload("resume", "Resume/CV");
+    const attaching = gh.ghSetFile(document, "resume", new File(["%PDF"], "Hasan.Masalha resume.docx"));
+    // The input is gone and the progress bar is up: not attached yet. Submit
+    // here is what Greenhouse refused with "Resume/CV is required."
+    await new Promise((r) => setTimeout(r, 100));
+    expect(document.getElementById("resume")).toBeNull();
+    expect(gh.ghUploadDone(document, "resume", "Hasan.Masalha resume.docx")).toBe(false);
+    expect(gh.ghRequiredEmpty(document, new Set()).map((e) => e.question)).toEqual(["Resume/CV"]);
+    expect(await attaching).toBe(true);
+    expect(gh.ghUploadDone(document, "resume", "Hasan.Masalha resume.docx")).toBe(true);
+    expect(gh.ghRequiredEmpty(document, new Set())).toEqual([]);
+  });
+
+  it("counts a file whose upload never finishes as not filled", async () => {
+    upload("resume", "Resume/CV", { ms: null });
+    expect(await gh.ghSetFile(document, "resume", new File(["%PDF"], "CV.pdf"), 800)).toBe(false);
+    const result = await gh.ghFill(
+      document,
+      {
+        questions: [{ id: "resume", label: "Resume/CV", kind: "file", required: true, role: "resume" }],
+        answers: [{ id: "resume", source: "resume" }],
+        missing: [],
+        cv: null,
+      },
+      async () => null,
+    );
+    expect(result.failed).toEqual(["Resume/CV"]);
+  });
+
+  it("recognises Greenhouse's errors under the fields, the résumé's included", () => {
+    text("first_name", "First Name", true);
+    document.getElementById("first_name")!.setAttribute("aria-invalid", "true");
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<p id="first_name-error" class="helper-text helper-text--error">First Name is required.</p>` +
+        // The résumé's error: no aria-invalid anywhere.
+        `<div class="file-upload"><p id="resume-error" class="helper-text helper-text--error">Resume/CV is required.</p></div>` +
+        `<label for="email">Email</label><input id="email" aria-invalid="true">` +
+        `<p class="helper-text">Accepted file types: pdf</p>`,
+    );
+    expect(gh.ghFormErrors(document)).toEqual(["First Name is required.", "Resume/CV is required.", "Email"]);
+    document.body.innerHTML = "";
+    text("first_name", "First Name", true);
+    expect(gh.ghFormErrors(document)).toEqual([]);
   });
 });

@@ -465,6 +465,17 @@ async function apiFetch(path, init = {}) {
   })
 }
 
+// The file name from a Content-Disposition header: filename* (UTF-8, the real
+// name — lib/content-disposition.ts) before the ASCII filename="…".
+function dispositionFilename(disposition) {
+  const d = disposition || ''
+  const star = d.match(/filename\*=UTF-8''([^;]+)/i)
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()) } catch {}
+  }
+  return (d.match(/filename="([^"]+)"/) || [])[1] || null
+}
+
 function bufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer)
   let bin = ''
@@ -480,7 +491,7 @@ const ATS_MESSAGES = {
   needs_user: 'Stopped before submitting: the form has fields JobAgent can\'t fill for you. Nothing was sent and the auto-apply was returned. Finish in the open tab.',
   fill_failed: "Stopped before submitting: a field couldn't be filled in. Nothing was sent and the auto-apply was returned. Check the open tab.",
   submit_unconfirmed: "Submit was clicked but Greenhouse didn't confirm it. Check the tab: it may have gone in. The auto-apply was returned.",
-  form_error: "Greenhouse didn't accept the form. Nothing was confirmed and the auto-apply was returned. Check the open tab.",
+  form_error: "Greenhouse didn't accept the form, so it wasn't sent. The auto-apply was returned. Check the open tab.",
   captcha_detected: 'Greenhouse asked for a security check before the form. Nothing was sent and the auto-apply was returned.',
   permission_denied: 'JobAgent needs access to Greenhouse pages to fill in the form. Nothing was sent and the auto-apply was returned.',
   tab_closed: 'The application tab was closed before it finished. Nothing was confirmed and the auto-apply was returned.',
@@ -618,8 +629,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let cv = null
         const cvRes = await apiFetch(`/api/apply/ats-package/${encodeURIComponent(state.applicationId)}/cv`)
         if (cvRes.ok) {
-          const disposition = cvRes.headers.get('Content-Disposition') || ''
-          const filename = (disposition.match(/filename="([^"]+)"/) || [])[1] || 'CV.pdf'
+          const filename = dispositionFilename(cvRes.headers.get('Content-Disposition')) || 'CV.pdf'
           cv = {
             filename,
             mimeType: cvRes.headers.get('Content-Type') || 'application/pdf',
