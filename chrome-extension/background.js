@@ -190,6 +190,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  // Step marker for content.js's failure logs: "this tab clicked Easy Apply"
+  // — the step name, which rule matched and when, nothing about the
+  // application. Kept per tab in chrome.storage.session (memory only, gone
+  // when the browser closes) so the page loaded after a navigating click can
+  // say so; content scripts can't read storage.session themselves.
+  if (message.type === 'SET_APPLY_STEP' || message.type === 'CLEAR_APPLY_STEP' || message.type === 'TAKE_APPLY_STEP') {
+    ;(async () => {
+      const key = `applyStep:${sender.tab?.id}`
+      if (message.type === 'SET_APPLY_STEP') {
+        await chrome.storage.session.set({ [key]: { step: message.step, rule: message.rule, at: Date.now() } })
+        sendResponse({ ok: true })
+        return
+      }
+      const stored = message.type === 'TAKE_APPLY_STEP' ? await chrome.storage.session.get(key) : {}
+      await chrome.storage.session.remove(key)
+      const marker = stored[key]
+      // Two minutes covers a navigation; anything older is unrelated.
+      sendResponse(marker && Date.now() - marker.at < 2 * 60 * 1000 ? marker : null)
+    })()
+    return true
+  }
+
   if (message.type === 'STORE_PENDING_APPLICATION') {
     chrome.storage.local.set({ pendingApplication: message.application })
     sendResponse({ success: true })
@@ -311,7 +333,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ])
         const url = await getServerUrl()
         const status = message.status || 'applied'
-        console.log('[JobAgent bg] updating status:', message.applicationId, '→', status)
+        console.log('[JobAgent bg] updating status:', message.applicationId, '→', status, 'reason:', message.reason)
+        if (sender.tab?.id) await chrome.storage.session.remove(`applyStep:${sender.tab.id}`)
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
@@ -366,6 +389,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               ? 'Your application was submitted successfully!'
               : message.reason === 'no_easy_apply'
                 ? "This job doesn't offer Easy Apply, so nothing was submitted. Apply in the LinkedIn tab yourself."
+              : message.reason === 'submit_unconfirmed'
+                ? "JobAgent clicked Submit but LinkedIn didn't confirm it. Check the LinkedIn tab: it may have gone in."
+              : message.reason === 'dry_run'
+                ? 'Dry run: every step was filled and it stopped before Submit application. Nothing was submitted.'
+              : message.reason === 'panel_not_found'
+                ? "Easy Apply didn't open, so nothing was submitted. Apply on LinkedIn yourself."
               : keepTab
                 ? 'JobAgent stopped at a question it has no answer from you for. Nothing was submitted. Finish in the LinkedIn tab.'
                 : 'JobAgent could not submit this application. Apply on LinkedIn yourself.',
