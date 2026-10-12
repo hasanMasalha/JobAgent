@@ -326,9 +326,11 @@ stay free of a tailoring charge.
 ## Chrome extension privacy policy
 `/privacy` is the extension's policy and the Chrome Web Store listing links
 to it. It lists what the extension stores (`chrome.storage.local`), sends
-(saved answers, application outcomes, its version number) and
-receives (account email, Application details, CV skills, saved answers — no
-CV and no cover letter).
+(saved answers, application outcomes and the questions an application
+stopped on, a Greenhouse form's phone-country list, its version number) and
+receives (account email, Application details, CV skills, saved answers; for
+Greenhouse since 1.6.0 also the form's answers, the CV file and the cover
+letter — LinkedIn still gets no CV and no cover letter).
 Any change to what `chrome-extension/` stores or sends must update it in
 the same PR — the Store reviews the listing against it.
 
@@ -604,6 +606,48 @@ BambooHR · 7 server-side submit switched off, then deleted.
   does. The extension reports with `update-status` (`manual` may carry
   `missingQuestions`, stored on `Application.missing_questions`). Loading the user's answers and
   CV is shared with `/ats-apply` (`ai-service/applicant_store.py`).
+- **Stage 3, extension side** (1.6.0, not released). `START_ATS_APPLY
+  {applicationId}` (external message; answered at once — the site refunds if
+  there's no `success: true` within 5s). One application at a time
+  (`atsApply` in `chrome.storage.local`: `permission → filling → submitted
+  (→ awaiting_code)`). Access to `https://*.greenhouse.io/*` is an
+  `optional_host_permissions`, asked the first time from `grant.html` (Chrome
+  only prompts after a click on an extension page); refused → `manual`.
+  `background.js` opens the package's `form_url` only if it's on
+  https://*.greenhouse.io, injects `greenhouse.js` into that one tab on every
+  load, and fetches the data for it (the content script can't call our API).
+- **greenhouse.js** fills what `/form-answers` returned, by DOM id: the board
+  API's field names are the page's ids (`question_1[]` → checkboxes named so,
+  or react-select `#question_1`; `location` → `#candidate-location`;
+  `demographic_<id>` → `#<id>`). React-selects: ArrowDown opens
+  `#react-select-<id>-listbox`; an option is clicked only when its text is
+  exactly the server's (verified on the control, or by `aria-selected` — the
+  phone picker's chip shows only "+44"). The phone country: the extension
+  reads `#country`'s options and asks `/resolve-answers` (kind
+  `phone_country`), which also returns the national number to type. A city is
+  chosen only when exactly one suggestion is that place ("London" → several →
+  the user's). Résumé and cover letter (as `Cover_Letter.txt`) are attached
+  with DataTransfer; Greenhouse swaps the input for the file name.
+- **It stops before Submit** (`manual`, tab and a banner left for the user)
+  when: the server lists a required question as missing (sent as
+  `missingQuestions`, so the Applications page asks it); a required field is
+  still empty that a saved answer wouldn't fill — phone country, an ambiguous
+  city, fields the board API doesn't list (Stripe's School / Degree) — reason
+  `needs_user`, not offered as questions; or a field it had an answer for
+  couldn't be set (`fill_failed`).
+- **Applied only on Greenhouse's confirmation**: a `/confirmation` page, or
+  "thank you for applying" / "your application has been submitted|received"
+  appearing (text already on the page before Submit doesn't count). The
+  security-code step (`#security-input-0`) happens in the user's own tab, so
+  it waits up to 30 minutes for them to enter it (`ATS_AWAITING_CODE`
+  notifies). No confirmation within 30s, leaving greenhouse.io after Submit,
+  or closing the tab → `manual` (`submit_unconfirmed` — it may have gone in).
+- Checked 2026-10-12 against live forms (GitLab on job-boards, Airbnb and
+  Stripe through the embed) with Playwright and `GH_DRY_RUN`, never
+  submitting: all fields filled on two, Stripe stopped on School / Degree.
+  `GH_DRY_RUN` must ship `false` (`__tests__/extension/greenhouse.test.ts`).
+  **Not yet tried in a real Chrome profile** (the grant prompt, the service
+  worker, a real submission and the confirmation page).
 
 ## No CAPTCHA solving, no disguise
 - Every ATS we apply to runs a bot check (2026-10-06 probe of live forms):
