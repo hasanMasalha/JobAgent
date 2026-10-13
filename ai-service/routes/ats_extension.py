@@ -8,6 +8,7 @@ of them. The server keeps every decision; the extension fills the page.
 - POST /ats-package       which form to open, and what to apply with
 - POST /ats-package/cv    the CV file to upload
 - POST /form-answers      the real form's questions and answers (fill-and-review page)
+- POST /linkedin-work-authorisation  the two yes/no values LinkedIn's 1.6.x extension uses
 
 Called only through Next.js (X-Internal-Key), with the user id Next.js has
 authenticated — never one from the caller. An application must be the user's
@@ -29,6 +30,7 @@ from applicant_store import application_cv_file, load_applicant, load_cv_row
 from form_questions import form_questions
 from application_answers import normalize
 from routes.ats_submit import _detect_ats
+from work_authorisation import authorised, needs_sponsorship
 
 router = APIRouter()
 
@@ -47,7 +49,7 @@ class ResolveRequest(ApplicationRef):
 async def _application(conn, user_id: str, application_id: str):
     return await conn.fetchrow(
         'SELECT a.id, a.status, a.tailored_cv, a.cover_letter, a.resolved_answers, '
-        'j.title, j.company, j.url, j.apply_url '
+        'j.title, j.company, j.url, j.apply_url, j.location '
         'FROM "Application" a JOIN "Job" j ON j.id = a.job_id '
         'WHERE a.id = $1 AND a.user_id = $2',
         application_id,
@@ -75,7 +77,7 @@ async def _resolve(conn, user_id: str, app, questions: list[Question]) -> tuple[
     """(answers, missing) for these questions on this application: facts from
     the user's own data, Claude for open-ended free text (cached on the
     Application, at most MAX_CLAUDE_ANSWERS), nothing otherwise."""
-    applicant = await load_applicant(conn, user_id)
+    applicant = await load_applicant(conn, user_id, job_location=app["location"])
     cv_row = await load_cv_row(conn, user_id)
     answers, for_claude, missing = plan_answers(questions, applicant, app["cover_letter"] or "")
 
@@ -228,3 +230,30 @@ async def form_answers(req: ApplicationRef):
         ],
         **_result(answers, missing),
     }
+
+
+@router.post("/linkedin-work-authorisation")
+async def linkedin_work_authorisation(req: ApplicationRef):
+    """The work-authorisation values for extension 1.6.x on LinkedIn
+    (/api/apply/check-pending). Its jaBooleanAnswer uses `work_authorized`
+    only for a question naming Israel, and `requires_sponsorship` for any
+    sponsorship question. That one is given for the job's country, and only
+    when a "currently" and a "now or in the future" question would get the
+    same answer; otherwise None, and the extension leaves it for the user."""
+    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+    try:
+        app = await _application(conn, req.user_id, req.application_id)
+        if closed := _closed(app):
+            return closed
+        applicant = await load_applicant(conn, req.user_id, job_location=app["location"])
+    finally:
+        await conn.close()
+
+    auth = applicant.work_auth
+    sponsorship = None
+    if len(applicant.job_countries) == 1:
+        (country,) = applicant.job_countries
+        now = needs_sponsorship(auth, country, current_only=True)
+        later = needs_sponsorship(auth, country, current_only=False)
+        sponsorship = now if now == later else None
+    return {"work_authorized": authorised(auth, "IL"), "requires_sponsorship": sponsorship}

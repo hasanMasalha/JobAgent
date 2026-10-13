@@ -48,6 +48,18 @@ model User {
   github_url           String?
   willing_to_relocate  Boolean?
   application_details_confirmed_at DateTime?
+  /// Where the user can work now: ISO 3166-1 alpha-2 codes, plus "EU" for an
+  /// EU citizen (the EU, EEA and Switzerland). An unlisted country is answered
+  /// "not authorised / needs sponsorship" — only once work_auth_confirmed_at
+  /// is set, because that rests on the list being complete. See
+  /// ai-service/work_authorisation.py. work_authorized (Israel only) and
+  /// requires_sponsorship (no country) are the pre-2026-10-13 answers, still
+  /// used for Israel until the list is saved; drop them in a later release.
+  work_countries              String[] @default([])
+  /// Of work_countries, where the right to work depends on a visa that will
+  /// need an employer's sponsorship later.
+  sponsorship_later_countries String[] @default([])
+  work_auth_confirmed_at      DateTime?
   /// When the user ticked "I understand that using automation on LinkedIn may
   /// result in account restrictions" (/dashboard/linkedin-extension). The
   /// first consent is kept. Without it nothing is handed to the extension

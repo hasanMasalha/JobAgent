@@ -15,8 +15,10 @@ PROFILE = ApplicantData(
     linkedin_url="https://linkedin.com/in/dana",
     expected_salary="25000",
     years_of_experience="6",
+    # The old Israel-only answers (the country list not saved yet), on a job in Israel.
     work_authorized=True,
     requires_sponsorship=False,
+    job_countries=frozenset({"IL"}),
     saved_answers={"how did you hear about this opportunity?": "A friend"},
 )
 
@@ -59,7 +61,7 @@ def test_saved_answer_for_the_exact_question():
     [
         "What is your expected annual salary in USD?",        # Profile is monthly NIS
         "Years of experience with React",                     # total years don't answer it
-        "Are you authorized to work in the United Kingdom?",  # Profile is for Israel
+        "Are you authorized to work in the United Kingdom?",  # only Israel until the list is saved
         "What is your notice period?",                        # not given
     ],
 )

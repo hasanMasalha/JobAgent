@@ -22,6 +22,9 @@ jest.mock("@/lib/db", () => ({
   },
 }));
 
+// Work authorisation per country is worked out by the AI service.
+jest.mock("@/lib/python-service", () => ({ pythonFetch: jest.fn() }));
+
 jest.mock("@/lib/usage", () => ({
   ...jest.requireActual("@/lib/usage"),
   refundAutoApplyForApplication: jest.fn(),
@@ -30,6 +33,7 @@ jest.mock("@/lib/usage", () => ({
 import { db } from "@/lib/db";
 import * as usage from "@/lib/usage";
 import { GET as checkPending } from "@/app/api/apply/check-pending/route";
+import { pythonFetch } from "@/lib/python-service";
 import { EXTENSION_VERSION_HEADER, MIN_EXTENSION_VERSION, isVersionAtLeast } from "@/lib/extension-version";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -79,7 +83,11 @@ beforeEach(() => {
   mdb.$executeRaw.mockResolvedValue(1);
   mdb.easyApplyAnswer.findMany.mockResolvedValue([]);
   mdb.user.findUnique.mockResolvedValue(UNTOUCHED);
+  workAuth({ work_authorized: null, requires_sponsorship: null });
 });
+
+const workAuth = (body: unknown, ok = true) =>
+  (pythonFetch as jest.Mock).mockResolvedValue({ ok, json: async () => body });
 
 describe("extension version gate", () => {
   it("compares dotted versions numerically", () => {
@@ -130,8 +138,31 @@ describe("check-pending sends only the user's own answers", () => {
 
   it("sends them once confirmed", async () => {
     mdb.user.findUnique.mockResolvedValue({ ...UNTOUCHED, years_of_experience: "7", application_details_confirmed_at: new Date() });
+    workAuth({ work_authorized: true, requires_sponsorship: false });
     const { application } = await (await checkPending(get("1.5.0"))).json();
-    expect(application).toMatchObject({ years_of_experience: "7", notice_period: "30", work_authorized: true });
+    expect(application).toMatchObject({
+      years_of_experience: "7", notice_period: "30", work_authorized: true, requires_sponsorship: false,
+    });
+  });
+
+  // ai-service/work_authorisation.py decides both, for this job's country.
+  it("asks the AI service for the two work-authorisation values for this application", async () => {
+    workAuth({ work_authorized: true, requires_sponsorship: true });
+    const { application } = await (await checkPending(get("1.5.0"))).json();
+    expect(pythonFetch).toHaveBeenCalledWith("/linkedin-work-authorisation", expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse((pythonFetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).toEqual({ user_id: "u1", application_id: "app-1" });
+    expect(application).toMatchObject({ work_authorized: true, requires_sponsorship: true });
+  });
+
+  it.each([
+    ["the AI service fails", () => workAuth({}, false)],
+    ["it can't be reached", () => (pythonFetch as jest.Mock).mockRejectedValue(new Error("down"))],
+    ["it answers something that isn't yes or no", () => workAuth({ work_authorized: "yes", requires_sponsorship: 1 })],
+  ])("sends null for both when %s", async (_what, arrange) => {
+    arrange();
+    const { application } = await (await checkPending(get("1.5.0"))).json();
+    expect(application).toMatchObject({ work_authorized: null, requires_sponsorship: null });
   });
 
   it("sends null, not a fallback, for anything the user never set", async () => {

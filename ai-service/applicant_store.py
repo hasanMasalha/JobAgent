@@ -11,15 +11,17 @@ from application_answers import ApplicantData
 from utils.cv_pdf import resolve_cv_file
 
 
-async def load_applicant(conn, user_id: str) -> ApplicantData:
+async def load_applicant(conn, user_id: str, job_location: str | None = None) -> ApplicantData:
     """The user's Profile and saved answers. The six Application details
     count only once confirmed (application_details_confirmed_at) — see
-    ApplicantData.from_row."""
+    ApplicantData.from_row. `job_location` (Job.location) is where a question
+    about "the country of this job" — and one naming no country — points."""
     profile_row = await conn.fetchrow(
         'SELECT first_name, last_name, email, phone, city, linkedin_url, github_url, '
         'portfolio_url, "currentCompany", expected_salary, notice_period, years_of_experience, '
         'highest_education, work_authorized, requires_sponsorship, willing_to_relocate, '
-        'application_details_confirmed_at '
+        'application_details_confirmed_at, work_countries, sponsorship_later_countries, '
+        'work_auth_confirmed_at '
         'FROM "User" WHERE id = $1',
         user_id,
     )
@@ -30,6 +32,7 @@ async def load_applicant(conn, user_id: str) -> ApplicantData:
     return ApplicantData.from_row(
         dict(profile_row) if profile_row else {},
         [(r["question"], r["answer"]) for r in saved_rows],
+        job_location=job_location,
     )
 
 

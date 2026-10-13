@@ -19,7 +19,9 @@ FULL = ApplicantData(
     first_name="Dana", last_name="Levi", email="dana@example.com", phone="+972501234567",
     city="Tel Aviv", linkedin_url="https://linkedin.com/in/dana", current_company="Acme",
     expected_salary="25000", notice_period="30", years_of_experience="6",
+    # The old Israel-only answers (the country list not saved yet), on a job in Israel.
     highest_education="BSc", work_authorized=True, requires_sponsorship=False,
+    job_countries=frozenset({"IL"}),
     willing_to_relocate=False,
     saved_answers={"how did you hear about this opportunity?": "A friend at the company"},
 )
@@ -91,7 +93,7 @@ def test_sponsorship_questions_still_get_the_profile_answer(label):
 @pytest.mark.parametrize(
     "label",
     [
-        # Profile asks about Israel only.
+        # Until the user saves their list of countries, only Israel is answered.
         "Are you legally authorized to work in the United Kingdom?",
         "Do you have the right to work in the US?",
     ],

@@ -27,7 +27,8 @@ BASIC = [
 ]
 DANA = ApplicantData(first_name="Dana", last_name="Levi", email="dana@example.com",
                      phone="+972501234567", city="Tel Aviv", years_of_experience="6",
-                     work_authorized=True, requires_sponsorship=False)
+                     work_authorized=True, requires_sponsorship=False,
+                     job_countries=frozenset({"IL"}))  # old Israel-only answers, a job in Israel
 
 
 def _by_path(actions):
