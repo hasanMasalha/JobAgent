@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { phoneProblem } from "@/lib/phone";
 import { db } from "@/lib/db";
+import { parseWorkCountries } from "@/lib/countries";
 
 export async function GET(_req: NextRequest) {
   try {
@@ -36,10 +37,11 @@ export async function GET(_req: NextRequest) {
           notice_period: true,
           years_of_experience: true,
           highest_education: true,
-          work_authorized: true,
-          requires_sponsorship: true,
           willing_to_relocate: true,
           application_details_confirmed_at: true,
+          work_countries: true,
+          sponsorship_later_countries: true,
+          work_auth_confirmed_at: true,
         },
       }),
     ]);
@@ -83,9 +85,13 @@ export async function GET(_req: NextRequest) {
       notice_period: dbUser?.notice_period ?? null,
       years_of_experience: dbUser?.years_of_experience ?? null,
       highest_education: dbUser?.highest_education ?? null,
-      work_authorized: dbUser?.work_authorized ?? null,
-      requires_sponsorship: dbUser?.requires_sponsorship ?? null,
       willing_to_relocate: dbUser?.willing_to_relocate ?? null,
+      // Where the user can work (ISO codes, "EU"), and where that needs
+      // sponsorship later. Confirmed once saved: only then is an unlisted
+      // country answered "no" (ai-service/work_authorisation.py).
+      work_countries: dbUser?.work_countries ?? [],
+      sponsorship_later_countries: dbUser?.sponsorship_later_countries ?? [],
+      work_auth_confirmed: !!dbUser?.work_auth_confirmed_at,
       // False until the user has saved or approved the answers above. Until
       // then the extension isn't given them (see /api/apply/check-pending).
       application_details_confirmed: !!dbUser?.application_details_confirmed_at,
@@ -113,8 +119,7 @@ export async function PATCH(req: NextRequest) {
       first_name, last_name, phone, city, currentCompany,
       linkedin_url, github_url, portfolio_url,
       expected_salary, notice_period, years_of_experience,
-      highest_education, work_authorized, requires_sponsorship,
-      willing_to_relocate, confirm_application_details,
+      highest_education, willing_to_relocate, confirm_application_details,
     } = body;
 
     // Application forms ask for the phone's country and the AI service takes
@@ -124,14 +129,47 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "invalid_phone", message: badPhone }, { status: 400 });
     }
 
+    // Right to work. The old "Authorized to work in Israel?" / sponsorship
+    // yes-nos aren't accepted any more: work_authorized and
+    // requires_sponsorship stay as they were, for Israel until the list is saved.
+    let workAuth: { work_countries: string[]; sponsorship_later_countries: string[]; work_auth_confirmed_at: Date | null } | null = null;
+    if (body.work_countries !== undefined) {
+      const countries = parseWorkCountries(body.work_countries);
+      const later = parseWorkCountries(body.sponsorship_later_countries ?? []);
+      if (!countries || !later || later.some((c) => !countries.includes(c))) {
+        return NextResponse.json(
+          { error: "invalid_work_countries", message: "Choose countries from the list. Sponsorship can only be needed in a country you listed." },
+          { status: 400 },
+        );
+      }
+      // Saving the list is what makes "not on it" an answer. An empty list
+      // isn't "nowhere": it's no answer, and those questions stop.
+      workAuth = {
+        work_countries: countries,
+        sponsorship_later_countries: later,
+        work_auth_confirmed_at: countries.length ? new Date() : null,
+      };
+    }
+
     // Saving the application details, or approving them on the apply review
     // screen, is what makes them the user's own answers.
     const APPLICATION_DETAIL_KEYS = [
-      "notice_period", "years_of_experience", "highest_education",
-      "work_authorized", "requires_sponsorship", "willing_to_relocate",
+      "notice_period", "years_of_experience", "highest_education", "willing_to_relocate", "work_countries",
     ];
     const confirmsDetails =
       confirm_application_details === true || APPLICATION_DETAIL_KEYS.some((k) => body[k] !== undefined);
+
+    // Approving on the review screen confirms the list it showed, if there is one.
+    if (!workAuth && confirm_application_details === true) {
+      const current = await db.user.findUnique({ where: { id: user.id }, select: { work_countries: true } });
+      if (current?.work_countries.length) {
+        workAuth = {
+          work_countries: current.work_countries,
+          sponsorship_later_countries: [],
+          work_auth_confirmed_at: new Date(),
+        };
+      }
+    }
 
     await db.user.update({
       where: { id: user.id },
@@ -148,9 +186,14 @@ export async function PATCH(req: NextRequest) {
         notice_period,
         years_of_experience,
         highest_education,
-        work_authorized,
-        requires_sponsorship,
         willing_to_relocate,
+        ...(workAuth
+          ? {
+              work_countries: workAuth.work_countries,
+              work_auth_confirmed_at: workAuth.work_auth_confirmed_at,
+              ...(body.work_countries !== undefined ? { sponsorship_later_countries: workAuth.sponsorship_later_countries } : {}),
+            }
+          : {}),
         ...(confirmsDetails ? { application_details_confirmed_at: new Date() } : {}),
       },
     });

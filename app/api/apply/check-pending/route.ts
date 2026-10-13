@@ -3,6 +3,32 @@ import { getSessionOrExtensionUserId } from "@/lib/extension-token";
 import { db } from "@/lib/db";
 import { extensionVersionOk, MIN_EXTENSION_VERSION } from "@/lib/extension-version";
 import { refundAutoApplyForApplication } from "@/lib/usage";
+import { pythonFetch } from "@/lib/python-service";
+
+// Work authorisation is answered per country (ai-service/work_authorisation.py,
+// since 2026-10-13). The 1.6.x extension still has two yes/no values: Israel,
+// and sponsorship for whatever country it's asked about. The AI service works
+// both out for this job; anything it can't answer, or no reply, is null and
+// the extension leaves the question for the user.
+async function linkedinWorkAuthorisation(
+  userId: string,
+  applicationId: string,
+): Promise<{ work_authorized: boolean | null; requires_sponsorship: boolean | null }> {
+  const none = { work_authorized: null, requires_sponsorship: null };
+  try {
+    const res = await pythonFetch("/linkedin-work-authorisation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, application_id: applicationId }),
+    });
+    if (!res.ok) return none;
+    const data = await res.json();
+    const bool = (v: unknown) => (typeof v === "boolean" ? v : null);
+    return { work_authorized: bool(data.work_authorized), requires_sponsorship: bool(data.requires_sponsorship) };
+  } catch {
+    return none;
+  }
+}
 
 // Handles both URL formats:
 //   /jobs/view/4417922448/                              → standard
@@ -90,7 +116,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Fetch the user's answers, saved answers, and CV skills in parallel
-  const [profile, savedAnswers, cvRows] = await Promise.all([
+  const [profile, savedAnswers, cvRows, workAuth] = await Promise.all([
     db.user.findUnique({
       where: { id: userId },
       select: {
@@ -107,8 +133,6 @@ export async function GET(request: NextRequest) {
         notice_period: true,
         years_of_experience: true,
         highest_education: true,
-        work_authorized: true,
-        requires_sponsorship: true,
         willing_to_relocate: true,
       },
     }),
@@ -116,6 +140,7 @@ export async function GET(request: NextRequest) {
     db.$queryRaw<{ skills_json: unknown }[]>`
       SELECT skills_json FROM "CV" WHERE user_id = ${userId} LIMIT 1
     `,
+    linkedinWorkAuthorisation(userId, rows[0].id),
   ]);
 
   const skills: string[] = (() => {
@@ -154,8 +179,9 @@ export async function GET(request: NextRequest) {
       notice_period: confirmed ? profile?.notice_period ?? null : null,
       years_of_experience: confirmed ? profile?.years_of_experience ?? null : null,
       highest_education: confirmed ? profile?.highest_education ?? null : null,
-      work_authorized: confirmed ? profile?.work_authorized ?? null : null,
-      requires_sponsorship: confirmed ? profile?.requires_sponsorship ?? null : null,
+      // The AI service applies the confirmation rules for these two.
+      work_authorized: workAuth.work_authorized,
+      requires_sponsorship: workAuth.requires_sponsorship,
       willing_to_relocate: confirmed ? profile?.willing_to_relocate ?? null : null,
       // CV skills
       skills,

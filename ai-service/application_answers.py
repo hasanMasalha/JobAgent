@@ -12,9 +12,11 @@ The rule (decided 2026-10-04, the same as the extension's for facts):
 
 The Profile matching mirrors chrome-extension/answers.js, including its
 limits: a Profile field answers only the question it was asked as. Profile
-asks "Authorized to work in Israel?" and "Expected salary (monthly, NIS)", so
-those don't answer a UK work-authorisation or an annual salary question, and
-total years don't answer "years of experience with React".
+asks "Expected salary (monthly, NIS)", so it doesn't answer an annual salary
+question, and total years don't answer "years of experience with React".
+Work authorisation and sponsorship are answered for the country the question
+or the job is about, from the user's list of countries (work_authorisation.py,
+since 2026-10-13; it was Israel only).
 
 Until 2026-10-04 the ATS filler answered "2" years, work authorisation "Yes",
 salary "Negotiable", notice "Immediate", current company "Self-employed",
@@ -23,6 +25,8 @@ Claude answer anything else.
 """
 import re
 from dataclasses import dataclass, field
+
+from work_authorisation import WorkAuth, authorisation_answer, job_countries, sponsorship_answer
 
 
 @dataclass
@@ -44,9 +48,18 @@ class ApplicantData:
     notice_period: str | None = None
     years_of_experience: str | None = None  # total
     highest_education: str | None = None
+    # The old Israel-only answers: used for Israel until the user saves their
+    # list of countries (work_authorisation.WorkAuth).
     work_authorized: bool | None = None  # in Israel
     requires_sponsorship: bool | None = None
     willing_to_relocate: bool | None = None
+    # Where the user may work (ISO codes, "EU"), and where that will need
+    # sponsorship later; `work_auth_confirmed` once they saved the list.
+    work_countries: frozenset[str] = frozenset()
+    sponsorship_later_countries: frozenset[str] = frozenset()
+    work_auth_confirmed: bool = False
+    # The countries of the job being applied to (from Job.location).
+    job_countries: frozenset[str] = frozenset()
     # Normalised question -> the answer the user typed for it before.
     saved_answers: dict[str, str] = field(default_factory=dict)
 
@@ -56,10 +69,23 @@ class ApplicantData:
             return f"{self.first_name} {self.last_name}"
         return None
 
+    @property
+    def work_auth(self) -> WorkAuth:
+        return WorkAuth(
+            countries=self.work_countries,
+            sponsorship_later=self.sponsorship_later_countries,
+            confirmed=self.work_auth_confirmed and bool(self.work_countries),
+            legacy_israel=self.work_authorized,
+            legacy_sponsorship=self.requires_sponsorship,
+        )
+
     @classmethod
-    def from_row(cls, row: dict, saved: list[tuple[str, str]] | None = None) -> "ApplicantData":
+    def from_row(
+        cls, row: dict, saved: list[tuple[str, str]] | None = None, job_location: str | None = None
+    ) -> "ApplicantData":
         """From a "User" row (and its EasyApplyAnswer rows), applying the
-        confirmation rule for the six Application details."""
+        confirmation rule for the six Application details. `job_location` is
+        the job's Job.location, for questions about "the country of this job"."""
         confirmed = bool(row.get("application_details_confirmed_at"))
 
         def text(key):
@@ -88,6 +114,10 @@ class ApplicantData:
             work_authorized=flag("work_authorized") if confirmed else None,
             requires_sponsorship=flag("requires_sponsorship") if confirmed else None,
             willing_to_relocate=flag("willing_to_relocate") if confirmed else None,
+            work_countries=frozenset(row.get("work_countries") or ()),
+            sponsorship_later_countries=frozenset(row.get("sponsorship_later_countries") or ()),
+            work_auth_confirmed=bool(row.get("work_auth_confirmed_at")),
+            job_countries=job_countries(job_location),
             saved_answers={normalize(q): a.strip() for q, a in (saved or []) if a and a.strip()},
         )
 
@@ -161,18 +191,29 @@ def text_answer(label: str, data: ApplicantData) -> str | None:
 
 
 def boolean_answer(label: str, data: ApplicantData) -> bool | None:
-    """Yes / no from the user's Profile, or None. Mirrors jaBooleanAnswer."""
+    """Yes / no from the user's Profile, or None. Work authorisation and
+    sponsorship are for the country the question names, else the job's
+    (work_authorisation.py). The extension's jaBooleanAnswer still has the
+    old Israel-only rule until it asks the server (1.7.0)."""
     lab = normalize(label)
-    # The Profile asks whether the user needs sponsorship, so a visa question
-    # is that question only when it asks about needing one. "What is your visa
-    # status?" (free text) and "Do you have a valid visa?" (Yes means the
-    # opposite) are not — both used to get this answer.
+    # A visa question is the sponsorship question only when it asks about
+    # needing one. "What is your visa status?" (free text) and "Do you have a
+    # valid visa?" (Yes means the opposite) are not — both used to get this
+    # answer.
+    # "What is your right to work or visa status?", "Which visa will you
+    # need?": open questions, not yes/no ones.
+    if re.search(r"\b(what|which|describe|explain|list|how)\b", lab):
+        return None
     needs = _any(lab, ("require", "need", "צריך", "תזדקק", "דרוש"))
     if _any(lab, ("sponsor", "חסות")) or (_any(lab, ("visa", "ויזה")) and needs and "authoriz" not in lab):
-        return data.requires_sponsorship
+        return sponsorship_answer(label, data.work_auth, data.job_countries)
+    # About working: "authorization" alone is also a background-check or
+    # data-processing consent.
     if _any(lab, ("authorized", "authorised", "authorization", "eligible to work", "right to work",
-                  "legally", "work permit", "מורשה", "רשאי")) and _any(lab, ("israel", "ישראל")):
-        return data.work_authorized
+                  "legally", "work permit", "מורשה", "רשאי")) and _any(
+        lab, ("work", "employ", "עבוד", "לעבוד")
+    ):
+        return authorisation_answer(label, data.work_auth, data.job_countries)
     if _any(lab, ("relocat", "willing to move", "מעבר דירה")):
         return data.willing_to_relocate
     return None

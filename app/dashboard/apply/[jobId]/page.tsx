@@ -16,6 +16,7 @@ import {
   buttonStyles,
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import { countryName } from "@/lib/countries";
 import { isVersionAtLeast } from "@/lib/extension-version";
 import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
@@ -64,7 +65,8 @@ interface PrepareResult {
 const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/jobagent-%E2%80%94-ai-job-assista/cjcfjidmlmclbemjoobdipjlcdbkldda";
 
 // What /api/profile returns for the answers the extension may type into
-// Easy Apply. The last six only count once the user has confirmed them.
+// Easy Apply. The Application details only count once the user has confirmed
+// them; the right-to-work list once it has been saved (work_auth_confirmed).
 interface ApplicationAnswers {
   first_name: string | null;
   last_name: string | null;
@@ -74,10 +76,11 @@ interface ApplicationAnswers {
   notice_period: string | null;
   years_of_experience: string | null;
   highest_education: string | null;
-  work_authorized: boolean | null;
-  requires_sponsorship: boolean | null;
   willing_to_relocate: boolean | null;
+  work_countries: string[];
+  sponsorship_later_countries: string[];
   application_details_confirmed: boolean;
+  work_auth_confirmed: boolean;
 }
 
 const yesNo = (v: boolean | null) => (v === true ? "Yes" : v === false ? "No" : "");
@@ -192,7 +195,8 @@ export default function ApplyPage() {
     }).then((r) => r.ok).catch(() => false);
     setApproving(false);
     if (!ok) return showToast("Couldn't save that. Please try again.", "error");
-    setAnswers((a) => (a ? { ...a, application_details_confirmed: true } : a));
+    // The server confirms the right-to-work list too, when there is one.
+    setAnswers((a) => (a ? { ...a, application_details_confirmed: true, work_auth_confirmed: a.work_countries.length > 0 } : a));
   }
 
   async function handleDownloadCv() {
@@ -615,22 +619,33 @@ export default function ApplyPage() {
   const lowMatch = d.match_score !== null && d.match_score !== undefined && d.match_score < 0.45;
   const plan = submitPlan(d.job_url);
 
-  const answerRows: { label: string; value: string; needsApproval?: boolean }[] = answers
+  const approved = !!answers?.application_details_confirmed;
+  const workAuthHeld = !answers?.work_auth_confirmed;
+  const answerRows: { label: string; value: string; held?: boolean }[] = answers
     ? [
         { label: "Name", value: [answers.first_name, answers.last_name].filter(Boolean).join(" ") },
         { label: "Phone", value: answers.phone ?? "" },
         { label: "City", value: answers.city ?? "" },
         { label: "Expected salary (monthly, NIS)", value: answers.expected_salary ?? "" },
-        { label: "Total years of experience", value: answers.years_of_experience ?? "", needsApproval: true },
-        { label: "Highest education", value: answers.highest_education ?? "", needsApproval: true },
-        { label: "Notice period (days)", value: answers.notice_period ?? "", needsApproval: true },
-        { label: "Authorized to work in Israel", value: yesNo(answers.work_authorized), needsApproval: true },
-        { label: "Requires visa sponsorship", value: yesNo(answers.requires_sponsorship), needsApproval: true },
-        { label: "Willing to relocate", value: yesNo(answers.willing_to_relocate), needsApproval: true },
+        { label: "Total years of experience", value: answers.years_of_experience ?? "", held: !approved },
+        { label: "Highest education", value: answers.highest_education ?? "", held: !approved },
+        { label: "Notice period (days)", value: answers.notice_period ?? "", held: !approved },
+        {
+          label: "Can work in (and nowhere else)",
+          value: answers.work_countries.map(countryName).join(", "),
+          held: workAuthHeld,
+        },
+        {
+          label: "Will need visa sponsorship later in",
+          value: answers.work_countries.length
+            ? answers.sponsorship_later_countries.map(countryName).join(", ") || "None"
+            : "",
+          held: workAuthHeld,
+        },
+        { label: "Willing to relocate", value: yesNo(answers.willing_to_relocate), held: !approved },
       ]
     : [];
-  const approved = !!answers?.application_details_confirmed;
-  const awaitingApproval = !!answers && !approved && answerRows.some((r) => r.needsApproval && r.value);
+  const awaitingApproval = !!answers && answerRows.some((r) => r.held && r.value);
 
   const linkedInReview = (
     <>
@@ -666,7 +681,7 @@ export default function ApplyPage() {
         ) : (
           <dl className="mt-5 divide-y divide-line border-y border-line">
             {answerRows.map((row) => {
-              const held = !!row.needsApproval && !approved;
+              const held = !!row.held;
               return (
                 <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2.5">
                   <dt className="text-body-sm text-ink-muted">{row.label}</dt>
@@ -681,7 +696,7 @@ export default function ApplyPage() {
         )}
 
         {awaitingApproval && (
-          <Notice tone="attention" title="Check the last six before you apply" className="mt-5">
+          <Notice tone="attention" title="Check the answers marked “not used until you approve”" className="mt-5">
             Until you approve them or save them in Profile, JobAgent leaves those questions blank.
           </Notice>
         )}

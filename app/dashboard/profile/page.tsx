@@ -20,6 +20,7 @@ import {
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
 import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
+import { RightToWork } from "./RightToWork";
 
 // The LinkedIn connection section is hidden until it's ready for launch.
 // While it is, don't run its check either: /api/linkedin/session-status
@@ -44,9 +45,11 @@ interface EasyApplyDefaults {
   notice_period: string;
   years_of_experience: string;
   highest_education: string;
-  work_authorized: boolean;
-  requires_sponsorship: boolean;
   willing_to_relocate: boolean;
+  // ISO codes (and "EU"): where the user can work now, and where that will
+  // need sponsorship later. Start empty — nothing is assumed.
+  work_countries: string[];
+  sponsorship_later_countries: string[];
 }
 
 interface SavedAnswer {
@@ -88,9 +91,11 @@ function ProfileContent() {
     linkedin_url: "", github_url: "", portfolio_url: "",
     expected_salary: "", notice_period: "30", years_of_experience: "2",
     highest_education: "Bachelor's Degree",
-    work_authorized: true, requires_sponsorship: false, willing_to_relocate: false,
+    willing_to_relocate: false, work_countries: [], sponsorship_later_countries: [],
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
+  // The country list has been saved since it replaced the Israel-only question.
+  const [workAuthConfirmed, setWorkAuthConfirmed] = useState(false);
 
   // Saved answers (learned from previous Easy Apply sessions)
   const [savedAnswers, setSavedAnswers] = useState<SavedAnswer[]>([]);
@@ -117,7 +122,7 @@ function ProfileContent() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
-      .then((data: Profile & { email_notifications?: boolean } & EasyApplyDefaults) => {
+      .then((data: Profile & { email_notifications?: boolean; work_auth_confirmed?: boolean } & EasyApplyDefaults) => {
         setProfile(data);
         if (typeof data.email_notifications === "boolean") {
           setEmailNotifications(data.email_notifications);
@@ -135,10 +140,11 @@ function ProfileContent() {
           notice_period: data.notice_period ?? "30",
           years_of_experience: data.years_of_experience ?? "2",
           highest_education: data.highest_education ?? "Bachelor's Degree",
-          work_authorized: data.work_authorized ?? true,
-          requires_sponsorship: data.requires_sponsorship ?? false,
           willing_to_relocate: data.willing_to_relocate ?? false,
+          work_countries: data.work_countries ?? [],
+          sponsorship_later_countries: data.sponsorship_later_countries ?? [],
         });
+        setWorkAuthConfirmed(!!data.work_auth_confirmed);
         if (data.preferences) {
           setTitles(data.preferences.titles ?? []);
           setLocation(data.preferences.locations?.[0] ?? "");
@@ -282,8 +288,13 @@ function ProfileContent() {
           showToast("Check your phone number", "error");
           return;
         }
+        if (data.error === "invalid_work_countries") {
+          showToast(data.message, "error");
+          return;
+        }
       }
       if (!res.ok) throw new Error("Failed to save");
+      setWorkAuthConfirmed(defaults.work_countries.length > 0);
       showToast("Auto Apply defaults saved", "success");
     } catch {
       showToast("Failed to save defaults", "error");
@@ -895,11 +906,23 @@ function ProfileContent() {
             </div>
 
             <div>
-              <h3 className={groupLabel}>Eligibility</h3>
+              <h3 className={groupLabel}>Right to work</h3>
+              <div className="mt-3">
+                <RightToWork
+                  countries={defaults.work_countries}
+                  later={defaults.sponsorship_later_countries}
+                  confirmed={workAuthConfirmed}
+                  onChange={({ countries, later }) =>
+                    setDefaults({ ...defaults, work_countries: countries, sponsorship_later_countries: later })
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <h3 className={groupLabel}>Relocation</h3>
               <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {([
-                  { label: "Authorized to work in Israel?", key: "work_authorized", yesFirst: true },
-                  { label: "Requires visa sponsorship?", key: "requires_sponsorship", yesFirst: false },
                   { label: "Willing to relocate?", key: "willing_to_relocate", yesFirst: true },
                 ] as const).map(({ label, key, yesFirst }) => (
                   <fieldset key={key}>

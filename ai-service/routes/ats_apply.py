@@ -236,7 +236,8 @@ async def ats_apply(req: ATSApplyRequest):
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
         row = await conn.fetchrow(
-            'SELECT tailored_cv, cover_letter FROM "Application" WHERE id = $1 AND user_id = $2',
+            'SELECT a.tailored_cv, a.cover_letter, j.location FROM "Application" a '
+            'LEFT JOIN "Job" j ON j.id = a.job_id WHERE a.id = $1 AND a.user_id = $2',
             req.application_id,
             req.user_id,
         )
@@ -261,7 +262,7 @@ async def ats_apply(req: ATSApplyRequest):
         # form may be answered with (application_answers). The six Application
         # details count only once confirmed (application_details_confirmed_at);
         # they were read here regardless until 2026-10-04.
-        applicant = await load_applicant(conn, req.user_id)
+        applicant = await load_applicant(conn, req.user_id, job_location=row["location"])
     finally:
         await conn.close()
 

@@ -445,9 +445,36 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   sponsorship, salary, notice, current company, how you heard, location…) are
   answered only from the user's Profile or an `EasyApplyAnswer` they saved for
   that question — the same matching and limits as the extension's
-  `answers.js` (work authorisation is for Israel, salary monthly NIS, total
-  years only for total experience), and the six Application details only once
-  `application_details_confirmed_at` is set.
+  `answers.js` (salary monthly NIS, total years only for total experience),
+  and the six Application details only once `application_details_confirmed_at`
+  is set. Work authorisation and sponsorship: per country, below.
+- **Right to work, per country** (since 2026-10-13,
+  `ai-service/work_authorisation.py`). Profile → Right to work saves
+  `User.work_countries` (ISO codes from `ai-service/data/countries.json`, the
+  file `lib/countries.ts` reads too, plus `EU` = EU/EEA/Switzerland for an EU
+  citizen) and `sponsorship_later_countries` (of those, where the visa will
+  need sponsorship later); saving a non-empty list sets
+  `work_auth_confirmed_at` (so does "These are correct" on the review screen).
+  The question's country is the one it names, else the job's (`job_countries`
+  from `Job.location`; `load_applicant(…, job_location=)`). On the list → Yes,
+  and sponsorship Yes only if it's in the later list and the question isn't
+  "currently" only; not on it → No / needs sponsorship, **only once
+  confirmed** — No rests on the list being complete. No country, several with
+  different answers, an ambiguous place ("Georgia", "Europe", "Home Office,
+  DE"), or an EU question when only some EU countries are listed → no answer,
+  the application stops. Open questions ("What is your visa status?") and
+  "authorization" without working (background checks) aren't yes/no ones.
+  Until the list is saved, only Israel is answered, from the old
+  `work_authorized` / `requires_sponsorship` (kept for that; drop them later).
+  The location parser was checked against all 13,716 active jobs: 3% can't
+  be placed, 310 of them have no location. "City, CA" after a city's name is
+  read as the US state unless the city is known elsewhere ("Toronto, CA").
+  The LinkedIn extension (1.6.x) still matches locally (Israel only); for it
+  `check-pending` asks `/linkedin-work-authorisation` for the two values for
+  that job (sponsorship only when "currently" and "in the future" agree), null
+  if the AI service doesn't answer. 1.7.0 should send these questions to
+  `/resolve-answers` instead. The migration (`20261013_add_work_countries`)
+  must be applied before the deploy: the Prisma client reads the new columns.
 - **Claude** may write the answer to an open-ended free-text question ("why
   this company"), grounded in the CV — `claude_may_answer` decides. Never for
   a select, yes/no or factual question.
@@ -557,11 +584,11 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
 ## Outstanding product decisions
 Not bugs; questions that need an answer before the code changes. The site
 is positioned as global and priced in USD, so both are real gaps.
-- **Israel-specific application details.** Profile → Application details
-  asks "Authorized to work in Israel?" and "Expected salary (monthly, NIS)",
-  with a +972 phone placeholder. These answers are typed into real
-  applications. Needs a decision on what to ask instead (per-country work
-  authorization? currency picker?) before rewording.
+- **Israel-specific application details.** Work authorisation is per
+  country since 2026-10-13. Still to do (decided, next PR): salary as amount,
+  currency and period — month ↔ year ×12, never to or from hourly, currency
+  conversion only if the user turns it on (off by default) at an ECB daily
+  rate under 3 days old, otherwise the question stops.
 - **Salaries shown in shekels.** Saved jobs formats `salary_min`/`salary_max`
   with a fixed ₪ sign, whatever the job's country. Needs a currency per job
   (or none) before it's shown to a global audience.

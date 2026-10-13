@@ -2,6 +2,7 @@
 The database and Claude are faked; the rules are the real ones."""
 
 import json
+import sys
 
 import pytest
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ import routes.ats_extension as ext
 APP_ROW = {
     "id": "app-1", "status": "pending_extension", "tailored_cv": "", "cover_letter": "",
     "resolved_answers": None, "title": "Engineer", "company": "Acme",
-    "url": "https://jobs.lever.co/acme/123", "apply_url": None,
+    "url": "https://jobs.lever.co/acme/123", "apply_url": None, "location": "Tel Aviv-Yafo, Israel",
 }
 USER_ROW = {"first_name": "Dana", "last_name": "Levi", "email": "dana@example.com", "phone": "+972 50-234-5678",
             "city": "Tel Aviv", "application_details_confirmed_at": None}
@@ -178,3 +179,40 @@ def test_form_answers_unsupported_ats(setup, monkeypatch):
     r = post(setup, "/form-answers")
     assert r == {"supported": False, "ats": "lever", "form_url": "https://jobs.lever.co/acme/123/apply"}
     assert setup["claude_calls"] == []
+
+
+# Extension 1.6.x on LinkedIn has two yes/no values (/api/apply/check-pending):
+# work authorisation for Israel, and sponsorship for any country. The server
+# works them out from the country list for this job (2026-10-13).
+@pytest.mark.parametrize(
+    "user, location, expected",
+    [
+        # Israeli citizen on a UK visa, list saved: an Israel job.
+        ({"work_countries": ["IL", "GB"], "sponsorship_later_countries": ["GB"], "work_auth_confirmed_at": "x"},
+         "Tel Aviv-Yafo, Israel", {"work_authorized": True, "requires_sponsorship": False}),
+        # A US job: not on the list, so sponsorship is needed.
+        ({"work_countries": ["IL", "GB"], "sponsorship_later_countries": ["GB"], "work_auth_confirmed_at": "x"},
+         "New York, NY", {"work_authorized": True, "requires_sponsorship": True}),
+        # A UK job: allowed now but not later — "currently" and "in the future"
+        # differ, and 1.6.x can't tell them apart: no answer.
+        ({"work_countries": ["IL", "GB"], "sponsorship_later_countries": ["GB"], "work_auth_confirmed_at": "x"},
+         "London, United Kingdom", {"work_authorized": True, "requires_sponsorship": None}),
+        # A job we can't place.
+        ({"work_countries": ["IL"], "work_auth_confirmed_at": "x"}, "Remote",
+         {"work_authorized": True, "requires_sponsorship": None}),
+        # List not saved yet: the old Israel-only answers, on an Israel job only.
+        ({"work_authorized": True, "requires_sponsorship": False, "application_details_confirmed_at": "x"},
+         "Tel Aviv-Yafo, Israel", {"work_authorized": True, "requires_sponsorship": False}),
+        ({"work_authorized": True, "requires_sponsorship": False, "application_details_confirmed_at": "x"},
+         "New York, NY", {"work_authorized": True, "requires_sponsorship": None}),
+        ({}, "Tel Aviv-Yafo, Israel", {"work_authorized": None, "requires_sponsorship": None}),
+    ],
+)
+def test_linkedin_work_authorisation(setup, monkeypatch, user, location, expected):
+    setup["conn"].app_row["location"] = location
+    monkeypatch.setattr(sys.modules[__name__], "USER_ROW", {**USER_ROW, **user})
+    assert post(setup, "/linkedin-work-authorisation") == expected
+
+
+def test_linkedin_work_authorisation_only_for_the_users_open_application(setup):
+    assert post(setup, "/linkedin-work-authorisation", user_id="someone-else") == {"error": "not_found"}
