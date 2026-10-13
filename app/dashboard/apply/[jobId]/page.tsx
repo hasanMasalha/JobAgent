@@ -17,6 +17,7 @@ import {
 } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
 import { countryName } from "@/lib/countries";
+import { formatSalary, legacyMonthlyNis, type SalaryPeriod } from "@/lib/salary";
 import { isVersionAtLeast } from "@/lib/extension-version";
 import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
@@ -72,7 +73,9 @@ interface ApplicationAnswers {
   last_name: string | null;
   phone: string | null;
   city: string | null;
-  expected_salary: string | null;
+  salary_amount: number | null;
+  salary_currency: string | null;
+  salary_period: string | null;
   notice_period: string | null;
   years_of_experience: string | null;
   highest_education: string | null;
@@ -626,7 +629,17 @@ export default function ApplyPage() {
         { label: "Name", value: [answers.first_name, answers.last_name].filter(Boolean).join(" ") },
         { label: "Phone", value: answers.phone ?? "" },
         { label: "City", value: answers.city ?? "" },
-        { label: "Expected salary (monthly, NIS)", value: answers.expected_salary ?? "" },
+        {
+          // The extension (1.6.x) answers only a monthly NIS salary question.
+          label: "Expected salary (for a monthly NIS question)",
+          value: (() => {
+            const s = answers.salary_amount && answers.salary_currency && answers.salary_period
+              ? { amount: answers.salary_amount, currency: answers.salary_currency, period: answers.salary_period as SalaryPeriod }
+              : null;
+            if (!s) return "";
+            return legacyMonthlyNis(s) ? formatSalary(s) : `Not used: your salary is ${formatSalary(s)}`;
+          })(),
+        },
         { label: "Total years of experience", value: answers.years_of_experience ?? "", held: !approved },
         { label: "Highest education", value: answers.highest_education ?? "", held: !approved },
         { label: "Notice period (days)", value: answers.notice_period ?? "", held: !approved },

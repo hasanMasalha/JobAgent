@@ -8,6 +8,7 @@ fields under the same rules.
 import os
 
 from application_answers import ApplicantData
+from exchange_rates import load_rates
 from utils.cv_pdf import resolve_cv_file
 
 
@@ -18,7 +19,8 @@ async def load_applicant(conn, user_id: str, job_location: str | None = None) ->
     about "the country of this job" — and one naming no country — points."""
     profile_row = await conn.fetchrow(
         'SELECT first_name, last_name, email, phone, city, linkedin_url, github_url, '
-        'portfolio_url, "currentCompany", expected_salary, notice_period, years_of_experience, '
+        'portfolio_url, "currentCompany", salary_amount, salary_currency, salary_period, '
+        'salary_convert_currency, notice_period, years_of_experience, '
         'highest_education, work_authorized, requires_sponsorship, willing_to_relocate, '
         'application_details_confirmed_at, work_countries, sponsorship_later_countries, '
         'work_auth_confirmed_at '
@@ -29,11 +31,14 @@ async def load_applicant(conn, user_id: str, job_location: str | None = None) ->
         'SELECT question, answer FROM "EasyApplyAnswer" WHERE user_id = $1',
         user_id,
     )
-    return ApplicantData.from_row(
+    applicant = ApplicantData.from_row(
         dict(profile_row) if profile_row else {},
         [(r["question"], r["answer"]) for r in saved_rows],
         job_location=job_location,
     )
+    if applicant.salary and applicant.salary.convert:
+        applicant.rates = await load_rates(conn)
+    return applicant
 
 
 async def load_cv_row(conn, user_id: str) -> dict | None:

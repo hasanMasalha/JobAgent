@@ -145,6 +145,17 @@ describe("check-pending sends only the user's own answers", () => {
     });
   });
 
+  // 1.6.x types expected_salary only into a monthly NIS question.
+  it.each([
+    [{ salary_amount: 20000, salary_currency: "ILS", salary_period: "month" }, "20000"],
+    [{ salary_amount: 240000, salary_currency: "ILS", salary_period: "year" }, null],
+    [{ salary_amount: 6000, salary_currency: "USD", salary_period: "month" }, null],
+  ])("sends the salary as the old monthly NIS text only when it is that (%o)", async (salary, expected) => {
+    mdb.user.findUnique.mockResolvedValue({ ...UNTOUCHED, ...salary });
+    const { application } = await (await checkPending(get("1.5.0"))).json();
+    expect(application.expected_salary).toBe(expected);
+  });
+
   // ai-service/work_authorisation.py decides both, for this job's country.
   it("asks the AI service for the two work-authorisation values for this application", async () => {
     workAuth({ work_authorized: true, requires_sponsorship: true });

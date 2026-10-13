@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import scrape_runner
+from exchange_rates import fetch_ecb, store_rates
 from pending_release import release_stale_pending
 from active_jobs_fetcher import fetch_and_save_jobs as _fetch_active_jobs
 from arbeitnow_fetcher import fetch_and_save_jobs as _fetch_arbeitnow
@@ -138,6 +139,22 @@ async def _release_stale_pending():
         logger.exception("[scheduler] Releasing stale pending_extension applications failed")
 
 
+async def _refresh_exchange_rates():
+    """The ECB's daily reference rates, for converting an expected salary
+    (exchange_rates.py). A failure keeps the last ones; salary.py stops using
+    them once they're too old."""
+    try:
+        rates = await fetch_ecb()
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            await store_rates(conn, rates)
+        finally:
+            await conn.close()
+        logger.info(f"[scheduler] Exchange rates for {rates.rate_date}: {len(rates.per_eur)} currencies")
+    except Exception:
+        logger.exception("[scheduler] Fetching the ECB exchange rates failed")
+
+
 def start_scheduler():
     from datetime import datetime, timedelta
 
@@ -157,13 +174,21 @@ def start_scheduler():
         max_instances=1,
         next_run_time=datetime.now(UTC) + timedelta(seconds=30),
     )
+    scheduler.add_job(
+        _refresh_exchange_rates,
+        "interval",
+        hours=6,
+        id="exchange_rates",
+        max_instances=1,
+        next_run_time=datetime.now(UTC) + timedelta(seconds=60),
+    )
     # Fire a one-shot recovery check 5 seconds after startup so the event loop is ready
     scheduler.add_job(_recovery_scrape_if_stale, "date",
                       run_date=datetime.now(UTC) + timedelta(seconds=5),
                       id="startup_recovery")
     scheduler.start()
     logger.info("[scheduler] Started — daily pipeline (scrape → Active Jobs DB → Arbeitnow → match) @05:00 UTC, "
-                "stale pending_extension release every 15 min, recovery check in 5s")
+                "stale pending_extension release every 15 min, ECB exchange rates every 6 h, recovery check in 5s")
 
 
 def stop_scheduler():

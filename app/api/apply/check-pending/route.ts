@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { extensionVersionOk, MIN_EXTENSION_VERSION } from "@/lib/extension-version";
 import { refundAutoApplyForApplication } from "@/lib/usage";
 import { pythonFetch } from "@/lib/python-service";
+import { legacyMonthlyNis, type SalaryPeriod } from "@/lib/salary";
 
 // Work authorisation is answered per country (ai-service/work_authorisation.py,
 // since 2026-10-13). The 1.6.x extension still has two yes/no values: Israel,
@@ -129,7 +130,9 @@ export async function GET(request: NextRequest) {
         linkedin_url: true,
         github_url: true,
         portfolio_url: true,
-        expected_salary: true,
+        salary_amount: true,
+        salary_currency: true,
+        salary_period: true,
         notice_period: true,
         years_of_experience: true,
         highest_education: true,
@@ -175,7 +178,13 @@ export async function GET(request: NextRequest) {
       github_url: profile?.github_url ?? null,
       portfolio_url: profile?.portfolio_url ?? null,
       // Work details
-      expected_salary: profile?.expected_salary ?? null,
+      // 1.6.x types this only into a question asking for a monthly NIS
+      // figure, so it's sent only when that's what the user's salary is.
+      expected_salary: legacyMonthlyNis(
+        profile?.salary_amount
+          ? { amount: profile.salary_amount, currency: profile.salary_currency ?? "", period: profile.salary_period as SalaryPeriod }
+          : null,
+      ),
       notice_period: confirmed ? profile?.notice_period ?? null : null,
       years_of_experience: confirmed ? profile?.years_of_experience ?? null : null,
       highest_education: confirmed ? profile?.highest_education ?? null : null,

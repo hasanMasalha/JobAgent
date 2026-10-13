@@ -445,9 +445,10 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   sponsorship, salary, notice, current company, how you heard, location…) are
   answered only from the user's Profile or an `EasyApplyAnswer` they saved for
   that question — the same matching and limits as the extension's
-  `answers.js` (salary monthly NIS, total years only for total experience),
-  and the six Application details only once `application_details_confirmed_at`
-  is set. Work authorisation and sponsorship: per country, below.
+  `answers.js` (total years only for total experience), and the six
+  Application details only once `application_details_confirmed_at` is set.
+  Work authorisation, sponsorship and salary: per country / per currency,
+  below.
 - **Right to work, per country** (since 2026-10-13,
   `ai-service/work_authorisation.py`). Profile → Right to work saves
   `User.work_countries` (ISO codes from `ai-service/data/countries.json`, the
@@ -475,6 +476,27 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   if the AI service doesn't answer. 1.7.0 should send these questions to
   `/resolve-answers` instead. The migration (`20261013_add_work_countries`)
   must be applied before the deploy: the Prisma client reads the new columns.
+- **Expected salary: amount, currency, period** (since 2026-10-13,
+  `ai-service/salary.py`). `User.salary_amount` / `salary_currency` (one of
+  `ai-service/data/currencies.json`: the euro and the ECB's 29) /
+  `salary_period` (year / month / hour), gross, and
+  `salary_convert_currency` (off by default). A question's units come from
+  its label (codes, symbols, words incl. Hebrew; a bare "$" is USD only on a
+  US job; a Hebrew question naming neither is monthly NIS). Month ↔ year ×12;
+  never to or from hourly; another currency only with conversion on, at an
+  ECB rate ≤ `MAX_RATE_AGE_DAYS` (4 — Friday's rate is the latest until
+  Monday 16:00 CET) old, rounded to 1,000 a year / 100 a month. Net or
+  take-home, total compensation / OTE / bonus / equity, day or week rates,
+  "kr", "¥", two currencies → no answer. A text field gets the bare figure
+  when the question states both units, else the figure with its units
+  ("20,000 ILS per month"); a number field only the bare figure; a dropdown
+  of ranges (`option_answer` → `salary_option`) the one range holding it.
+  Rates: `exchange_rates.py`, the scheduler's `exchange_rates` job every 6 h
+  into `"ExchangeRate"` (one row per currency, replaced). Extension 1.6.x gets
+  the old `expected_salary` text only when the salary is ILS per month
+  (`legacyMonthlyNis`). `expected_salary` is kept, unread; the migration
+  (`20261013_add_salary_model`, apply before deploying) copied plain numbers
+  into it as ILS / month.
 - **Claude** may write the answer to an open-ended free-text question ("why
   this company"), grounded in the CV — `claude_may_answer` decides. Never for
   a select, yes/no or factual question.
@@ -584,11 +606,9 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
 ## Outstanding product decisions
 Not bugs; questions that need an answer before the code changes. The site
 is positioned as global and priced in USD, so both are real gaps.
-- **Israel-specific application details.** Work authorisation is per
-  country since 2026-10-13. Still to do (decided, next PR): salary as amount,
-  currency and period — month ↔ year ×12, never to or from hourly, currency
-  conversion only if the user turns it on (off by default) at an ECB daily
-  rate under 3 days old, otherwise the question stops.
+- **Israel-specific application details** — done 2026-10-13: work
+  authorisation per country, salary with currency and period (above). The
+  extension (1.6.x) still matches both locally the old way until 1.7.0.
 - **Salaries shown in shekels.** Saved jobs formats `salary_min`/`salary_max`
   with a fixed ₪ sign, whatever the job's country. Needs a currency per job
   (or none) before it's shown to a global audience.

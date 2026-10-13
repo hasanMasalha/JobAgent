@@ -11,12 +11,12 @@ The rule (decided 2026-10-04, the same as the extension's for facts):
   not submitted (needs_manual, credit refunded).
 
 The Profile matching mirrors chrome-extension/answers.js, including its
-limits: a Profile field answers only the question it was asked as. Profile
-asks "Expected salary (monthly, NIS)", so it doesn't answer an annual salary
-question, and total years don't answer "years of experience with React".
-Work authorisation and sponsorship are answered for the country the question
-or the job is about, from the user's list of countries (work_authorisation.py,
-since 2026-10-13; it was Israel only).
+limits: a Profile field answers only the question it was asked as: total
+years don't answer "years of experience with React". Work authorisation and
+sponsorship are answered for the country the question or the job is about,
+from the user's list of countries (work_authorisation.py); the expected salary
+in the currency and period the question asks for, or not at all (salary.py).
+Both since 2026-10-13: until then they were Israel-only and monthly NIS.
 
 Until 2026-10-04 the ATS filler answered "2" years, work authorisation "Yes",
 salary "Negotiable", notice "Immediate", current company "Self-employed",
@@ -26,6 +26,7 @@ Claude answer anything else.
 import re
 from dataclasses import dataclass, field
 
+from salary import PERIODS, CURRENCIES, Rates, Salary, salary_option, salary_text
 from work_authorisation import WorkAuth, authorisation_answer, job_countries, sponsorship_answer
 
 
@@ -42,7 +43,10 @@ class ApplicantData:
     github_url: str | None = None
     portfolio_url: str | None = None
     current_company: str | None = None
-    expected_salary: str | None = None  # monthly, NIS (Profile)
+    # Expected salary (gross), and the ECB rates when the user allows
+    # converting it (load_applicant fetches them only then).
+    salary: Salary | None = None
+    rates: Rates | None = None
     # The six "Application details": only once the user has confirmed them
     # (application_details_confirmed_at) — they once had database defaults.
     notice_period: str | None = None
@@ -107,7 +111,7 @@ class ApplicantData:
             github_url=text("github_url"),
             portfolio_url=text("portfolio_url"),
             current_company=text("currentCompany"),
-            expected_salary=text("expected_salary"),
+            salary=_salary(row),
             notice_period=text("notice_period") if confirmed else None,
             years_of_experience=text("years_of_experience") if confirmed else None,
             highest_education=text("highest_education") if confirmed else None,
@@ -120,6 +124,13 @@ class ApplicantData:
             job_countries=job_countries(job_location),
             saved_answers={normalize(q): a.strip() for q, a in (saved or []) if a and a.strip()},
         )
+
+
+def _salary(row: dict) -> Salary | None:
+    amount, currency, period = row.get("salary_amount"), row.get("salary_currency"), row.get("salary_period")
+    if not isinstance(amount, int) or amount <= 0 or currency not in CURRENCIES or period not in PERIODS:
+        return None
+    return Salary(amount, currency, period, convert=row.get("salary_convert_currency") is True)
 
 
 def normalize(label: str | None) -> str:
@@ -135,10 +146,16 @@ def saved_answer(label: str, data: ApplicantData) -> str | None:
     return data.saved_answers.get(normalize(label)) or None
 
 
-def text_answer(label: str, data: ApplicantData) -> str | None:
+def is_salary_question(label: str | None) -> bool:
+    return _any(normalize(label), ("salary", "compensation", "wage", "ctc", "שכר"))
+
+
+def text_answer(label: str, data: ApplicantData, numeric: bool = False) -> str | None:
     """A text / number / URL / dropdown answer from the user's Profile.
     None when the user hasn't given one (or it isn't the question the Profile
-    field was asked as). Mirrors jaAnswerForLabel in answers.js."""
+    field was asked as). Mirrors jaAnswerForLabel in answers.js, except for
+    salary and work authorisation (the extension's are still the old rules).
+    `numeric`: a number field, where a salary needs the question's units."""
     lab = normalize(label)
     if not lab:
         return None
@@ -167,11 +184,9 @@ def text_answer(label: str, data: ApplicantData) -> str | None:
                   "recent employer", "current or most recent")):
         return data.current_company
 
-    # Salary: the Profile figure is monthly, in NIS.
-    if _any(lab, ("salary", "compensation", "wage", "ctc", "שכר")):
-        monthly_nis = _any(lab, ("month", "nis", "ils", "₪", "שכר", "חודשי"))
-        other_basis = _any(lab, ("annual", "year", "hour", "usd", "$", "eur", "€", "gbp", "£"))
-        return data.expected_salary if monthly_nis and not other_basis else None
+    # Salary: in the units the question asks for, or nothing (salary.py).
+    if is_salary_question(label):
+        return salary_text(label, data.salary, data.rates, data.job_countries, numeric=numeric)
 
     if _any(lab, ("notice period", "הודעה מוקדמת")):
         return data.notice_period
@@ -219,7 +234,7 @@ def boolean_answer(label: str, data: ApplicantData) -> bool | None:
     return None
 
 
-def user_answer(label: str, data: ApplicantData, choice: bool = False) -> str | None:
+def user_answer(label: str, data: ApplicantData, choice: bool = False, numeric: bool = False) -> str | None:
     """The user's answer to a question, as text: a saved answer for this exact
     question first, then a Profile field. A Profile yes/no only when `choice`
     — the question is a select / radio whose options it can be matched to; in
@@ -228,7 +243,7 @@ def user_answer(label: str, data: ApplicantData, choice: bool = False) -> str | 
     saved = saved_answer(label, data)
     if saved:
         return saved
-    text = text_answer(label, data)
+    text = text_answer(label, data, numeric=numeric)
     if text:
         return text
     if not choice:
@@ -243,6 +258,15 @@ def _contains_words(text: str, words: str) -> bool:
     """`words` appears in `text` as whole words: "no" is in "No, I will not
     require…" but not in "now" or "noted"."""
     return re.search(r"(?<!\w)" + re.escape(words) + r"(?!\w)", text) is not None
+
+
+def option_answer(label: str, options: list[str], data: ApplicantData) -> int:
+    """Which of a select's options is the user's answer, or -1. A salary
+    question's options are usually ranges: the one that holds the figure."""
+    saved = saved_answer(label, data)
+    if not saved and is_salary_question(label):
+        return salary_option(label, options, data.salary, data.rates, data.job_countries)
+    return match_option(options, user_answer(label, data, choice=True))
 
 
 def match_option(options: list[str], answer: str | None) -> int:

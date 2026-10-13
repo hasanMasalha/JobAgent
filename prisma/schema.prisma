@@ -40,7 +40,17 @@ model User {
   notice_period        String?
   work_authorized      Boolean?
   requires_sponsorship Boolean?
+  /// Pre-2026-10-13 "Expected salary (monthly, NIS)" text. Not read any more:
+  /// the migration copied plain numbers into salary_amount (ILS, month).
   expected_salary      String?
+  /// Expected salary, gross: amount, ISO currency (ai-service/data/currencies.json)
+  /// and period (year / month / hour). All three or none. See ai-service/salary.py.
+  salary_amount           Int?
+  salary_currency         String?
+  salary_period           String?
+  /// May JobAgent convert it to another currency (ECB rate)? Off by default:
+  /// a question in another currency then stops for the user.
+  salary_convert_currency Boolean  @default(false)
   years_of_experience  String?
   highest_education    String?
   linkedin_url         String?
@@ -267,4 +277,13 @@ model UserJobInteraction {
   job  Job  @relation(fields: [job_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, job_id])
+}
+
+/// The ECB's daily euro reference rates (ai-service/exchange_rates.py, every
+/// 6 hours), for converting an expected salary. One row per currency.
+model ExchangeRate {
+  currency   String   @id
+  per_eur    Float
+  rate_date  DateTime @db.Date
+  fetched_at DateTime @default(now())
 }

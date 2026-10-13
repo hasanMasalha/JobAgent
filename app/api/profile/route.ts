@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase.server";
 import { phoneProblem } from "@/lib/phone";
 import { db } from "@/lib/db";
 import { parseWorkCountries } from "@/lib/countries";
+import { parseSalary } from "@/lib/salary";
 
 export async function GET(_req: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [cvRows, dbUser] = await Promise.all([
+    const [cvRows, dbUser, rateRows] = await Promise.all([
       db.$queryRaw<{ id: string; clean_summary: string | null; skills_json: string | null; updated_at: Date; raw_text: string }[]>`
         SELECT id, clean_summary, skills_json, updated_at, raw_text
         FROM "CV" WHERE user_id = ${user.id} LIMIT 1
@@ -33,7 +34,10 @@ export async function GET(_req: NextRequest) {
           linkedin_url: true,
           github_url: true,
           portfolio_url: true,
-          expected_salary: true,
+          salary_amount: true,
+          salary_currency: true,
+          salary_period: true,
+          salary_convert_currency: true,
           notice_period: true,
           years_of_experience: true,
           highest_education: true,
@@ -44,6 +48,8 @@ export async function GET(_req: NextRequest) {
           work_auth_confirmed_at: true,
         },
       }),
+      // For the Profile's conversion example only; the AI service reads its own.
+      db.exchangeRate.findMany({ select: { currency: true, per_eur: true, rate_date: true } }),
     ]);
 
     // Run preferences query separately so a missing column never causes 500
@@ -79,7 +85,17 @@ export async function GET(_req: NextRequest) {
       linkedin_url: dbUser?.linkedin_url ?? null,
       github_url: dbUser?.github_url ?? null,
       portfolio_url: dbUser?.portfolio_url ?? null,
-      expected_salary: dbUser?.expected_salary ?? null,
+      // Expected salary, gross (ai-service/salary.py). All three or none.
+      salary_amount: dbUser?.salary_amount ?? null,
+      salary_currency: dbUser?.salary_currency ?? null,
+      salary_period: dbUser?.salary_period ?? null,
+      salary_convert_currency: dbUser?.salary_convert_currency ?? false,
+      exchange_rates: rateRows.length
+        ? {
+            date: rateRows.reduce((d, r) => (r.rate_date < d ? r.rate_date : d), rateRows[0].rate_date),
+            per_eur: Object.fromEntries(rateRows.map((r) => [r.currency, r.per_eur])),
+          }
+        : null,
       // Null when the user has no answer — never a made-up one. The Profile
       // form supplies its own starting values.
       notice_period: dbUser?.notice_period ?? null,
@@ -118,7 +134,7 @@ export async function PATCH(req: NextRequest) {
     const {
       first_name, last_name, phone, city, currentCompany,
       linkedin_url, github_url, portfolio_url,
-      expected_salary, notice_period, years_of_experience,
+      notice_period, years_of_experience,
       highest_education, willing_to_relocate, confirm_application_details,
     } = body;
 
@@ -127,6 +143,21 @@ export async function PATCH(req: NextRequest) {
     const badPhone = phone !== undefined ? phoneProblem(phone) : null;
     if (badPhone) {
       return NextResponse.json({ error: "invalid_phone", message: badPhone }, { status: 400 });
+    }
+
+    // Expected salary: amount, currency and period together, or none.
+    let salary: { salary_amount: number | null; salary_currency: string | null; salary_period: string | null } | null = null;
+    if (body.salary_amount !== undefined) {
+      const parsed = parseSalary(body);
+      if (parsed && "error" in parsed) {
+        return NextResponse.json({ error: "invalid_salary", message: parsed.error }, { status: 400 });
+      }
+      salary = parsed
+        ? { salary_amount: parsed.amount, salary_currency: parsed.currency, salary_period: parsed.period }
+        : { salary_amount: null, salary_currency: null, salary_period: null };
+    }
+    if (body.salary_convert_currency !== undefined && typeof body.salary_convert_currency !== "boolean") {
+      return NextResponse.json({ error: "invalid_salary", message: "Invalid conversion setting." }, { status: 400 });
     }
 
     // Right to work. The old "Authorized to work in Israel?" / sponsorship
@@ -182,7 +213,8 @@ export async function PATCH(req: NextRequest) {
         linkedin_url,
         github_url,
         portfolio_url,
-        expected_salary,
+        ...(salary ?? {}),
+        ...(typeof body.salary_convert_currency === "boolean" ? { salary_convert_currency: body.salary_convert_currency } : {}),
         notice_period,
         years_of_experience,
         highest_education,

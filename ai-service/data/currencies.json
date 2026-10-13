@@ -1,0 +1,125 @@
+{
+ "_comment": "Currencies for Profile → Expected salary: the euro and the ones the European Central Bank publishes a daily reference rate for (ai-service/exchange_rates.py), so any of them can be converted. Read by ai-service/salary.py and lib/salary.ts.",
+ "currencies": [
+  {
+   "code": "ILS",
+   "name": "Israeli shekel"
+  },
+  {
+   "code": "USD",
+   "name": "US dollar"
+  },
+  {
+   "code": "EUR",
+   "name": "Euro"
+  },
+  {
+   "code": "GBP",
+   "name": "British pound"
+  },
+  {
+   "code": "CHF",
+   "name": "Swiss franc"
+  },
+  {
+   "code": "CAD",
+   "name": "Canadian dollar"
+  },
+  {
+   "code": "AUD",
+   "name": "Australian dollar"
+  },
+  {
+   "code": "NZD",
+   "name": "New Zealand dollar"
+  },
+  {
+   "code": "JPY",
+   "name": "Japanese yen"
+  },
+  {
+   "code": "CNY",
+   "name": "Chinese yuan"
+  },
+  {
+   "code": "HKD",
+   "name": "Hong Kong dollar"
+  },
+  {
+   "code": "SGD",
+   "name": "Singapore dollar"
+  },
+  {
+   "code": "INR",
+   "name": "Indian rupee"
+  },
+  {
+   "code": "KRW",
+   "name": "South Korean won"
+  },
+  {
+   "code": "SEK",
+   "name": "Swedish krona"
+  },
+  {
+   "code": "NOK",
+   "name": "Norwegian krone"
+  },
+  {
+   "code": "DKK",
+   "name": "Danish krone"
+  },
+  {
+   "code": "ISK",
+   "name": "Icelandic króna"
+  },
+  {
+   "code": "PLN",
+   "name": "Polish złoty"
+  },
+  {
+   "code": "CZK",
+   "name": "Czech koruna"
+  },
+  {
+   "code": "HUF",
+   "name": "Hungarian forint"
+  },
+  {
+   "code": "RON",
+   "name": "Romanian leu"
+  },
+  {
+   "code": "TRY",
+   "name": "Turkish lira"
+  },
+  {
+   "code": "BRL",
+   "name": "Brazilian real"
+  },
+  {
+   "code": "MXN",
+   "name": "Mexican peso"
+  },
+  {
+   "code": "ZAR",
+   "name": "South African rand"
+  },
+  {
+   "code": "IDR",
+   "name": "Indonesian rupiah"
+  },
+  {
+   "code": "MYR",
+   "name": "Malaysian ringgit"
+  },
+  {
+   "code": "PHP",
+   "name": "Philippine peso"
+  },
+  {
+   "code": "THB",
+   "name": "Thai baht"
+  }
+ ]
+}

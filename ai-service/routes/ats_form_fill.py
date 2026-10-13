@@ -14,7 +14,9 @@ from application_answers import (
     claude_may_answer,
     is_data_processing_consent,
     is_decline_option,
+    is_salary_question,
     match_option,
+    option_answer,
     user_answer,
 )
 from answer_resolver import claude_answer
@@ -868,7 +870,8 @@ async def _fill_lever_questions(
         done = False
         try:
             if answer is not None and kind in ("select", "radio", "checkbox"):
-                idx = match_option(texts, answer)
+                # A salary question's options are ranges (salary.py).
+                idx = option_answer(label, texts, applicant) if is_salary_question(label) else match_option(texts, answer)
                 if idx != -1:
                     value = options[idx]["value"]
                     if kind == "select":
@@ -1412,7 +1415,9 @@ async def _fill_greenhouse_form(
                     "el => Array.from(el.options).map(o => ({value: o.value, text: o.text.trim()}))"
                 )
                 real = [o for o in options if o["value"] != ""]
-                idx = match_option([o["text"] for o in real], answer)
+                texts = [o["text"] for o in real]
+                idx = (option_answer(label_text, texts, applicant) if is_salary_question(label_text)
+                       else match_option(texts, answer))
                 if idx != -1:
                     await q.select_option(value=real[idx]["value"])
                     # select_option() already dispatches native events, but
