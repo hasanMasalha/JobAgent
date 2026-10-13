@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/cn";
 import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 import { RightToWork } from "./RightToWork";
+import { ExpectedSalary, type SalaryValue } from "./ExpectedSalary";
 
 // The LinkedIn connection section is hidden until it's ready for launch.
 // While it is, don't run its check either: /api/linkedin/session-status
@@ -41,7 +42,6 @@ interface EasyApplyDefaults {
   linkedin_url: string;
   github_url: string;
   portfolio_url: string;
-  expected_salary: string;
   notice_period: string;
   years_of_experience: string;
   highest_education: string;
@@ -89,11 +89,15 @@ function ProfileContent() {
   const [defaults, setDefaults] = useState<EasyApplyDefaults>({
     first_name: "", last_name: "", phone: "", city: "", currentCompany: "",
     linkedin_url: "", github_url: "", portfolio_url: "",
-    expected_salary: "", notice_period: "30", years_of_experience: "2",
+    notice_period: "30", years_of_experience: "2",
     highest_education: "Bachelor's Degree",
     willing_to_relocate: false, work_countries: [], sponsorship_later_countries: [],
   });
   const [savingDefaults, setSavingDefaults] = useState(false);
+  // Expected salary (sent as salary_amount / _currency / _period) and the ECB
+  // rates for the conversion example.
+  const [salary, setSalary] = useState<SalaryValue>({ amount: "", currency: "", period: "", convert: false });
+  const [rates, setRates] = useState<{ date: string; per_eur: Record<string, number> } | null>(null);
   // The country list has been saved since it replaced the Israel-only question.
   const [workAuthConfirmed, setWorkAuthConfirmed] = useState(false);
 
@@ -122,7 +126,15 @@ function ProfileContent() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
-      .then((data: Profile & { email_notifications?: boolean; work_auth_confirmed?: boolean } & EasyApplyDefaults) => {
+      .then((data: Profile & EasyApplyDefaults & {
+        email_notifications?: boolean;
+        work_auth_confirmed?: boolean;
+        salary_amount?: number | null;
+        salary_currency?: string | null;
+        salary_period?: string | null;
+        salary_convert_currency?: boolean;
+        exchange_rates?: { date: string; per_eur: Record<string, number> } | null;
+      }) => {
         setProfile(data);
         if (typeof data.email_notifications === "boolean") {
           setEmailNotifications(data.email_notifications);
@@ -136,7 +148,6 @@ function ProfileContent() {
           linkedin_url: data.linkedin_url ?? "",
           github_url: data.github_url ?? "",
           portfolio_url: data.portfolio_url ?? "",
-          expected_salary: data.expected_salary ?? "",
           notice_period: data.notice_period ?? "30",
           years_of_experience: data.years_of_experience ?? "2",
           highest_education: data.highest_education ?? "Bachelor's Degree",
@@ -145,6 +156,13 @@ function ProfileContent() {
           sponsorship_later_countries: data.sponsorship_later_countries ?? [],
         });
         setWorkAuthConfirmed(!!data.work_auth_confirmed);
+        setSalary({
+          amount: data.salary_amount ? String(data.salary_amount) : "",
+          currency: data.salary_currency ?? "",
+          period: data.salary_period ?? "",
+          convert: !!data.salary_convert_currency,
+        });
+        setRates(data.exchange_rates ?? null);
         if (data.preferences) {
           setTitles(data.preferences.titles ?? []);
           setLocation(data.preferences.locations?.[0] ?? "");
@@ -279,13 +297,23 @@ function ProfileContent() {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(defaults),
+        body: JSON.stringify({
+          ...defaults,
+          salary_amount: salary.amount.trim() || null,
+          salary_currency: salary.currency || null,
+          salary_period: salary.period || null,
+          salary_convert_currency: salary.convert,
+        }),
       });
       if (res.status === 400) {
         const data = await res.json().catch(() => ({}));
         if (data.error === "invalid_phone") {
           setPhoneError(data.message);
           showToast("Check your phone number", "error");
+          return;
+        }
+        if (data.error === "invalid_salary") {
+          showToast(data.message, "error");
           return;
         }
         if (data.error === "invalid_work_countries") {
@@ -866,14 +894,6 @@ function ProfileContent() {
                     ))}
                   </Select>
                 </Field>
-                <Field id="default-salary" label="Expected salary (monthly, NIS)">
-                  <Input
-                    inputMode="numeric"
-                    value={defaults.expected_salary}
-                    onChange={(e) => setDefaults({ ...defaults, expected_salary: e.target.value })}
-                    placeholder="20000"
-                  />
-                </Field>
                 <Field id="default-notice" label="Notice period (days)">
                   <Input
                     inputMode="numeric"
@@ -882,6 +902,13 @@ function ProfileContent() {
                     placeholder="30"
                   />
                 </Field>
+              </div>
+            </div>
+
+            <div>
+              <h3 className={groupLabel}>Expected salary</h3>
+              <div className="mt-3">
+                <ExpectedSalary value={salary} onChange={setSalary} rates={rates} />
               </div>
             </div>
 

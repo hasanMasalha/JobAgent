@@ -4,6 +4,7 @@
 and the first option of any unrecognised dropdown."""
 import pytest
 
+from salary import Salary
 from application_answers import (
     ApplicantData,
     boolean_answer,
@@ -18,7 +19,7 @@ from application_answers import (
 FULL = ApplicantData(
     first_name="Dana", last_name="Levi", email="dana@example.com", phone="+972501234567",
     city="Tel Aviv", linkedin_url="https://linkedin.com/in/dana", current_company="Acme",
-    expected_salary="25000", notice_period="30", years_of_experience="6",
+    salary=Salary(25000, "ILS", "month"), notice_period="30", years_of_experience="6",
     # The old Israel-only answers (the country list not saved yet), on a job in Israel.
     highest_education="BSc", work_authorized=True, requires_sponsorship=False,
     job_countries=frozenset({"IL"}),
@@ -106,12 +107,13 @@ def test_work_authorisation_is_for_israel_only(label):
     "label, expected",
     [
         ("Expected monthly salary (NIS)", "25000"),
-        ("Expected salary (annual, USD)", None),
-        ("What are your salary expectations per year?", None),
+        ("Expected salary (annual, NIS)", "300000"),  # month → year is ×12
+        ("Expected salary (annual, USD)", None),  # another currency: not allowed to convert
+        ("What are your salary expectations per year?", "300,000 ILS per year"),  # the user's currency, said
         ("Hourly rate", None),
     ],
 )
-def test_salary_is_monthly_nis_only(label, expected):
+def test_salary_in_the_units_the_question_asks_for(label, expected):
     assert text_answer(label, FULL) == expected
 
 

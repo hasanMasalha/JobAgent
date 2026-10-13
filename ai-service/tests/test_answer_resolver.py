@@ -5,6 +5,7 @@ import pytest
 
 from answer_resolver import Question, plan_answers
 from application_answers import ApplicantData
+from salary import Salary
 
 PROFILE = ApplicantData(
     first_name="Dana",
@@ -13,7 +14,7 @@ PROFILE = ApplicantData(
     phone="+972 50-234-5678",
     city="Tel Aviv",
     linkedin_url="https://linkedin.com/in/dana",
-    expected_salary="25000",
+    salary=Salary(25000, "ILS", "month"),
     years_of_experience="6",
     # The old Israel-only answers (the country list not saved yet), on a job in Israel.
     work_authorized=True,
@@ -59,7 +60,7 @@ def test_saved_answer_for_the_exact_question():
 @pytest.mark.parametrize(
     "label",
     [
-        "What is your expected annual salary in USD?",        # Profile is monthly NIS
+        "What is your expected annual salary in USD?",        # NIS, and converting isn't allowed
         "Years of experience with React",                     # total years don't answer it
         "Are you authorized to work in the United Kingdom?",  # only Israel until the list is saved
         "What is your notice period?",                        # not given

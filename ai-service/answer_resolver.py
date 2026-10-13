@@ -34,6 +34,7 @@ from application_answers import (
     is_data_processing_consent,
     is_decline_option,
     match_option,
+    option_answer,
     normalize,
     saved_answer,
     user_answer,
@@ -197,12 +198,11 @@ def _answer(q: Question, applicant: ApplicantData, cover_letter: str) -> Answer 
 
     if q.kind in ("select", "radio", "multi_select"):
         if is_data_processing_consent(q.label):
-            answer = "I agree"
             source = "consent"
+            idx = match_option(q.options, "I agree")
         else:
-            answer = user_answer(q.label, applicant, choice=True)
             source = _source(q.label, applicant)
-        idx = match_option(q.options, answer)
+            idx = option_answer(q.label, q.options, applicant)
         if idx == -1:
             return None
         if q.kind == "multi_select":
@@ -210,7 +210,7 @@ def _answer(q: Question, applicant: ApplicantData, cover_letter: str) -> Answer 
         return Answer(q.id, source, option=q.options[idx])
 
     if q.kind in ("text", "long_text", "email", "phone", "number", "url"):
-        answer = user_answer(q.label, applicant)
+        answer = user_answer(q.label, applicant, numeric=q.kind == "number")
         if answer is not None:
             return Answer(q.id, _source(q.label, applicant), value=answer)
         if q.kind == "long_text" and cover_letter and "cover letter" in normalize(q.label):

@@ -31,7 +31,7 @@ from application_answers import (
     boolean_answer,
     claude_may_answer,
     is_decline_option,
-    match_option,
+    option_answer,
     normalize,
     saved_answer,
     user_answer,
@@ -108,11 +108,11 @@ def plan(posting: dict, applicant: ApplicantData, cover_letter: str = "") -> tup
                     action = Action(path, "boolean", title, "yes" if flag else "no")
         elif ftype in ("ValueSelect", "MultiValueSelect"):
             options = _options(field)
-            idx = match_option(options, user_answer(title, applicant, choice=True))
+            idx = option_answer(title, options, applicant)
             if idx != -1:
                 action = Action(path, "choice" if ftype == "ValueSelect" else "multi", title, options[idx])
         elif ftype in ("String", "Email", "Number", "LongText"):
-            answer = user_answer(title, applicant)
+            answer = user_answer(title, applicant, numeric=ftype == "Number")
             if answer is None and ftype == "LongText" and cover_letter and "cover letter" in normalize(title):
                 answer = cover_letter
             if answer is not None:
