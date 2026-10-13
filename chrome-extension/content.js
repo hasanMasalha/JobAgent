@@ -699,9 +699,7 @@ async function showQuestionOverlay(question, onAnswer) {
                   border-radius:20px;font-size:12px;font-weight:600">JobAgent</div>
       <span style="font-size:13px;color:#666">needs your help</span>
     </div>
-    <p style="font-size:15px;font-weight:500;color:#111;margin-bottom:16px;line-height:1.5">
-      ${question}
-    </p>
+    <p id="jobagent-question-text" style="font-size:15px;font-weight:500;color:#111;margin-bottom:16px;line-height:1.5"></p>
     <input id="jobagent-answer-input" type="text" placeholder="Type your answer…"
       style="width:100%;padding:10px 12px;border:2px solid #1a2e5e;border-radius:8px;
              font-size:14px;box-sizing:border-box;margin-bottom:10px;outline:none;" />
@@ -720,6 +718,8 @@ async function showQuestionOverlay(question, onAnswer) {
         cursor:pointer;color:#666;">Skip</button>
     </div>
   `
+  // The question is LinkedIn's label text: set as text, never as HTML.
+  overlay.querySelector('#jobagent-question-text').textContent = question
 
   overlayHost().appendChild(overlay)
   const input = document.getElementById('jobagent-answer-input')

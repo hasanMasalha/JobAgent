@@ -43,7 +43,7 @@ function setup({
 
   const chrome = {
     runtime: {
-      getManifest: () => ({ version: "1.6.0" }),
+      getManifest: () => ({ version: "1.6.1" }),
       getURL: (p: string) => `chrome-extension://ext/${p}`,
       onMessage: { addListener: (l: Listener) => listeners.message.push(l) },
       onMessageExternal: { addListener: (l: Listener) => listeners.external.push(l) },
@@ -234,7 +234,7 @@ describe("background.js — Greenhouse applications", () => {
     });
     // Every call carries the extension token and version.
     for (const c of t.calls) {
-      expect(c.init?.headers).toMatchObject({ Authorization: "Bearer tok", "X-JobAgent-Extension-Version": "1.6.0" });
+      expect(c.init?.headers).toMatchObject({ Authorization: "Bearer tok", "X-JobAgent-Extension-Version": "1.6.1" });
     }
   });
 

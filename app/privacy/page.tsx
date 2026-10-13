@@ -16,7 +16,7 @@ export default function PrivacyPage() {
     <LegalFrame>
       <div className="mb-10">
         <h1 className="font-serif text-title-page text-ink">Privacy Policy</h1>
-        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension (version 1.6.0) — Last updated: 12 October 2026</p>
+        <p className="mt-2 text-body-sm text-ink-subtle">JobAgent Chrome Extension (version 1.6.1) — Last updated: 13 October 2026</p>
       </div>
 
       <Section title="What the Extension Does">
@@ -34,7 +34,8 @@ export default function PrivacyPage() {
           items={[
             "A sign-in token for JobAgent, so the extension can make requests for your account. It expires after 14 days and is renewed when you visit jobagent.uk.",
             "Your JobAgent user ID and email, to show your account in the popup and find your pending applications.",
-            "The applications you queued from JobAgent and how far through them it is, so it can fill them one at a time.",
+            "The address of the JobAgent site you signed in on, so its requests go there.",
+            "The LinkedIn applications you queued from JobAgent, how far through them it is and the ID of the LinkedIn tab it opened for them, so it can fill them one at a time.",
             "For a Greenhouse application in progress: its ID, the tab it opened, how far it got and, once it clicks Submit, the text of the form page from just before — so it can tell Greenhouse's confirmation from text that was already on the page. Deleted when the application finishes.",
           ]}
         />
@@ -51,6 +52,20 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
+      <Section title="What the Extension Reads on the Page">
+        <p>
+          To fill in a form, the extension reads that form in the page: its field labels and
+          options, which fields are required, the error messages the form shows and the
+          page&apos;s headings. This happens on your device, on LinkedIn job pages and in the
+          Greenhouse tab it opened for you. Only what&apos;s listed under &ldquo;What Is Sent to
+          JobAgent&rdquo; leaves your device.
+        </p>
+        <p>
+          For a Greenhouse application it also checks the address of the tab it opened, to tell
+          whether the form or Greenhouse&apos;s confirmation is showing. It doesn&apos;t look at the
+          address of any other tab.
+        </p>
+      </Section>
       <Section title="What Is Sent to JobAgent">
         <p>The extension sends data only to jobagent.uk:</p>
         <div className="overflow-x-auto">
@@ -65,7 +80,7 @@ export default function PrivacyPage() {
             <tbody className="divide-y divide-line">
               <tr>
                 <Td>Your answers to application questions the extension doesn&apos;t recognise (the question and your answer)</Td>
-                <Td>When you answer such a question in an Easy Apply form</Td>
+                <Td>When you answer such a question in the JobAgent box that appears over an Easy Apply form, and only if &ldquo;Remember this answer for future applications&rdquo; is ticked. The box starts ticked; untick it to use the answer for this application only.</Td>
                 <Td>Saved to your JobAgent account and reused on later applications. You can see, edit or delete them in Profile → Saved answers.</Td>
               </tr>
               <tr>
@@ -83,6 +98,11 @@ export default function PrivacyPage() {
                 <Td>With every request to JobAgent</Td>
                 <Td>So JobAgent can refuse to work with a version that has a known problem.</Td>
               </tr>
+              <tr>
+                <Td>Your JobAgent sign-in token (described above)</Td>
+                <Td>With every request to JobAgent</Td>
+                <Td>So JobAgent knows the request comes from your account.</Td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -93,7 +113,8 @@ export default function PrivacyPage() {
           To fill a form you started from JobAgent, the extension downloads, for that application
           only: your account email, the details you entered in Profile → Application details
           (name, phone, city, profile links, experience, education, notice period, expected salary
-          and eligibility answers), the skills from your CV, and your saved answers. It uses them
+          and eligibility answers — the city is the one you typed in Profile; the extension
+          doesn&apos;t use your device&apos;s location), the skills from your CV, and your saved answers. It uses them
           to fill the form in your browser and does not keep them after the application. It fills
           in a question only with an answer you have given; if LinkedIn requires a question you
           haven&apos;t answered, it stops without submitting. It does not upload a CV or a cover
@@ -127,7 +148,7 @@ export default function PrivacyPage() {
             <><strong className="font-semibold text-ink">Storage:</strong> for the data listed under &ldquo;What Is Stored on Your Device&rdquo;.</>,
             <><strong className="font-semibold text-ink">Notifications:</strong> to tell you when an application is submitted, needs you to finish it, or is paused.</>,
             <><strong className="font-semibold text-ink">Access to greenhouse.io (optional):</strong> asked for the first time you apply to a Greenhouse job, and used only in the tab the extension opens for that application. You can remove it in Chrome&apos;s extension settings.</>,
-            <><strong className="font-semibold text-ink">Active tab and scripting:</strong> to fill in the form on the LinkedIn page or Greenhouse form you are applying on.</>,
+            <><strong className="font-semibold text-ink">Scripting:</strong> to run the extension&apos;s own Greenhouse script in the tab it opened for your application, once you&apos;ve allowed access to greenhouse.io. LinkedIn forms are filled by the extension&apos;s scripts for LinkedIn job pages.</>,
           ]}
         />
       </Section>

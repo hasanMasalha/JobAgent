@@ -20,18 +20,6 @@ async function getServerUrl() {
   return stored.serverUrl || 'https://jobagent.uk'
 }
 
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-]
-
-function getRandomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
-}
-
 const MAX_APPLIES_PER_HOUR = 12
 
 // Extract LinkedIn job ID from a URL, handling two formats:
@@ -91,7 +79,7 @@ async function releaseUnprocessed() {
     try {
       const res = await fetch(`${url}/api/applications/update-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
+        headers: { 'Content-Type': 'application/json', ...versionHeader, ...authHeader(stored) },
         body: JSON.stringify({ applicationId: id, status: 'manual' }),
       })
       if (res.ok) released++
@@ -212,12 +200,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (message.type === 'STORE_PENDING_APPLICATION') {
-    chrome.storage.local.set({ pendingApplication: message.application })
-    sendResponse({ success: true })
-    return true
-  }
-
   if (message.type === 'GET_PENDING_APPLICATION') {
     // Fetch from the API — background.js is exempt from page CSP and can reach the server.
     // Passes jobId or jobUrl so check-pending can look up the pending application.
@@ -236,7 +218,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[JobAgent bg] calling:', fullUrl)
 
         const res = await fetch(fullUrl, {
-          headers: { 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) }
+          headers: { ...versionHeader, ...authHeader(stored) }
         })
         const data = await res.json()
         console.log('[JobAgent bg] check-pending response:', data)
@@ -286,7 +268,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const serverUrl = await getServerUrl()
         await fetch(`${serverUrl}/api/apply/answers`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
+          headers: { 'Content-Type': 'application/json', ...versionHeader, ...authHeader(stored) },
           body: JSON.stringify({
             question: message.question,
             answer: message.answer,
@@ -337,7 +319,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (sender.tab?.id) await chrome.storage.session.remove(`applyStep:${sender.tab.id}`)
         const res = await fetch(`${url}/api/applications/update-status`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': getRandomUserAgent(), ...versionHeader, ...authHeader(stored) },
+          headers: { 'Content-Type': 'application/json', ...versionHeader, ...authHeader(stored) },
           body: JSON.stringify({
             applicationId: message.applicationId,
             status,
@@ -745,16 +727,6 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       await processNextInQueue()
       sendResponse({ success: true })
     })()
-    return true
-  }
-
-  // Sent from the apply page when user confirms — stores application data so
-  // content.js can pick it up without needing cross-site cookies
-  if (message.type === 'STORE_PENDING_APPLICATION') {
-    chrome.storage.local.set({ pendingApplication: message.application }, () => {
-      console.log('[JobAgent bg] stored pending application:', message.application?.id)
-      sendResponse({ success: true })
-    })
     return true
   }
 })
