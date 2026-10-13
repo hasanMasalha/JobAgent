@@ -319,4 +319,26 @@ describe("extension release safety", () => {
     const src = fs.readFileSync(path.join(__dirname, "../../chrome-extension/content.js"), "utf8");
     expect(src).toMatch(/^const JA_DRY_RUN = false$/m);
   });
+
+  // Each of these is declared to the Chrome Web Store (1.6.1): no permission
+  // it doesn't use, no disguised requests, no page text run as HTML.
+  const ext = (f: string) => fs.readFileSync(path.join(__dirname, "../../chrome-extension", f), "utf8");
+
+  it("requests no activeTab permission (nothing uses it)", () => {
+    for (const f of ["manifest.json", "manifest.prod.json"]) {
+      expect(JSON.parse(ext(f)).permissions).not.toContain("activeTab");
+    }
+  });
+
+  it("sends no made-up User-Agent", () => {
+    for (const f of ["background.js", "content.js", "greenhouse.js", "popup.js", "auth-sync.js"]) {
+      expect(ext(f)).not.toMatch(/User-Agent|Mozilla\/5\.0/);
+    }
+  });
+
+  it("never puts page text into innerHTML", () => {
+    for (const f of ["content.js", "greenhouse.js", "answers.js"]) {
+      for (const m of Array.from(ext(f).matchAll(/innerHTML\s*=\s*`([\s\S]*?)`/g))) expect(m[1]).not.toContain("${");
+    }
+  });
 });

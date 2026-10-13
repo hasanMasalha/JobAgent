@@ -67,7 +67,7 @@ DODO_UNLIMITED_MONTHLY_PRODUCT_ID    Dodo product ID, Unlimited plan / monthly
 DODO_UNLIMITED_ANNUAL_PRODUCT_ID     Dodo product ID, Unlimited plan / annual
 NEXT_PUBLIC_GREENHOUSE_VIA_EXTENSION  "true" = Greenhouse applies go through the extension
                            (stage 3). A GitHub repo *variable*, passed as a Docker build
-                           arg — changing it needs a redeploy. Off until 1.6.0 is live.
+                           arg — changing it needs a redeploy. Off until 1.6.1 is live.
 EXTENSION_TOKEN_SECRET     ≥32 random chars; signs the Chrome extension's API token
                            (lib/extension-token.ts). Unset = extension API calls fail closed
 
@@ -346,12 +346,27 @@ to it. It lists what the extension stores (`chrome.storage.local`), sends
 (saved answers, application outcomes with the reason one stopped — for
 Greenhouse with field labels, the form's errors or the page's URL and
 headings, never answers — and the questions an application stopped on, a
-Greenhouse form's phone-country list, its version number) and
+Greenhouse form's phone-country list, its version number and sign-in token),
+what it reads on the page (form labels, options, errors, headings; the
+Greenhouse tab's address) and
 receives (account email, Application details, CV skills, saved answers; for
 Greenhouse since 1.6.0 also the form's answers, the CV file and the cover
 letter — LinkedIn still gets no CV and no cover letter).
-Any change to what `chrome-extension/` stores or sends must update it in
-the same PR — the Store reviews the listing against it.
+Any change to what `chrome-extension/` stores, reads or sends must update it
+in the same PR — the Store reviews the listing against it, and the Store's
+privacy form (permission justifications, data-usage boxes: PII,
+authentication, location, web history, website content) says the same.
+- **The Store zip is built from `manifest.prod.json`** (renamed to
+  `manifest.json` inside the zip), never the dev `manifest.json`.
+  `npm run package:extension` zips the dev one; the 1.3.0 upload carried it
+  (name "JobAgent DEV", localhost, `tabs`/`windows`). 1.6.0 was submitted and
+  withdrawn unpublished; 1.6.1 (2026-10-13) dropped the unused `activeTab`,
+  the fake User-Agent headers on calls to jobagent.uk, and dead
+  `STORE_PENDING_APPLICATION` code, and sets the LinkedIn question box's text
+  with `textContent` (it was put into `innerHTML`). A test checks all three.
+- **To decide:** `humanType` (`content.js`, LinkedIn) still waits a random
+  100–300 ms before and while typing an answer — the kind of "human" pacing
+  ruled out for Greenhouse (no delays, a paste-like fill). Kept for now.
 
 ## LinkedIn automation consent
 - Before the extension is installed or used, the user sees a risk notice at
@@ -637,7 +652,8 @@ BambooHR · 7 server-side submit switched off, then deleted.
   does. The extension reports with `update-status` (`manual` may carry
   `missingQuestions`, stored on `Application.missing_questions`). Loading the user's answers and
   CV is shared with `/ats-apply` (`ai-service/applicant_store.py`).
-- **Stage 3, extension side** (1.6.0, not released). `START_ATS_APPLY
+- **Stage 3, extension side** (1.6.0; first released as 1.6.1, which
+  `MIN_ATS_EXTENSION_VERSION` 1.6.0 accepts). `START_ATS_APPLY
   {applicationId}` (external message; answered at once — the site refunds if
   there's no `success: true` within 5s). One application at a time
   (`atsApply` in `chrome.storage.local`: `permission → filling → submitted
@@ -726,8 +742,8 @@ BambooHR · 7 server-side submit switched off, then deleted.
 - Still to decide: the scrapers send a Windows Chrome user agent to public
   listing pages (`linkedin_fetcher.py` also hides the automation flag), and
   `linkedin_auth.py` `_LINKEDIN_HEADERS` checks the user's LinkedIn session
-  with one. The extension's `background.js` rotates fake user agents on calls
-  to our own server.
+  with one. (The extension's fake user agents on calls to our own server were
+  removed in 1.6.1.)
 
 ## Playwright / browser automation caveats
 - **ATS form filling runs at most `ATS_APPLY_MAX_BROWSERS` (default 2) at
