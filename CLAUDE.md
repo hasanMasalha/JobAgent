@@ -912,6 +912,22 @@ npm run lint
 
 `_`-prefixed variables are intentionally unused in both configs.
 
+## Python dependencies are exact
+`ai-service/requirements.txt` pins every direct dependency (`==`), and
+`ai-service/constraints.txt` pins the whole tree (torch, transformers,
+numpy, pydantic…). The Dockerfile and CI install
+`-r requirements.txt -c constraints.txt`. Both were read off the production
+container on 2026-11-25 (`pip freeze`; image built 2026-10-13). Until then
+everything but ruff floated, so every image build took the newest of
+everything: python-jobspy 1.4 removed `Country.from_string` and the next
+build would have broken the daily scrape (#131).
+- **Upgrading is a change of its own:** bump the version in both files
+  (and any transitive ones it needs) and let CI run the suite on it. A new
+  dependency goes in both files too.
+- Not pinned yet: the base image (`python:3.11-slim`, so the patch release
+  and Debian packages move) and the Next.js side's `package.json` ranges
+  (`package-lock.json` holds them for `npm ci`).
+
 ## Naming conventions
 - API routes: /app/api/[resource]/route.ts
 - Python routes: /ai-service/routes/[resource].py

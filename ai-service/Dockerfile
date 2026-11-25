@@ -31,9 +31,10 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy and install Python dependencies — exact versions, the whole tree
+# (constraints.txt), so a rebuild installs what ran before.
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Install Playwright browsers (Chromium only)
 RUN playwright install chromium
