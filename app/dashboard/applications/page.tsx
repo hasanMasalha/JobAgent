@@ -21,6 +21,7 @@ import {
 import { statusMeta } from "@/lib/application-status";
 import { questionKey } from "@/lib/question-key";
 import { cn } from "@/lib/cn";
+import { downloadFile } from "@/lib/download-file";
 import { GOOGLE_CALENDAR_ENABLED } from "@/lib/features";
 
 interface Application {
@@ -268,22 +269,7 @@ export default function ApplicationsPage() {
   async function handleDownloadCV(id: string) {
     setDownloading(id);
     try {
-      const res = await fetch(`/api/apply/${id}/download-cv`);
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error ?? "Download failed");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const cd = res.headers.get("content-disposition") ?? "";
-      const match = cd.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? "CV_tailored.docx";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadFile(`/api/apply/${id}/download-cv`, "CV_tailored.pdf");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Download failed", "error");
     } finally {

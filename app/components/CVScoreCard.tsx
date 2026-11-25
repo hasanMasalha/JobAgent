@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Badge, Button, CheckIcon, CloseIcon, Notice, ScoreRing, Spinner, type BadgeTone } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
+import type { CvFormat } from "@/lib/cv-file";
+import { downloadFile } from "@/lib/download-file";
 
 interface Improvement {
   issue: string;
@@ -27,7 +29,7 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [cvId, setCvId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<CvFormat | null>(null);
 
   // Escape closes, except while Claude is rewriting (closing then would hide the result).
   useEffect(() => {
@@ -52,21 +54,16 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
     }
   }
 
-  async function handleDownload() {
+  async function handleDownload(format: CvFormat) {
     if (!cvId) return;
-    setDownloading(true);
+    setErrorMsg("");
+    setDownloading(format);
     try {
-      const res = await fetch(`/api/cv/download-generated?cv_id=${cvId}`);
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Improved_CV.docx";
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadFile(`/api/cv/download-generated?cv_id=${cvId}&format=${format}`, `Improved_CV.${format}`);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Download failed");
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -105,9 +102,13 @@ function ImproveModal({ onClose }: { onClose: (cvId?: string) => void }) {
         {state === "done" && (
           <>
             <Notice tone="success" className="mt-4">Your CV has been improved and saved.</Notice>
+            {errorMsg && <Notice tone="danger" className="mt-3">{errorMsg}</Notice>}
             <div className="mt-6 space-y-2">
-              <Button size="lg" block onClick={handleDownload} disabled={downloading} loading={downloading}>
-                {downloading ? "Preparing…" : "Download improved CV (.docx)"}
+              <Button size="lg" block onClick={() => handleDownload("pdf")} disabled={downloading !== null} loading={downloading === "pdf"}>
+                {downloading === "pdf" ? "Preparing…" : "Download improved CV (PDF)"}
+              </Button>
+              <Button size="lg" variant="ghost" block onClick={() => handleDownload("docx")} disabled={downloading !== null} loading={downloading === "docx"}>
+                {downloading === "docx" ? "Preparing…" : "Word (.docx)"}
               </Button>
               <Button size="lg" variant="secondary" block onClick={() => onClose(cvId ?? undefined)}>Close</Button>
             </div>

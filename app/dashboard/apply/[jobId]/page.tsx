@@ -21,6 +21,8 @@ import { formatSalary, legacyMonthlyNis, type SalaryPeriod } from "@/lib/salary"
 import { isVersionAtLeast } from "@/lib/extension-version";
 import { EXTENSION_ID, extensionVersion } from "@/lib/extension-client";
 import { linkedInSetupHref } from "@/lib/linkedin-consent";
+import type { CvFormat } from "@/lib/cv-file";
+import { downloadFile } from "@/lib/download-file";
 import FormAnswers from "./FormAnswers";
 
 
@@ -131,7 +133,7 @@ export default function ApplyPage() {
   const [coverLetter, setCoverLetter] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<{ status: string; message: string } | null>(null);
-  const [downloadingCv, setDownloadingCv] = useState(false);
+  const [downloadingCv, setDownloadingCv] = useState<CvFormat | null>(null);
   const [bgStatus, setBgStatus] = useState<string | null>(null);
   const [bgTimedOut, setBgTimedOut] = useState(false);
   const [manualUrl, setManualUrl] = useState<string | null>(null);
@@ -202,30 +204,16 @@ export default function ApplyPage() {
     setAnswers((a) => (a ? { ...a, application_details_confirmed: true, work_auth_confirmed: a.work_countries.length > 0 } : a));
   }
 
-  async function handleDownloadCv() {
+  // PDF by default; Word for a job site that asks for it.
+  async function handleDownloadCv(format: CvFormat = "pdf") {
     if (!data) return;
-    setDownloadingCv(true);
+    setDownloadingCv(format);
     try {
-      const res = await fetch(`/api/apply/${data.application_id}/download-cv`);
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error ?? `Download failed (${res.status})`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      a.download = match?.[1] ?? "CV_tailored.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadFile(`/api/apply/${data.application_id}/download-cv?format=${format}`, `CV_tailored.${format}`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Download failed", "error");
     } finally {
-      setDownloadingCv(false);
+      setDownloadingCv(null);
     }
   }
 
@@ -459,9 +447,9 @@ export default function ApplyPage() {
         </Button>
       </div>
       <Textarea readOnly value={coverLetter} rows={9} className="mt-3 resize-none bg-surface-sunken" aria-label="Your cover letter" />
-      <Button size="sm" variant="ghost" className="mt-2" onClick={handleDownloadCv} disabled={downloadingCv}>
+      <Button size="sm" variant="ghost" className="mt-2" onClick={() => handleDownloadCv()} disabled={downloadingCv !== null}>
         <DownloadIcon className="h-3.5 w-3.5" />
-        {downloadingCv ? "Preparing…" : "Download the tailored CV"}
+        {downloadingCv ? "Preparing…" : "Download the tailored CV (PDF)"}
       </Button>
     </div>
   );
@@ -767,9 +755,9 @@ export default function ApplyPage() {
               <Button variant="secondary" size="sm" onClick={() => setShowCv((v) => !v)} aria-expanded={showCv} aria-controls="tailored-cv">
                 {showCv ? "Hide" : "Show CV"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleDownloadCv} disabled={downloadingCv}>
+              <Button variant="ghost" size="sm" onClick={() => handleDownloadCv()} disabled={downloadingCv !== null}>
                 <DownloadIcon className="h-3.5 w-3.5" />
-                {downloadingCv ? "Preparing…" : "Download"}
+                {downloadingCv ? "Preparing…" : "Download PDF"}
               </Button>
             </div>
           </div>
@@ -803,9 +791,12 @@ export default function ApplyPage() {
           <div className="mt-5 flex flex-col gap-2">
             {isDownloadMode ? (
               <>
-                <Button size="lg" block onClick={handleDownloadCv} disabled={downloadingCv} loading={downloadingCv}>
+                <Button size="lg" block onClick={() => handleDownloadCv("pdf")} disabled={downloadingCv !== null} loading={downloadingCv === "pdf"}>
                   <DownloadIcon className="h-4 w-4" />
-                  {downloadingCv ? "Preparing…" : "Download CV"}
+                  {downloadingCv === "pdf" ? "Preparing…" : "Download CV (PDF)"}
+                </Button>
+                <Button size="lg" variant="ghost" block onClick={() => handleDownloadCv("docx")} disabled={downloadingCv !== null} loading={downloadingCv === "docx"}>
+                  {downloadingCv === "docx" ? "Preparing…" : "Word (.docx), if the form asks for it"}
                 </Button>
                 <a href={d.job_url} target="_blank" rel="noopener noreferrer" className={buttonStyles({ variant: "secondary", size: "lg", block: true })}>
                   View job <span aria-hidden="true">↗</span>

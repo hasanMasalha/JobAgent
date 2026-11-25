@@ -17,7 +17,7 @@ jest.mock("@/lib/email", () => ({
   sendNeedsManualEmail: jest.fn(),
   sendDailyMatchEmail: jest.fn(),
 }));
-jest.mock("@/lib/generate-cv", () => ({ generateCVDocx: jest.fn() }));
+jest.mock("@/lib/cv-file", () => ({ renderCvFile: jest.fn() }));
 
 import { db } from "@/lib/db";
 import { isInternalRequest } from "@/lib/internal-auth";

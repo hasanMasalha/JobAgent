@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
-import { generateCVDocx } from "@/lib/generate-cv";
+import { attachmentDisposition } from "@/lib/content-disposition";
+import { cvDisplayName, cvFormat, renderCvFile } from "@/lib/cv-file";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { applicationId: string } }
 ) {
   try {
@@ -32,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    const { tailored_cv, job_title } = rows[0];
+    const { tailored_cv } = rows[0];
 
     if (!tailored_cv) {
       return NextResponse.json(
@@ -46,22 +47,14 @@ export async function GET(
     `;
     const hyperlinks = JSON.parse(cvRows[0]?.hyperlinks_json ?? "[]");
 
-    const buffer = await generateCVDocx(tailored_cv, job_title, hyperlinks);
+    // PDF unless the user asked for Word (?format=docx).
+    const file = await renderCvFile(tailored_cv, cvFormat(req.nextUrl.searchParams.get("format")), hyperlinks);
+    const filename = `${cvDisplayName(tailored_cv, user.email)}_CV.${file.extension}`;
 
-    const nameFromCv = (tailored_cv.split("\n").find((l: string) => l.trim()) ?? "")
-      .replace(/[^a-zA-Z0-9 ]/g, "")
-      .trim();
-    const nameFromEmail = (user.email ?? "").split("@")[0];
-    const displayName = (nameFromCv || nameFromEmail || "CV")
-      .replace(/\s+/g, "_")
-      .slice(0, 60);
-    const filename = `${displayName}_CV.docx`;
-
-    return new Response(new Uint8Array(buffer), {
+    return new Response(new Uint8Array(file.body), {
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": file.contentType,
+        "Content-Disposition": attachmentDisposition(filename),
       },
     });
   } catch (err) {

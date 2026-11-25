@@ -4,7 +4,7 @@ import {
   sendApplicationConfirmationEmail,
   sendNeedsManualEmail,
 } from "@/lib/email";
-import { generateCVDocx } from "@/lib/generate-cv";
+import { renderCvFile, type CvFile } from "@/lib/cv-file";
 import { isInternalRequest } from "@/lib/internal-auth";
 
 // Only the AI service calls this (X-Internal-Key). There used to be a
@@ -64,8 +64,16 @@ export async function POST(req: NextRequest) {
           SELECT hyperlinks_json FROM "CV" WHERE user_id = ${row.user_id} LIMIT 1
         `;
         const hyperlinks = JSON.parse(cvRows[0]?.hyperlinks_json ?? "[]");
-        const buffer = await generateCVDocx(row.tailored_cv, row.job_title, hyperlinks);
-        cvAttachment = { filename: `${row.company}_${row.job_title}_CV.docx`.replace(/\s+/g, "_"), content: buffer };
+        // The PDF, as downloads get; Word if the AI service can't render it,
+        // so the email still goes out with the CV.
+        let file: CvFile;
+        try {
+          file = await renderCvFile(row.tailored_cv, "pdf", hyperlinks);
+        } catch (err) {
+          console.error("[email/send-application-confirmation] CV PDF failed, attaching Word", err);
+          file = await renderCvFile(row.tailored_cv, "docx", hyperlinks);
+        }
+        cvAttachment = { filename: `${row.company}_${row.job_title}_CV.${file.extension}`.replace(/\s+/g, "_"), content: file.body };
       }
       await sendNeedsManualEmail({
         userEmail: row.user_email,
