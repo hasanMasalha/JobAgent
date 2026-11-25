@@ -65,7 +65,7 @@ Languages: ${skillsInfo.languages?.join(", ") || "(none)"}
 ${projectLines ? `Projects:\n${projectLines}` : ""}
 
 Instructions:
-- Start with the candidate's full name on the first line, then contact info on the second line (email | phone | location${personal.linkedin ? " | LinkedIn" : ""}${personal.portfolio ? " | Portfolio" : ""})
+- Start with the candidate's full name on the first line, ${personal.title?.trim() ? `then the target role exactly as "${personal.title.trim()}" on the second line (the CV shows it under the name), then contact info on the third line` : "then contact info on the second line"} (email | phone | location${personal.linkedin ? " | LinkedIn" : ""}${personal.portfolio ? " | Portfolio" : ""})
 - Write a 2-3 sentence professional summary tailored to "${personal.title}"
 ${expLines ? "- For each job: write 3-5 impactful bullet points using strong action verbs and quantified achievements where possible" : "- Do NOT include a Work Experience section at all — the candidate has no work experience"}
 - Use these exact section headers (plain text, no markdown): Summary${expLines ? ", Work Experience" : ""}, Education, Skills, Languages${projectLines ? ", Projects" : ""}

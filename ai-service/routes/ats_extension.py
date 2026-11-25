@@ -31,6 +31,7 @@ from form_questions import form_questions
 from application_answers import normalize
 from routes.ats_submit import _detect_ats
 from work_authorisation import authorised, needs_sponsorship
+from utils.cv_pdf import UnsupportedScriptError
 
 router = APIRouter()
 
@@ -191,7 +192,11 @@ async def ats_package_cv(req: ApplicationRef):
     finally:
         await conn.close()
 
-    resolved = application_cv_file(app["tailored_cv"], cv_row, applicant.first_name, applicant.last_name)
+    try:
+        resolved = application_cv_file(app["tailored_cv"], cv_row, applicant.first_name, applicant.last_name)
+    except UnsupportedScriptError:
+        # Letters the PDF can't set: no file rather than one with boxes.
+        return {"error": "cv_unavailable", "reason": "unsupported_script"}
     if resolved is None:
         return {"error": "cv_unavailable"}
     cv_bytes, filename = resolved

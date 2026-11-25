@@ -827,8 +827,75 @@ BambooHR · 7 server-side submit switched off, then deleted.
   fetched via `next/font/google` — a Google Fonts outage must not break
   the Docker build.
 - **Known inconsistency:** the logo (`public/logo.png`) is a brighter royal
-  blue than the brand navy `#1B3A5C` used in the UI and generated CVs.
-  Left as is for now; revisit with a recoloured logo.
+  blue than the brand navy `#1B3A5C` used in the UI. (Generated CVs use
+  their own accent, `#2C5F7C`, since 2026-10-14.)
+
+## Generated CV (PDF default, Word on request)
+Redesigned 2026-10-14: single column, Public Sans, one accent `#2C5F7C`
+(only the role line under the name and the section labels), 2pt rule under
+the header, dates right-aligned on the title's line, A4, order Summary,
+Experience, Education, Skills, then Projects and the rest. Only ever for
+Claude-authored text (tailored / generated), never a user's own upload.
+- **PDF = `ai-service/utils/cv_pdf.py`** — what ATS applications submit and
+  the default download (`POST /render-cv-pdf`, via `lib/cv-file.ts`). The
+  download routes and the needs-manual email serve PDF; `?format=docx` gives
+  Word (`lib/generate-cv.ts`). The email falls back to Word if the AI
+  service can't render.
+- **Every choice below was checked against PyMuPDF, pdfminer, pypdf and
+  pdftotext** (what resume parsers read PDFs with); tests pin them:
+  - Fonts embedded (`ai-service/fonts/`, OFL, fsType 0). Real Unicode now
+    extracts — the old ASCII folding is gone.
+  - The date's gap is one space glyph stretched with horizontal scaling.
+    A plain jump to the right margin made pdfminer file the date after the
+    role's first bullet (why dates used to be inline).
+  - Section labels use `PublicSansTracked-Bold.ttf`, Bold with the 0.18em
+    tracking in its advance widths (`fonts/make_tracked_font.py`). Tracking
+    as character spacing extracts as "E X P E R I E N C E" above ~0.08em.
+  - The bullet is part of the paragraph text, not reportlab's `bulletText`
+    (that extracts on a line of its own).
+- Spacing is fixed; a CV that spills onto an extra page is re-rendered with
+  tighter gaps (never smaller type) and that one kept only if it saves the
+  page. A role's title keeps its first line(s) and its last two lines stay
+  together; no running header/footer (it would land mid-text).
+- **Role line**: rendered only when the CV text has one (short line under
+  the name followed by a line with an email/phone/profile URL). The CV
+  builder prompt writes the target role there; never invent one.
+- **Word file** (`lib/generate-cv.ts`): Public Sans Regular + Bold embedded
+  as one family (500 → 400, 600 → 700; Medium/SemiBold would fall back to
+  regular Arial), Arial as altName. `finishFontEmbedding` fixes the docx
+  library's embedding (space in font part names = Word says "corrupt";
+  bold face moved to `embedBold`). Every paragraph is explicitly LTR —
+  without it Word with a Hebrew UI mirrors the whole CV (the old file did).
+  Verified by opening in Word 365 without Public Sans installed.
+- Parsing (header, sections, roles) is `lib/cv-text.ts` for Word and the
+  on-screen preview (`app/components/CVPreview.tsx`), mirrored in
+  `cv_pdf.py` — change both.
+- **Margins are exactly 60 / 66 / 54** (a padding-free `Frame`). Until
+  2026-11-25 `SimpleDocTemplate`'s 6pt frame padding made them 66 / 72 / 60.
+- **Hebrew (PDF, since 2026-11-25).** Public Sans has no Hebrew; Hebrew
+  letters and ₪ are set in Noto Sans Hebrew (OFL, same four weights),
+  chosen per character. A CV with more Hebrew than Latin letters is laid
+  out right to left (name, labels, text flush right; bullets hang right;
+  dates on the left of the title line); Hebrew words in an English CV are
+  reordered in place. Lines with Hebrew, and every line of a Hebrew CV, go
+  through `_BidiParagraph` / `_BidiEntryHeader` (bidi from `python-bidi`'s
+  `bidi.algorithm`, run step by step to keep each character's style —
+  reportlab's own needs `rlbidi`, not on PyPI); everything else is the
+  unchanged Paragraph path. Hebrew section names, months, "היום" and
+  MM/YYYY dates are parsed in both parsers. Glyphs are drawn in display
+  order: PyMuPDF and pdftotext (default, -layout) extract Hebrew in reading
+  order, pdftotext -raw reversed. An ActualText span fixed -raw and broke
+  the other three — don't add one.
+- **A script neither font has (Arabic, Cyrillic, CJK…)** raises
+  `UnsupportedScriptError` instead of printing boxes: `/render-cv-pdf`
+  returns 422 `unsupported_script` and `lib/cv-file.ts` serves Word instead;
+  the ATS paths stop the application (needs_manual, credit refunded,
+  `CV_SCRIPT_MESSAGE`). Stray symbols neither font has (emoji, ✓), format
+  controls (LRM/RLM) and Hebrew points are dropped.
+- **Known gaps:** Arabic isn't rendered in the PDF (needs shaping as well as
+  bidi). The Word file forces every paragraph LTR, so a Hebrew CV in Word
+  is left-aligned (Hebrew runs still read correctly, in Arial). A PDF the
+  user prints from the Word file has "S U M M A R Y" labels.
 
 ## Linting
 

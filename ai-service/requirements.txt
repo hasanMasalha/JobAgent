@@ -16,5 +16,6 @@ aiohttp>=3.9.0
 beautifulsoup4
 phonenumbers>=8.13
 reportlab
+python-bidi>=0.6,<0.7  # utils/cv_pdf.py runs bidi.algorithm step by step (Hebrew in the CV PDF)
 pytest
 pytest-asyncio

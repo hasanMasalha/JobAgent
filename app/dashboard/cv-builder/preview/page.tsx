@@ -4,63 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
+import CVPreview from "@/app/components/CVPreview";
 import CVScoreCard from "@/app/components/CVScoreCard";
 import { showToast } from "@/app/components/Toast";
 import { DownloadIcon, PageHero, Skeleton, Spinner, StatePanel, buttonStyles, heroControlStyles } from "@/app/components/ui";
 import { cn } from "@/lib/cn";
-
-const SECTION_HEADERS = new Set([
-  "summary", "work experience", "experience", "education",
-  "skills", "languages", "projects", "certifications",
-]);
-
-function CVPreview({ cvText }: { cvText: string }) {
-  const lines = cvText.split("\n");
-
-  let nameWritten = false;
-  let contactWritten = false;
-
-  return (
-    <>
-      {/* Carlito is metric-compatible with Calibri — used as fallback on non-Windows */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}</style>
-    <div className="max-h-[75vh] overflow-y-auto px-6 py-8 text-[13px] leading-relaxed text-ink sm:px-12 sm:py-12" style={{ fontFamily: "Calibri, Carlito, Arial, sans-serif" }}>
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-
-        if (!nameWritten && trimmed) {
-          nameWritten = true;
-          return (
-            <div key={i} className="mb-1 text-center text-lg font-bold text-brand-text">
-              {trimmed}
-            </div>
-          );
-        }
-        if (nameWritten && !contactWritten && trimmed) {
-          contactWritten = true;
-          return (
-            <div key={i} className="mb-5 text-center text-xs text-ink-muted">
-              {trimmed}
-            </div>
-          );
-        }
-        if (SECTION_HEADERS.has(trimmed.toLowerCase().replace(/:$/, ""))) {
-          return (
-            <div key={i} className="mb-1.5 mt-5 border-b border-brand/40 pb-0.5 text-xs font-bold uppercase tracking-wider text-brand-text">
-              {trimmed.replace(/:$/, "")}
-            </div>
-          );
-        }
-        if (trimmed.startsWith("•")) {
-          return <div key={i} className="pl-4 text-ink">{trimmed}</div>;
-        }
-        if (!trimmed) return <div key={i} className="h-2" />;
-        return <div key={i} className="text-ink">{trimmed}</div>;
-      })}
-    </div>
-    </>
-  );
-}
+import type { CvFormat } from "@/lib/cv-file";
+import { downloadFile } from "@/lib/download-file";
 
 function PreviewContent() {
   const router = useRouter();
@@ -70,7 +20,7 @@ function PreviewContent() {
   const [cvText, setCvText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<CvFormat | null>(null);
 
   useEffect(() => {
     if (!cvId) {
@@ -87,26 +37,14 @@ function PreviewContent() {
       .finally(() => setLoading(false));
   }, [cvId, router]);
 
-  async function handleDownload() {
-    setDownloading(true);
+  async function handleDownload(format: CvFormat) {
+    setDownloading(format);
     try {
-      const res = await fetch(`/api/cv/download-generated?cv_id=${cvId}`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error ?? "Download failed", "error");
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "My_CV.docx";
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      showToast("Download failed. Try again.", "error");
+      await downloadFile(`/api/cv/download-generated?cv_id=${cvId}&format=${format}`, `My_CV.${format}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Download failed. Try again.", "error");
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -118,9 +56,12 @@ function PreviewContent() {
       meta={cvText && (
         <>
           <Link href="/dashboard/cv-builder" className={heroAction}>Edit answers</Link>
-          <button type="button" onClick={handleDownload} disabled={downloading} className={heroAction}>
-            {downloading ? <Spinner size="sm" decorative /> : <DownloadIcon className="h-4 w-4" />}
-            {downloading ? "Preparing…" : "Download .docx"}
+          <button type="button" onClick={() => handleDownload("pdf")} disabled={downloading !== null} className={heroAction}>
+            {downloading === "pdf" ? <Spinner size="sm" decorative /> : <DownloadIcon className="h-4 w-4" />}
+            {downloading === "pdf" ? "Preparing…" : "Download PDF"}
+          </button>
+          <button type="button" onClick={() => handleDownload("docx")} disabled={downloading !== null} className={heroAction}>
+            {downloading === "docx" ? "Preparing…" : "Word (.docx)"}
           </button>
         </>
       )}
@@ -185,7 +126,11 @@ function PreviewContent() {
         </div>
 
         <section aria-label="Your new CV" className={cn(cardCls, "overflow-hidden lg:order-1 lg:col-span-2")}>
-          {cvText && <CVPreview cvText={cvText} />}
+          {cvText && (
+            <div className="max-h-[75vh] overflow-y-auto bg-white px-6 py-8 sm:px-12 sm:py-12">
+              <CVPreview cvText={cvText} />
+            </div>
+          )}
         </section>
       </div>
     </div>

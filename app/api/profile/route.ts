@@ -17,8 +17,8 @@ export async function GET(_req: NextRequest) {
     }
 
     const [cvRows, dbUser, rateRows] = await Promise.all([
-      db.$queryRaw<{ id: string; clean_summary: string | null; skills_json: string | null; updated_at: Date; raw_text: string }[]>`
-        SELECT id, clean_summary, skills_json, updated_at, raw_text
+      db.$queryRaw<{ id: string; clean_summary: string | null; skills_json: string | null; updated_at: Date; raw_text: string; source: string; has_original_file: boolean }[]>`
+        SELECT id, clean_summary, skills_json, updated_at, raw_text, source, (original_file IS NOT NULL) AS has_original_file
         FROM "CV" WHERE user_id = ${user.id} LIMIT 1
       `,
       db.user.findUnique({

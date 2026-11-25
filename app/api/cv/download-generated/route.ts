@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase.server";
 import { db } from "@/lib/db";
-import { generateCVDocx } from "@/lib/generate-cv";
+import { attachmentDisposition } from "@/lib/content-disposition";
+import { cvDisplayName, cvFormat, renderCvFile } from "@/lib/cv-file";
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,14 +22,13 @@ export async function GET(req: NextRequest) {
 
     const rows = await db.$queryRaw<{
       raw_text: string;
-      skills_json: { skills?: string[] } | null;
       hyperlinks_json: string | null;
       source: string;
       original_file: Buffer | null;
       original_filename: string | null;
       original_mime_type: string | null;
     }[]>`
-      SELECT raw_text, skills_json, hyperlinks_json, source, original_file, original_filename, original_mime_type
+      SELECT raw_text, hyperlinks_json, source, original_file, original_filename, original_mime_type
       FROM "CV" WHERE id = ${cvId} AND user_id = ${user.id} LIMIT 1
     `;
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "No CV found" }, { status: 404 });
     }
 
-    const { raw_text, skills_json, hyperlinks_json, source, original_file, original_filename, original_mime_type } = rows[0];
+    const { raw_text, hyperlinks_json, source, original_file, original_filename, original_mime_type } = rows[0];
 
     // Uploaded CV — send the user's own file back exactly as they gave it to
     // us, never re-rendered. (Pre-migration uploads have no original_file on
@@ -52,25 +52,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Derive job title from skills_json or first line of CV
-    const firstLine = raw_text.split("\n").find((l: string) => l.trim()) ?? "CV";
-    const jobTitle = skills_json?.skills?.[0] ?? firstLine;
+    // PDF unless the user asked for Word (?format=docx).
     const hyperlinks = JSON.parse(hyperlinks_json ?? "[]");
+    const file = await renderCvFile(raw_text, cvFormat(req.nextUrl.searchParams.get("format")), hyperlinks);
 
-    const buffer = await generateCVDocx(raw_text, jobTitle, hyperlinks);
-
-    const nameFromCv = firstLine.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-    const nameFromEmail = (user.email ?? "").split("@")[0];
-    const displayName = (nameFromCv || nameFromEmail || "CV")
-      .replace(/\s+/g, "_")
-      .slice(0, 60);
-
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(new Uint8Array(file.body), {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${displayName}_CV.docx"`,
+        "Content-Type": file.contentType,
+        "Content-Disposition": attachmentDisposition(`${cvDisplayName(raw_text, user.email)}_CV.${file.extension}`),
       },
     });
   } catch (err) {

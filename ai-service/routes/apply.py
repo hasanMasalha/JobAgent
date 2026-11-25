@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
 
-from utils.cv_pdf import generate_cv_pdf, resolve_cv_file
+from utils.cv_pdf import CV_SCRIPT_MESSAGE, UnsupportedScriptError, generate_cv_pdf, resolve_cv_file
 
 _anthropic = anthropic.Anthropic()
 
@@ -923,7 +923,10 @@ async def apply_to_job(req: ApplyRequest):
     tailored_cv = application["tailored_cv"] or ""
     cover_letter = application["cover_letter"] or ""
 
-    resolved_cv = resolve_cv_file(tailored_cv or None, dict(cv) if cv else None)
+    try:
+        resolved_cv = resolve_cv_file(tailored_cv or None, dict(cv) if cv else None)
+    except UnsupportedScriptError:
+        return {"status": "manual", "message": CV_SCRIPT_MESSAGE}
     if resolved_cv is None:
         # Defensive only — this route only runs after /api/apply/prepare has
         # already populated tailored_cv, so this shouldn't be reachable in
@@ -978,7 +981,10 @@ async def generate_cv_pdf_endpoint(application_id: str):
     if not row["tailored_cv"]:
         raise HTTPException(status_code=404, detail="No tailored CV for this application")
 
-    pdf_bytes = generate_cv_pdf(row["tailored_cv"])
+    try:
+        pdf_bytes = generate_cv_pdf(row["tailored_cv"])
+    except UnsupportedScriptError as exc:
+        raise HTTPException(status_code=422, detail="unsupported_script") from exc
     safe_title = (row["job_title"] or "tailored").replace(" ", "_")[:50]
     filename = f"CV_{safe_title}.pdf"
 

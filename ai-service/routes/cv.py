@@ -1,10 +1,11 @@
 import json
 
 import anthropic
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel, Field
 
 from embedder import embed
+from utils.cv_pdf import UnsupportedScriptError, generate_cv_pdf
 
 router = APIRouter()
 _client = anthropic.Anthropic()
@@ -66,3 +67,24 @@ async def process_cv(req: ProcessCVRequest):
         "clean_summary": clean_summary,
         "embedding": embedding,
     }
+
+
+class RenderCVRequest(BaseModel):
+    cv_text: str = Field(min_length=1, max_length=50_000)
+
+
+@router.post("/render-cv-pdf")
+def render_cv_pdf(req: RenderCVRequest):
+    """The designed CV PDF for a CV text — the same renderer that produces
+    the file ATS applications submit. Next.js serves it as the default
+    download (lib/cv-file.ts); the caller decides the text may be rendered
+    (never a user's own upload).
+
+    422 unsupported_script when the text has letters the PDF can't set
+    (neither Public Sans nor Noto Sans Hebrew has them); lib/cv-file.ts then
+    serves Word instead."""
+    try:
+        pdf = generate_cv_pdf(req.cv_text)
+    except UnsupportedScriptError as exc:
+        raise HTTPException(status_code=422, detail="unsupported_script") from exc
+    return Response(content=pdf, media_type="application/pdf")

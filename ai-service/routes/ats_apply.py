@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from applicant_store import application_cv_file, load_applicant, load_cv_row
 from pending_release import refund_auto_apply
+from utils.cv_pdf import CV_SCRIPT_MESSAGE, UnsupportedScriptError
 
 # Python fully-buffers stdout by default when it isn't attached to a TTY
 # (true under uvicorn/Docker) — a slow background thread's print()s can sit
@@ -267,7 +268,20 @@ async def ats_apply(req: ATSApplyRequest):
         await conn.close()
 
     cv_row_dict = cv_row
-    resolved_cv = application_cv_file(tailored_cv, cv_row_dict, req.first_name, req.last_name)
+    try:
+        resolved_cv = application_cv_file(tailored_cv, cv_row_dict, req.first_name, req.last_name)
+    except UnsupportedScriptError as exc:
+        # The CV has letters our PDF fonts don't cover (Public Sans + Noto
+        # Sans Hebrew) — not submitted with boxes in it. Credit refunded by
+        # _mark_needs_manual like any other stop.
+        print(f"[ats-apply] CV text can't be set in the PDF ({exc}) — landing as needs_manual")
+        cv_conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            await _mark_needs_manual(cv_conn, req.application_id, CV_SCRIPT_MESSAGE)
+        finally:
+            await cv_conn.close()
+        await _send_application_confirmation_email(req.application_id)
+        return {"success": True, "status": "needs_manual", "message": CV_SCRIPT_MESSAGE}
     if resolved_cv is None:
         # A pre-migration CV row with no confirmed source — we can't prove
         # raw_text isn't the user's own uploaded words, so we refuse to guess
