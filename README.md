@@ -384,7 +384,7 @@ npx prisma db push
 
 ```bash
 cd ai-service
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt  # exact versions, as in production
 playwright install chromium
 uvicorn main:app --reload --port 8000
 ```
