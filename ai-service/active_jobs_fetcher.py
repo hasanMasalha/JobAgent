@@ -55,12 +55,17 @@ async def fetch_active_jobs(
     return data if isinstance(data, list) else data.get("data", [])
 
 
-async def fetch_market(client: httpx.AsyncClient, location: str, budget: int) -> list[dict]:
-    """Page through a location's jobs until it runs out or budget is spent."""
+async def fetch_market(
+    client: httpx.AsyncClient, location: str, budget: int, errors: list[str] | None = None
+) -> list[dict]:
+    """Page through a location's jobs until it runs out or budget is spent.
+    A location whose page the API refused is added to `errors`."""
     jobs: list[dict] = []
     while len(jobs) < budget:
         limit = min(PAGE_LIMIT, budget - len(jobs))
         page = await fetch_active_jobs(client, location, limit, offset=len(jobs))
+        if page is None and errors is not None:
+            errors.append(location)
         if not page:
             break
         jobs.extend(page)
@@ -104,9 +109,10 @@ async def fetch_and_save_jobs(max_jobs: int = MAX_JOBS_PER_RUN) -> dict:
 
         raw_jobs: list[dict] = []
         by_market: dict[str, int] = {}
+        api_errors: list[str] = []  # the run history alerts when it's every market
         async with httpx.AsyncClient(timeout=30) as client:
             for market in markets:
-                got = await fetch_market(client, market, per_market)
+                got = await fetch_market(client, market, per_market, api_errors)
                 by_market[market] = len(got)
                 raw_jobs.extend(got)
         print(f"[active-jobs] fetched {len(raw_jobs)} jobs: {by_market}")
@@ -126,7 +132,7 @@ async def fetch_and_save_jobs(max_jobs: int = MAX_JOBS_PER_RUN) -> dict:
     finally:
         await conn.close()
 
-    result = {"new": new, "updated": updated, "skipped": skipped, "by_market": by_market}
+    result = {"new": new, "updated": updated, "skipped": skipped, "by_market": by_market, "api_errors": api_errors}
     print(f"[active-jobs] Done: {result}")
     return result
 

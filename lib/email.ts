@@ -471,3 +471,20 @@ export async function sendSubscriptionCancelledEmail(params: {
     html,
   });
 }
+
+/** Operator alert: job intake isn't working (lib/intake-health.ts). Plain
+ *  text — it's read by whoever runs the site, not by users. Throws if Resend
+ *  refuses it, so the caller doesn't mark the alert as sent. */
+export async function sendIntakeAlert(params: { to: string; messages: string[] }) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const n = params.messages.length;
+  const { error } = await resend.emails.send({
+    from: "JobAgent <notifications@jobagent.uk>",
+    to: params.to,
+    subject: `JobAgent intake: ${n} problem${n === 1 ? "" : "s"}`,
+    text:
+      params.messages.join("\n\n") +
+      "\n\nRun history: the \"IntakeRun\" table (newest first). This check runs after every daily run and every 6 h from GitHub (Intake health workflow).",
+  });
+  if (error) throw new Error(`Resend refused the intake alert: ${error.message}`);
+}

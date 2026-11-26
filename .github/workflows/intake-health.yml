@@ -1,0 +1,44 @@
+name: Intake health
+
+# Checks job intake from outside the server (/api/admin/intake-health): no
+# daily run for 48 h, a run stuck past its time limits, or a run that stored 0
+# jobs or had a step fail. The route emails ALERT_EMAIL; this job also fails
+# while intake is unhealthy, so GitHub's failure email reaches the repo owner
+# even when the site, Resend or ALERT_EMAIL is the problem.
+# It doesn't start intake (CLAUDE.md: the AI service's scheduler is the only
+# trigger); it only reads the run history the AI service writes.
+# From 2026-10-20 to 2026-11-25 intake stored nothing and nobody noticed.
+#
+# GitHub turns off scheduled workflows in a repo with no activity for 60 days;
+# if this stops showing runs, re-enable it in the Actions tab.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check intake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the site
+        run: |
+          STATUS=$(curl -s -o result.json -w '%{http_code}' --max-time 120 \
+            -X POST https://jobagent.uk/api/admin/intake-health \
+            -H "x-api-key: ${{ secrets.INTERNAL_API_KEY }}")
+          echo "HTTP $STATUS"
+          cat result.json; echo
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::The intake health route didn't answer (HTTP $STATUS)"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("result.json"))
+          for p in d.get("problems", []):
+              print(f"::error::{p.splitlines()[0]}")
+          if d.get("emailError"):
+              print(f"::error::Alert email: {d['emailError']}")
+          sys.exit(0 if d.get("healthy") else 1)
+          PY
