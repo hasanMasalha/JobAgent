@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from locations import CITY_COUNTRY as _CITY_COUNTRY_SYNONYMS
+from utils.cv_skills import cv_skills_json
 
 router = APIRouter()
 _client = anthropic.Anthropic()
@@ -506,9 +507,7 @@ async def match_jobs(req: MatchRequest):
         if not cv_row:
             raise HTTPException(status_code=404, detail="CV not found for user")
 
-        skills_json = cv_row["skills_json"] or {}
-        if isinstance(skills_json, str):
-            skills_json = json.loads(skills_json)
+        skills_json = cv_skills_json(cv_row["skills_json"])
 
         years_exp = int(skills_json.get("years_experience") or 0)
         if years_exp == 0 and cv_row.get("clean_summary"):

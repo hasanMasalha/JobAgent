@@ -7,7 +7,7 @@ The scheduler's run also used a key the server doesn't have, so its writes
 were refused while the API quota was still spent.
 
 Now it fetches per market (the same locations the scrape searches), pages
-through each with location_filter, and stores through routes.jobs.upsert_job
+through each with `location`, and stores through routes.jobs.upsert_job
 like every other source, so each job is embedded.
 """
 import asyncio
@@ -40,7 +40,11 @@ async def fetch_active_jobs(
             "limit": limit,
             "offset": offset,
             # Full names only ("United States", not "US"); see api_location_name.
-            "location_filter": location,
+            # `location` since Fantastic.jobs' v1 API (which the RapidAPI host
+            # now serves): it renamed location_filter -> location and answers
+            # the old name with 400 "Unknown query parameter" (seen first on
+            # 2026-11-26, when every market fetched 0).
+            "location": location,
             "description_format": "text",
         },
     )
