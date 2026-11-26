@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
 
+from utils.cv_skills import cv_skills_json
 from utils.cv_pdf import CV_SCRIPT_MESSAGE, UnsupportedScriptError, generate_cv_pdf, resolve_cv_file
 
 _anthropic = anthropic.Anthropic()
@@ -864,8 +865,6 @@ def _run_in_proactor_thread(*args) -> dict:
 
 @router.post("/apply")
 async def apply_to_job(req: ApplyRequest):
-    import json as _json
-
     is_linkedin = "linkedin.com" in req.job_url
     is_indeed = "indeed.com" in req.job_url
 
@@ -901,12 +900,7 @@ async def apply_to_job(req: ApplyRequest):
     first_name = parts[0] if parts else ""
     last_name = parts[-1] if len(parts) > 1 else ""
 
-    skills_json: dict = {}
-    if cv and cv["skills_json"]:
-        try:
-            skills_json = _json.loads(cv["skills_json"]) if isinstance(cv["skills_json"], str) else cv["skills_json"]
-        except Exception:
-            pass
+    skills_json = cv_skills_json(cv["skills_json"] if cv else None)
 
     user_data = {
         "first_name": first_name,
