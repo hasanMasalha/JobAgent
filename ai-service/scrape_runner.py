@@ -14,6 +14,8 @@ import traceback
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone  # noqa: UP017
 
+import intake_history
+
 _task: asyncio.Task | None = None
 _status: dict = {"state": "not run since the service started"}
 
@@ -46,19 +48,42 @@ def ensure_running(
     _status.clear()
     _status.update(state="running", trigger=trigger, options=kwargs, started_at=_now())
     print(f"[scrape-runner] {trigger}: starting scrape {kwargs}")
-    _task = asyncio.create_task(_run(run, kwargs))
+    _task = asyncio.create_task(_run(run, kwargs, trigger))
     return _task, True
 
 
-async def _run(run: Callable[..., Awaitable[dict]], kwargs: dict) -> dict | None:
+async def _run(run: Callable[..., Awaitable[dict]], kwargs: dict, trigger: str = "") -> dict | None:
     # Failures are recorded, not raised: nothing may be awaiting this task
     # (the endpoint returns at once), and the daily pipeline should still go on
     # to matching with whatever is stored.
+    #
+    # The daily pipeline ("scheduler") records the scrape as a step of its own
+    # IntakeRun; any other start (the endpoint, the startup recovery) gets a
+    # run of kind "scrape" here, so it's in the history too.
+    run_id = None if trigger == "scheduler" else await intake_history.start_run("scrape", trigger or "unknown")
+    step: dict = {}
     try:
         result = await run(**kwargs)
+    except asyncio.CancelledError:
+        # The pipeline's time limit (scheduler.STEP_TIMEOUT_S) or a shutdown.
+        _status.update(state="cancelled", finished_at=_now(), error="cancelled (time limit or shutdown)")
+        step = {"status": "cancelled", "stored": 0}
+        raise
     except Exception as e:
         traceback.print_exc()
         _status.update(state="failed", finished_at=_now(), error=repr(e))
+        step = {"status": "failed", "error": repr(e)[:500], "stored": 0}
         return None
-    _status.update(state="finished", finished_at=_now(), result=result)
-    return result
+    else:
+        _status.update(state="finished", finished_at=_now(), result=result)
+        step = {"status": "ok", "result": intake_history.summary(result),
+                "stored": intake_history.stored_by("scrape", result)}
+        return result
+    finally:
+        if run_id:
+            step["problems"] = intake_history.step_problems("scrape", step)
+            await intake_history.record_step(run_id, "scrape", step)
+            problems = list(step["problems"])
+            if step.get("stored", 0) == 0:
+                problems.insert(0, "The run stored 0 jobs")
+            await intake_history.finish_run(run_id, jobs_stored=step.get("stored", 0), problems=problems)

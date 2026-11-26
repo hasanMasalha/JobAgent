@@ -82,6 +82,8 @@ def test_daily_pipeline_runs_each_source_then_match():
         patch.object(scheduler, "_fetch_active_jobs", AsyncMock(side_effect=lambda: order.append("active_jobs"))),
         patch.object(scheduler, "_fetch_arbeitnow", AsyncMock(side_effect=lambda: order.append("arbeitnow"))),
         patch.object(scheduler, "_run_match_all", AsyncMock(side_effect=lambda: order.append("match"))),
+        patch.object(scheduler.intake_history, "start_run", AsyncMock(return_value=None)),
+        patch.object(scheduler, "_report_intake", AsyncMock()),
     ):
         asyncio.run(scheduler._run_daily_pipeline())
 
@@ -101,6 +103,8 @@ def test_a_failing_source_does_not_stop_matching():
         patch.object(scheduler, "_fetch_active_jobs", AsyncMock(side_effect=RuntimeError("quota"))),
         patch.object(scheduler, "_fetch_arbeitnow", AsyncMock(side_effect=RuntimeError("down"))),
         patch.object(scheduler, "_run_match_all", AsyncMock(side_effect=lambda: order.append("match"))),
+        patch.object(scheduler.intake_history, "start_run", AsyncMock(return_value=None)),
+        patch.object(scheduler, "_report_intake", AsyncMock()),
     ):
         asyncio.run(scheduler._run_daily_pipeline())
 

@@ -71,7 +71,7 @@ def test_request_uses_location_filter():
 def test_every_market_gets_its_share_and_every_job_is_upserted():
     asked = {}
 
-    async def fake_market(client, market, budget):
+    async def fake_market(client, market, budget, errors=None):
         asked[market] = budget
         return [_raw(hash(market) % 10_000 * 10 + i) for i in range(2)]
 

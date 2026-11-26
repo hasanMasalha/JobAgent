@@ -221,7 +221,8 @@ jobs:
               "DODO_UNLIMITED_ANNUAL_PRODUCT_ID=${{ secrets.DODO_UNLIMITED_ANNUAL_PRODUCT_ID }}" \
               "NEXTJS_URL=http://nextjs:3000" \
               "INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}" \
-              "EXTENSION_TOKEN_SECRET=${{ secrets.EXTENSION_TOKEN_SECRET }}"; do
+              "EXTENSION_TOKEN_SECRET=${{ secrets.EXTENSION_TOKEN_SECRET }}" \
+              "ALERT_EMAIL=${{ secrets.ALERT_EMAIL }}"; do
               key="${entry%%=*}"
               if grep -q "^${key}=" /home/ubuntu/jobagent/.env 2>/dev/null; then
                 sed -i "s|^${key}=.*|${entry}|" /home/ubuntu/jobagent/.env

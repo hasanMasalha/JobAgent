@@ -287,3 +287,31 @@ model ExchangeRate {
   rate_date  DateTime @db.Date
   fetched_at DateTime @default(now())
 }
+
+/// One row per intake run, written by the AI service (ai-service/intake_history.py):
+/// kind "daily" (the 05:00 pipeline) or "scrape" (a scrape started by hand or at
+/// startup). `steps` holds each step's result, `problems` what was wrong. Kept
+/// because a deploy wipes the container logs: 2026-10-20 → 11-25 stored nothing
+/// and left no record of why.
+model IntakeRun {
+  id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  kind        String
+  trigger     String
+  status      String    @default("running")
+  started_at  DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at DateTime? @db.Timestamptz(6)
+  jobs_stored Int?
+  steps       Json      @default("{}")
+  problems    Json      @default("[]")
+  error       String?
+
+  @@index([kind, started_at(sort: Desc)])
+}
+
+/// Intake alerts sent (/api/admin/intake-health), so each goes out once (or
+/// once a day while "no run" lasts).
+model IntakeAlert {
+  key     String   @id
+  sent_at DateTime @db.Timestamptz(6)
+  message String
+}

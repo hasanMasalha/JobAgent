@@ -70,6 +70,9 @@ NEXT_PUBLIC_GREENHOUSE_VIA_EXTENSION  "true" = Greenhouse applies go through the
                            arg — changing it needs a redeploy. On since 2026-11-26 (1.6.1 is live).
 EXTENSION_TOKEN_SECRET     ≥32 random chars; signs the Chrome extension's API token
                            (lib/extension-token.ts). Unset = extension API calls fail closed
+ALERT_EMAIL                Where intake alerts go (/api/admin/intake-health). A GitHub
+                           secret written into the server's .env by deploy.yml. Unset =
+                           intake reports unhealthy and the Intake health workflow fails
 
 ## Database tables
 users          id, email, name, linkedin_session_path,
@@ -634,6 +637,29 @@ is positioned as global and priced in USD, so both are real gaps.
   LinkedIn detail page, for measuring.
 - The scrape searches the default markets plus every `JobPreference`
   location (`ai-service/locations.py`) and includes company career pages.
+- **Every run is recorded and checked** (since 2026-11-26). From 2026-10-20 to
+  2026-11-25 the pipeline stored nothing: the AI service answered requests,
+  but no source stored or refreshed a job, and by 2 November cleanup had
+  deactivated every job. The container logs went with the next deploy. The
+  likely cause: the 20 October run hung with no time limit, and
+  `max_instances=1` made APScheduler skip every 05:00 after it. Now:
+  - **Time limits per step** (`scheduler.STEP_TIMEOUT_S`: scrape 3 h, Active
+    Jobs DB 30 min, Arbeitnow 2 h, match 2 h). A step over it is cancelled,
+    recorded `timed_out`, and the next step runs.
+  - **`"IntakeRun"`**, one row per run (`ai-service/intake_history.py`): kind
+    `daily` (the pipeline) or `scrape` (manual/startup), each step's status,
+    result and jobs stored, and `problems` — 0 jobs stored, a step failed or
+    timed out, Active Jobs DB refused every market, matching failed for a user
+    (404 no-CV isn't a failure). History writes never break intake.
+  - **`/api/admin/intake-health`** (`lib/intake-health.ts`) emails
+    `ALERT_EMAIL` via Resend about: no daily run started for 48 h (repeated
+    daily), a run still `running` after 9 h, the newest finished run's
+    problems (once per run; `"IntakeAlert"` records what was sent). The AI
+    service calls it at the end of every daily run; the **Intake health**
+    workflow calls it every 6 h from GitHub (a dead scheduler can't report
+    itself) and fails while `healthy` is false, so GitHub's failure email is a
+    second channel. Both tables are created on first use (migration
+    `20261126_add_intake_runs` is the same DDL).
 - **Every source stores through `routes/jobs.py` `upsert_job`**, which
   embeds the job. Matching reads only rows with an embedding: Active Jobs DB
   rows were written without one until 2026-10-04 and never reached matches.
