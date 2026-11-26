@@ -9,7 +9,11 @@ import type { NextRequest } from "next/server";
 // 1.5.0 is the first version that leaves a question blank and stops instead.
 // It is also the first that sends this header at all, so a request without it
 // is an older version.
-export const MIN_EXTENSION_VERSION = "1.5.0";
+//
+// Raised to 1.6.0 on 2026-11-26 (1.6.1 is the first published 1.6): 1.5.x
+// typed a bare "Yes"/"No" into text fields and gave the sponsorship answer to
+// "Do you have a valid visa?", where Yes means the opposite (#122).
+export const MIN_EXTENSION_VERSION = "1.6.0";
 // The first version that fills in and submits employer job-site forms
 // (Greenhouse). An older one doesn't know START_ATS_APPLY, so the site asks
 // for an update before handing it one.

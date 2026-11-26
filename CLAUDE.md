@@ -67,7 +67,7 @@ DODO_UNLIMITED_MONTHLY_PRODUCT_ID    Dodo product ID, Unlimited plan / monthly
 DODO_UNLIMITED_ANNUAL_PRODUCT_ID     Dodo product ID, Unlimited plan / annual
 NEXT_PUBLIC_GREENHOUSE_VIA_EXTENSION  "true" = Greenhouse applies go through the extension
                            (stage 3). A GitHub repo *variable*, passed as a Docker build
-                           arg — changing it needs a redeploy. Off until 1.6.1 is live.
+                           arg — changing it needs a redeploy. On since 2026-11-26 (1.6.1 is live).
 EXTENSION_TOKEN_SECRET     ≥32 random chars; signs the Chrome extension's API token
                            (lib/extension-token.ts). Unset = extension API calls fail closed
 
@@ -432,8 +432,9 @@ authentication, location, web history, website content) says the same.
   they become the user's answers only when the user presses Save.
 - **Version gate:** the extension sends `X-JobAgent-Extension-Version`.
   `check-pending` gives nothing to a version below `MIN_EXTENSION_VERSION`
-  (`lib/extension-version.ts`, 1.5.0 — the first that stops instead of
-  guessing); a request with no header counts as older. The application is
+  (`lib/extension-version.ts`, 1.6.0 since 2026-11-26; 1.5.0 was the
+  first that stops instead of guessing, 1.6 the first with the yes/no and
+  sponsorship fix below); a request with no header counts as older. The application is
   set to `manual` and refunded. The apply page asks the extension for its
   version (PING) before marking or charging. Raise `MIN_EXTENSION_VERSION`
   whenever a released version turns out to answer wrongly.
@@ -544,8 +545,7 @@ review step. Decided 2026-10-04 (`ai-service/application_answers.py`):
   only for a question about *needing* sponsorship or a visa ("require" /
   "need") — "What is your visa status?" and "Do you have a valid visa?" (Yes
   means the opposite) used to get it. Same rule in the extension's
-  `jaBooleanAnswer`; it reaches users with the next extension release, after
-  which `MIN_EXTENSION_VERSION` should be raised to it.
+  `jaBooleanAnswer`, released in 1.6.1; `MIN_EXTENSION_VERSION` is 1.6.0.
 - Success only on the ATS's own confirmation; "no error and no confirmation"
   is `unconfirmed` (needs_manual), not applied.
 - Until 2026-10-04 the filler answered "2" years, work authorisation "Yes",

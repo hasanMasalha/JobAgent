@@ -91,10 +91,12 @@ const workAuth = (body: unknown, ok = true) =>
 
 describe("extension version gate", () => {
   it("compares dotted versions numerically", () => {
-    expect(isVersionAtLeast("1.5.0")).toBe(true);
+    expect(isVersionAtLeast("1.6.0")).toBe(true);
+    expect(isVersionAtLeast("1.6.1")).toBe(true);
     expect(isVersionAtLeast("1.10.0")).toBe(true);
     expect(isVersionAtLeast("2.0")).toBe(true);
-    expect(isVersionAtLeast("1.4.9")).toBe(false);
+    expect(isVersionAtLeast("1.5.9")).toBe(false);
+    expect(isVersionAtLeast("1.4.9", "1.5.0")).toBe(false);
     expect(isVersionAtLeast("1.4.0")).toBe(false);
     expect(isVersionAtLeast("0")).toBe(false);
     expect(isVersionAtLeast(null)).toBe(false);
@@ -108,7 +110,7 @@ describe("extension version gate", () => {
     }
   });
 
-  it.each([undefined, "1.4.0", "1.3.0"])("gives version %s no application, hands it back as manual and refunds", async (version) => {
+  it.each([undefined, "1.5.9", "1.5.0", "1.4.0", "1.3.0"])("gives version %s no application, hands it back as manual and refunds", async (version) => {
     const res = await checkPending(get(version));
     const body = await res.json();
     expect(body).toMatchObject({ pending: false, upgrade_required: true });
@@ -128,7 +130,7 @@ describe("extension version gate", () => {
 
 describe("check-pending sends only the user's own answers", () => {
   it("holds back the six once-defaulted answers until the user has confirmed them", async () => {
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     expect(application).toMatchObject({
       first_name: "Dana", email: "dana@example.com",
       notice_period: null, years_of_experience: null, highest_education: null,
@@ -139,7 +141,7 @@ describe("check-pending sends only the user's own answers", () => {
   it("sends them once confirmed", async () => {
     mdb.user.findUnique.mockResolvedValue({ ...UNTOUCHED, years_of_experience: "7", application_details_confirmed_at: new Date() });
     workAuth({ work_authorized: true, requires_sponsorship: false });
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     expect(application).toMatchObject({
       years_of_experience: "7", notice_period: "30", work_authorized: true, requires_sponsorship: false,
     });
@@ -152,14 +154,14 @@ describe("check-pending sends only the user's own answers", () => {
     [{ salary_amount: 6000, salary_currency: "USD", salary_period: "month" }, null],
   ])("sends the salary as the old monthly NIS text only when it is that (%o)", async (salary, expected) => {
     mdb.user.findUnique.mockResolvedValue({ ...UNTOUCHED, ...salary });
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     expect(application.expected_salary).toBe(expected);
   });
 
   // ai-service/work_authorisation.py decides both, for this job's country.
   it("asks the AI service for the two work-authorisation values for this application", async () => {
     workAuth({ work_authorized: true, requires_sponsorship: true });
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     expect(pythonFetch).toHaveBeenCalledWith("/linkedin-work-authorisation", expect.objectContaining({ method: "POST" }));
     const body = JSON.parse((pythonFetch as jest.Mock).mock.calls[0][1].body);
     expect(body).toEqual({ user_id: "u1", application_id: "app-1" });
@@ -172,7 +174,7 @@ describe("check-pending sends only the user's own answers", () => {
     ["it answers something that isn't yes or no", () => workAuth({ work_authorized: "yes", requires_sponsorship: 1 })],
   ])("sends null for both when %s", async (_what, arrange) => {
     arrange();
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     expect(application).toMatchObject({ work_authorized: null, requires_sponsorship: null });
   });
 
@@ -182,7 +184,7 @@ describe("check-pending sends only the user's own answers", () => {
       notice_period: null, years_of_experience: null, highest_education: null,
       work_authorized: null, requires_sponsorship: null, willing_to_relocate: null,
     });
-    const { application } = await (await checkPending(get("1.5.0"))).json();
+    const { application } = await (await checkPending(get(MIN_EXTENSION_VERSION))).json();
     for (const k of ["notice_period", "years_of_experience", "highest_education", "work_authorized",
       "requires_sponsorship", "willing_to_relocate", "phone", "city", "expected_salary"]) {
       expect(application[k]).toBeNull();
