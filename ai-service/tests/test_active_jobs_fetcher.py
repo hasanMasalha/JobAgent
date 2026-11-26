@@ -1,4 +1,4 @@
-"""Active Jobs DB: fetched per market with location_filter, paged, capped, and
+"""Active Jobs DB: fetched per market with `location`, paged, capped, and
 stored through upsert_job so every job gets an embedding. Until 2026-10-04 its
 rows were written without one and never reached matching."""
 import asyncio
@@ -57,14 +57,15 @@ def test_fetch_market_stops_at_the_budget():
     assert [c.args[2] for c in fetch.call_args_list] == [100, 50]  # second page asks only for the rest
 
 
-def test_request_uses_location_filter():
+def test_request_uses_location():
     client = MagicMock()
     client.get = AsyncMock(return_value=MagicMock(status_code=200, json=list))
     with patch.dict("os.environ", {"RAPIDAPI_KEY": "k"}):
         asyncio.run(ajf.fetch_active_jobs(client, "United States", 100, 200))
     params = client.get.call_args.kwargs["params"]
-    assert params["location_filter"] == "United States"
-    assert "location" not in params
+    # v1 renamed location_filter -> location and rejects the old name (400).
+    assert params["location"] == "United States"
+    assert "location_filter" not in params
     assert (params["limit"], params["offset"], params["time_frame"]) == (100, 200, "24h")
 
 

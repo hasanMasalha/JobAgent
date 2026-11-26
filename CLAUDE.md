@@ -639,7 +639,10 @@ is positioned as global and priced in USD, so both are real gaps.
   rows were written without one until 2026-10-04 and never reached matches.
 - Active Jobs DB is billed per job: `ACTIVE_JOBS_MAX_PER_RUN` (default 200)
   caps a run, shared across markets. Its location parameter is
-  `location_filter` (full names, "United States" not "US").
+  `location` (full names, "United States" not "US"). Fantastic.jobs' v1 API
+  renamed it from `location_filter` and answers the old name with 400
+  "Unknown query parameter" — found 2026-11-26, after every market had
+  fetched 0 for weeks.
 - Arbeitnow (`arbeitnow_fetcher.py`, free, no key): a job's `url` is
   Arbeitnow's page and its `/apply` redirect is the employer's ATS, stored as
   `apply_url`. Arbeitnow's Cloudflare returns 429 to lookups faster than about
